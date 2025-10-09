@@ -149,7 +149,7 @@ app.listen(PORT, `0.0.0.0`, () => {
     const ip = getLocalIp();
     console.log(`
         
-        server is running:  http://150.242.201.153:${PORT}
+        server is running:  http://localhost:${PORT}
                             http://${ip}:${PORT} 
     `);
   } catch (err) {
