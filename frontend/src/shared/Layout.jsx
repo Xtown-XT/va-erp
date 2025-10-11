@@ -442,14 +442,14 @@ export default function Layout() {
     } else {
       navigate(item.path);
       setActiveMenu(null);
-      setSidebarOpen(false);
+      // setSidebarOpen(false);
     }
   };
 
   const handleSubNavClick = (path) => {
     navigate(path);
     setActiveMenu(null);
-    setSidebarOpen(false);
+    // setSidebarOpen(false);
   };
 
   const isActiveRoute = (path) => location.pathname === path;
