@@ -194,7 +194,7 @@ const ItemManagement = () => {
   const columns = [
     { title: "Item Name", dataIndex: "itemName", key: "itemName" },
     { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-    { title: "Group Name", dataIndex: "groupName", key: "groupName" },
+    { title: "Category", dataIndex: "groupName", key: "groupName" },
     { title: "Units", dataIndex: "units", key: "units" },
     {
       title: "Purchase Rate",
@@ -329,8 +329,8 @@ const ItemManagement = () => {
               </Form.Item>
               <Form.Item
                 name="groupName"
-                label="Group Name"
-                rules={[{ required: true, message: "Please enter group name" }]}
+                label="Category"
+                rules={[{ required: true, message: "Please enter category" }]}
               >
                 <Input />
               </Form.Item>

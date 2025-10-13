@@ -272,7 +272,8 @@ const CompressorManagement = () => {
               <Form.Item
                 name="compressorType"
                 label="Type"
-                rules={[{ required: true }]}
+                rules={[{ required: false }]}
+                
               >
                 <Input />
               </Form.Item>
