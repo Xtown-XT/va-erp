@@ -24,7 +24,7 @@ const Item = sequelize.define(
       allowNull: false,
     },
     units: {
-      type: DataTypes.ENUM("kg", "ltr", "mtr", "nos", "set", "unit"),
+      type: DataTypes.ENUM("kg", "ltr", "mtr", "nos", "set", "unit", "kit"),
       allowNull: false,
     },
     purchaseRate: {

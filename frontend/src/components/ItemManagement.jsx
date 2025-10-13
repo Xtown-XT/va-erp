@@ -346,6 +346,7 @@ const ItemManagement = () => {
                   <Select.Option value="nos">nos</Select.Option>
                   <Select.Option value="set">set</Select.Option>
                   <Select.Option value="unit">unit</Select.Option>
+                  <Select.Option value="kit">kit</Select.Option>
                 </Select>
               </Form.Item>
               <Form.Item

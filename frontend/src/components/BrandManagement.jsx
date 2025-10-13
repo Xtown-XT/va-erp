@@ -26,13 +26,27 @@ const BrandManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+    showQuickJumper: true,
+  });
 
   // Fetch brands
-  const fetchBrands = async () => {
+  const fetchBrands = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const res = await api.get("/api/brands");
+      const res = await api.get(`/api/brands?page=${page}&limit=${limit}`);
       setBrands(res.data.data || []);
+
+      // Update pagination state
+      setPagination(prev => ({
+        ...prev,
+        current: res.data.page || page,
+        total: res.data.total || 0,
+      }));
     } catch (err) {
       console.error("Error fetching brands", err);
       setBrands([]);
@@ -42,7 +56,7 @@ const BrandManagement = () => {
   };
 
   useEffect(() => {
-    fetchBrands();
+    fetchBrands(pagination.current, pagination.pageSize);
   }, []);
 
   // Handle form submit (create or update)
@@ -63,7 +77,7 @@ const BrandManagement = () => {
       setShowForm(false);
       setEditingId(null);
       form.resetFields();
-      fetchBrands();
+      fetchBrands(pagination.current, pagination.pageSize);
     } catch (err) {
       console.error("Error saving brand", err);
     }
@@ -82,10 +96,17 @@ const BrandManagement = () => {
   const handleDelete = async (id) => {
     try {
       await api.delete(`/api/brands/${id}/hard`);
-      setBrands(brands.filter((brand) => brand.id !== id));
+      message.success("Brand deleted successfully");
+      fetchBrands(pagination.current, pagination.pageSize);
     } catch (err) {
       console.error("Error deleting brand", err);
+      message.error("Error deleting brand");
     }
+  };
+
+  // Handle table change
+  const handleTableChange = (pagination) => {
+    fetchBrands(pagination.current, pagination.pageSize);
   };
 
   // PDF Export
@@ -261,7 +282,11 @@ const BrandManagement = () => {
         )}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        pagination={{
+          ...pagination,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} brands`
+        }}
+        onChange={handleTableChange}
       />
     </div>
   );

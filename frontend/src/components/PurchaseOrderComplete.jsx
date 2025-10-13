@@ -896,10 +896,20 @@ const PurchaseOrderComplete = () => {
                   label="Billing Address"
                   rules={[{ required: true, message: "Please select billing address" }]}
                 >
-                  <Select placeholder="Select billing address">
+                  <Select 
+                    placeholder="Select billing address"
+                    showSearch
+                    optionFilterProp="children"
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
+                    dropdownStyle={{ minWidth: 400 }}
+                  >
                     {addresses.map((address) => (
                       <Select.Option key={address.id} value={address.id}>
-                        {address.addressBill || address.addressLine1} - {address.city}
+                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '350px' }}>
+                          <strong>Billing:</strong> {address.addressBill} | <strong>Phone:</strong> {address.phone} | <strong>Email:</strong> {address.email}
+                        </div>
                       </Select.Option>
                     ))}
                   </Select>
@@ -911,10 +921,20 @@ const PurchaseOrderComplete = () => {
                   label="Shipping Address"
                   rules={[{ required: true, message: "Please select shipping address" }]}
                 >
-                  <Select placeholder="Select shipping address">
+                  <Select 
+                    placeholder="Select shipping address"
+                    showSearch
+                    optionFilterProp="children"
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
+                    dropdownStyle={{ minWidth: 400 }}
+                  >
                     {addresses.map((address) => (
                       <Select.Option key={address.id} value={address.id}>
-                        {address.addressShip || address.addressLine1} - {address.city}
+                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '350px' }}>
+                          <strong>Shipping:</strong> {address.addressShip} | <strong>Phone:</strong> {address.phone} | <strong>Email:</strong> {address.email}
+                        </div>
                       </Select.Option>
                     ))}
                   </Select>
@@ -1131,11 +1151,9 @@ const PurchaseOrderComplete = () => {
                 <Title level={4}>Billing Address</Title>
                 {selectedPO.address ? (
                   <div>
-                    <p>{selectedPO.address.addressBill || selectedPO.address.addressLine1}</p>
-                    <p>{selectedPO.address.addressLine2}</p>
-                    <p>{selectedPO.address.city}, {selectedPO.address.state} - {selectedPO.address.pincode}</p>
-                    <p>Phone: {selectedPO.address.phone}</p>
-                    <p>Email: {selectedPO.address.email}</p>
+                    <p><strong>Address:</strong> {selectedPO.address.addressBill}</p>
+                    <p><strong>Phone:</strong> {selectedPO.address.phone}</p>
+                    <p><strong>Email:</strong> {selectedPO.address.email}</p>
                   </div>
                 ) : (
                   <p>No billing address</p>
@@ -1145,18 +1163,16 @@ const PurchaseOrderComplete = () => {
                 <Title level={4}>Shipping Address</Title>
                 {selectedPO.shippingAddress ? (
                   <div>
-                    <p>{selectedPO.shippingAddress.addressShip || selectedPO.shippingAddress.addressLine1}</p>
-                    <p>{selectedPO.shippingAddress.addressLine2}</p>
-                    <p>{selectedPO.shippingAddress.city}, {selectedPO.shippingAddress.state} - {selectedPO.shippingAddress.pincode}</p>
-                    <p>Phone: {selectedPO.shippingAddress.phone}</p>
-                    <p>Email: {selectedPO.shippingAddress.email}</p>
+                    <p><strong>Address:</strong> {selectedPO.shippingAddress.addressShip}</p>
+                    <p><strong>Phone:</strong> {selectedPO.shippingAddress.phone}</p>
+                    <p><strong>Email:</strong> {selectedPO.shippingAddress.email}</p>
                   </div>
                 ) : selectedPO.address ? (
                   <div>
                     <p><em>Same as billing address</em></p>
-                    <p>{selectedPO.address.addressBill || selectedPO.address.addressLine1}</p>
-                    <p>{selectedPO.address.addressLine2}</p>
-                    <p>{selectedPO.address.city}, {selectedPO.address.state} - {selectedPO.address.pincode}</p>
+                    <p><strong>Address:</strong> {selectedPO.address.addressBill}</p>
+                    <p><strong>Phone:</strong> {selectedPO.address.phone}</p>
+                    <p><strong>Email:</strong> {selectedPO.address.email}</p>
                   </div>
                 ) : (
                   <p>No shipping address</p>

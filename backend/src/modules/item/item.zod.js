@@ -4,7 +4,7 @@ export const createItemSchema = z.object({
   itemName: z.string().min(1).optional(),
   partNumber: z.string().min(1).optional(),
   groupName: z.string().min(1).optional(),
-  units: z.enum(["kg", "ltr", "mtr", "nos", "set", "unit"]),
+  units: z.enum(["kg", "ltr", "mtr", "nos", "set", "unit", "kit"]),
   purchaseRate: z.number().min(0).optional(),
   gst: z.number().min(0).optional(),
   canBeFitted: z.boolean().optional(),

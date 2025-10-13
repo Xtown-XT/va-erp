@@ -48,6 +48,13 @@ const Attendance = () => {
   const [viewSite, setViewSite] = useState('');
   const [viewRecords, setViewRecords] = useState([]);
   const [viewLoading, setViewLoading] = useState(false);
+  const [viewPagination, setViewPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+    showQuickJumper: true,
+  });
   // Inline edit state for View table
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [inlineEditId, setInlineEditId] = useState(null);
@@ -85,12 +92,12 @@ const Attendance = () => {
   };
 
   // Fetch attendance records for viewing
-  const fetchViewRecords = async (date = viewDate, siteId = viewSite) => {
+  const fetchViewRecords = async (date = viewDate, siteId = viewSite, page = 1, limit = 10) => {
     setViewLoading(true);
     try {
       const dateStr = date.format("YYYY-MM-DD");
       
-      let url = `/api/employeeAttendance?date=${dateStr}`;
+      let url = `/api/employeeAttendance?date=${dateStr}&page=${page}&limit=${limit}`;
       if (siteId) {
         url += `&siteId=${siteId}`;
       }
@@ -99,6 +106,13 @@ const Attendance = () => {
       const records = res.data.data || [];
       
       setViewRecords(records);
+      
+      // Update pagination state
+      setViewPagination(prev => ({
+        ...prev,
+        current: res.data.page || page,
+        total: res.data.total || 0,
+      }));
     } catch (err) {
       message.error("Error fetching attendance records");
       setViewRecords([]);
@@ -142,7 +156,7 @@ const Attendance = () => {
         fetchVehicles()
       ]);
       fetchRecords();
-      fetchViewRecords();
+      fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
     };
     initializeData();
   }, []);
@@ -205,7 +219,7 @@ const Attendance = () => {
       // Refresh attendance and employees to reflect updated remaining amounts
       fetchRecords();
       fetchEmployees();
-      fetchViewRecords();
+      fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
     } catch (err) {
       message.error("Error saving attendance");
     } finally {
@@ -266,7 +280,7 @@ const Attendance = () => {
       await api.put(`/api/employeeAttendance/${inlineEdit.id}`, payload);
       message.success('Attendance updated');
       handleInlineCancel();
-      await fetchViewRecords(viewDate, viewSite);
+      await fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
       await fetchEmployees();
     } catch (e) {
       message.error('Failed to update attendance');
@@ -285,7 +299,7 @@ const Attendance = () => {
       await api.delete(`/api/employeeAttendance/${id}/hard`);
       message.success("Record deleted successfully");
       fetchRecords();
-      fetchViewRecords();
+      fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
     } catch (err) {
       message.error("Error deleting record");
     }
@@ -294,6 +308,11 @@ const Attendance = () => {
   // Get all employees for adding attendance (no filters)
   const getFilteredEmployees = () => {
     return employees;
+  };
+
+  // Handle view table change
+  const handleViewTableChange = (pagination) => {
+    fetchViewRecords(viewDate, viewSite, pagination.current, pagination.pageSize);
   };
 
   // PDF Export for view records
@@ -379,6 +398,13 @@ const Attendance = () => {
   const workingCount = allEmployees.filter(emp => attendanceData[emp.id]?.workStatus === 'working').length;
   const totalEmployees = allEmployees.length;
   const attendancePercentage = totalEmployees > 0 ? (presentCount / totalEmployees) * 100 : 0;
+  
+  // Calculate saved attendance statistics
+  const savedAttendanceCount = allEmployees.filter(emp => {
+    const data = attendanceData[emp.id] || {};
+    return data.recordId !== null && data.recordId !== undefined;
+  }).length;
+  const pendingAttendanceCount = totalEmployees - savedAttendanceCount;
 
   // Table columns for viewing attendance records
   const viewColumns = [
@@ -588,12 +614,43 @@ const Attendance = () => {
     {
       title: "Employee",
       key: "employeeName",
-      render: (_, employee) => (
-        <div>
-          <div className="font-medium">{employee.name}</div>
-          <div className="text-sm text-gray-500">ID: {employee.empId}</div>
-        </div>
-      ),
+      render: (_, employee) => {
+        const data = attendanceData[employee.id] || {};
+        const hasAttendanceSaved = data.recordId !== null && data.recordId !== undefined;
+        const isPresent = data.presence === 'present';
+        
+        return (
+          <div 
+            style={{
+              padding: '8px',
+              borderRadius: '4px',
+              backgroundColor: hasAttendanceSaved 
+                ? (isPresent ? '#f6ffed' : '#fff2f0') 
+                : 'transparent',
+              border: hasAttendanceSaved 
+                ? `2px solid ${isPresent ? '#52c41a' : '#ff4d4f'}` 
+                : '2px solid transparent'
+            }}
+          >
+            <div 
+              className="font-medium"
+              style={{ 
+                color: hasAttendanceSaved 
+                  ? (isPresent ? '#52c41a' : '#ff4d4f') 
+                  : 'inherit' 
+              }}
+            >
+              {employee.name}
+              {hasAttendanceSaved && (
+                <span style={{ marginLeft: '8px', fontSize: '12px' }}>
+                  {isPresent ? '✓ Present' : '✗ Absent'}
+                </span>
+              )}
+            </div>
+            <div className="text-sm text-gray-500">ID: {employee.empId}</div>
+          </div>
+        );
+      },
     },
     {
       title: "Presence",
@@ -785,6 +842,43 @@ const Attendance = () => {
                   />
                 </Col>
               </Row>
+              <Row gutter={16} style={{ marginTop: '16px' }}>
+                <Col span={6}>
+                  <Statistic
+                    title="Saved Today"
+                    value={savedAttendanceCount}
+                    valueStyle={{ color: '#52c41a' }}
+                    prefix={<CheckCircleOutlined />}
+                  />
+                </Col>
+                <Col span={6}>
+                  <Statistic
+                    title="Pending"
+                    value={pendingAttendanceCount}
+                    valueStyle={{ color: '#faad14' }}
+                    prefix={<CloseCircleOutlined />}
+                  />
+                </Col>
+                <Col span={12}>
+                  <div style={{ 
+                    padding: '8px 16px', 
+                    backgroundColor: savedAttendanceCount > 0 ? '#f6ffed' : '#fff7e6',
+                    border: `1px solid ${savedAttendanceCount > 0 ? '#52c41a' : '#faad14'}`,
+                    borderRadius: '4px',
+                    textAlign: 'center'
+                  }}>
+                    <Text style={{ 
+                      color: savedAttendanceCount > 0 ? '#52c41a' : '#faad14',
+                      fontWeight: 'bold'
+                    }}>
+                      {savedAttendanceCount > 0 
+                        ? `✓ ${savedAttendanceCount} employees have attendance saved for today`
+                        : 'No attendance saved for today yet'
+                      }
+                    </Text>
+                  </div>
+                </Col>
+              </Row>
             </Col>
           </Row>
         </Card>
@@ -796,7 +890,13 @@ const Attendance = () => {
           dataSource={allEmployees}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 20 }}
+          pagination={{ 
+            pageSize: 50,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            pageSizeOptions: ['20', '50', '100', '150'],
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`
+          }}
           scroll={{ x: 1000 }}
           size="small"
           className="attendance-table"
@@ -846,7 +946,7 @@ const Attendance = () => {
                 value={viewDate}
                 onChange={(date) => {
                   setViewDate(date);
-                  fetchViewRecords(date, viewSite);
+                  fetchViewRecords(date, viewSite, viewPagination.current, viewPagination.pageSize);
                 }}
                 format="DD/MM/YYYY"
               />
@@ -859,7 +959,7 @@ const Attendance = () => {
                 value={viewSite}
                 onChange={(siteId) => {
                   setViewSite(siteId);
-                  fetchViewRecords(viewDate, siteId);
+                  fetchViewRecords(viewDate, siteId, viewPagination.current, viewPagination.pageSize);
                 }}
                 allowClear
               >
@@ -876,7 +976,7 @@ const Attendance = () => {
                 <Button
                   onClick={() => {
                     setViewSite('');
-                    fetchViewRecords(viewDate, '');
+                    fetchViewRecords(viewDate, '', viewPagination.current, viewPagination.pageSize);
                   }}
                   className="w-full"
                   icon={<ClearOutlined />}
@@ -901,10 +1001,14 @@ const Attendance = () => {
           dataSource={viewRecords}
           rowKey="id"
           loading={viewLoading}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            ...viewPagination,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} records`
+          }}
           scroll={{ x: 1000 }}
           size="small"
           className="view-attendance-table"
+          onChange={handleViewTableChange}
           expandable={{
             expandedRowKeys,
             onExpand: (expanded, record) => {
