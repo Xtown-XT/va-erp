@@ -46,18 +46,47 @@ app.use(morgan("dev"));
 app.use("/api", apiLimiter);
 
 // Connect DB
+// const initializeDatabase = async () => {
+//   try {
+//     await connectDB(); // connect only
+//     defineAssociations(); // define relationships
+
+//     console.log(Object.keys(sequelize.models));
+
+//     await sequelize.sync({ force: false, alter: true }); // now sync with associations
+//     await seedAdminUser();
+//     console.log("✅ Database initialized successfully with associations");
+//   } catch (error) {
+//     console.error("❌ Database initialization failed:", error);
+//     process.exit(1);
+//   }
+// };
+
+// Replace your initializeDatabase function in server.js with this:
+
+// Replace your initializeDatabase function in server.js with this:
+
 const initializeDatabase = async () => {
   try {
-    await connectDB(); // connect only
-    defineAssociations(); // define relationships
+ 
+    await connectDB();
 
-    console.log(Object.keys(sequelize.models));
-
-    await sequelize.sync({ force: false, alter: true }); // now sync with associations
+    defineAssociations();
+   
+    // Add timeout to detect hanging sync
+    const syncPromise = sequelize.sync({ force: false, alter: false, logging: console.log });
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Database sync timeout after 30 seconds")), 30000)
+    );
+    
+    await Promise.race([syncPromise, timeoutPromise]);
+    
     await seedAdminUser();
+    console.log("✅ Step 4: Admin user seeded");
+
     console.log("✅ Database initialized successfully with associations");
   } catch (error) {
-    console.error("❌ Database initialization failed:", error);
+    console.error("❌ Database initialization failed");
     process.exit(1);
   }
 };
