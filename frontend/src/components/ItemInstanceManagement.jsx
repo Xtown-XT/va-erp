@@ -37,20 +37,39 @@ const ItemInstanceManagement = () => {
   const [editingId, setEditingId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+    showQuickJumper: true,
+  });
 
   // Fetch data
-  const fetchData = async () => {
+  const fetchData = async (page = 1, limit = 10, search = searchTerm, status = statusFilter) => {
     setLoading(true);
     try {
+      // Build query params
+      let queryParams = `page=${page}&limit=${limit}`;
+      if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+      if (status && status !== 'all') queryParams += `&status=${status}`;
+
       const [instancesRes, itemsRes, vehiclesRes] = await Promise.all([
-        api.get("/api/itemInstances?include=item,fittedToVehicle"),
-        api.get("/api/items?canBeFitted=true"),
-        api.get("/api/vehicles"),
+        api.get(`/api/itemInstances?${queryParams}`),
+        api.get("/api/items?canBeFitted=true&limit=1000"),
+        api.get("/api/vehicles?limit=1000"),
       ]);
 
       setItemInstances(instancesRes.data.data || []);
       setItems(itemsRes.data.data || []);
       setVehicles(vehiclesRes.data.data || []);
+
+      // Update pagination state
+      setPagination(prev => ({
+        ...prev,
+        current: instancesRes.data.page || page,
+        total: instancesRes.data.total || 0,
+      }));
     } catch (err) {
       console.error("Error fetching data", err);
       message.error("Error fetching data");
@@ -60,20 +79,23 @@ const ItemInstanceManagement = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(pagination.current, pagination.pageSize);
   }, []);
 
-  // Filter data
-  const filteredInstances = itemInstances.filter((instance) => {
-    const matchesSearch = 
-      instance.instanceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      instance.item?.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      instance.item?.partNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === "all" || instance.status === statusFilter;
-    
-    return matchesSearch && matchesStatus;
-  });
+  // Trigger search when filters change with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      // Reset to page 1 when filters change
+      fetchData(1, pagination.pageSize, searchTerm, statusFilter);
+    }, 300); // Debounce search by 300ms
+
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, statusFilter]);
+
+  // Handle table change
+  const handleTableChange = (paginationConfig) => {
+    fetchData(paginationConfig.current, paginationConfig.pageSize, searchTerm, statusFilter);
+  };
 
   // Handle form submit
   const handleSubmit = async (values) => {
@@ -91,11 +113,11 @@ const ItemInstanceManagement = () => {
         await api.post("/api/itemInstances", processedValues);
         message.success("Item instance created successfully");
       }
-      
+
       setShowForm(false);
       setEditingId(null);
       form.resetFields();
-      fetchData();
+      fetchData(pagination.current, pagination.pageSize, searchTerm, statusFilter);
     } catch (err) {
       console.error("Error saving machine item", err);
       message.error("Error saving machine item");
@@ -117,7 +139,7 @@ const ItemInstanceManagement = () => {
     try {
       await api.delete(`/api/itemInstances/${id}`);
       message.success("Item instance deleted successfully");
-      fetchData();
+      fetchData(pagination.current, pagination.pageSize, searchTerm, statusFilter);
     } catch (err) {
       console.error("Error deleting machine item", err);
       message.error("Error deleting machine item");
@@ -264,15 +286,21 @@ const ItemInstanceManagement = () => {
       <Card>
         <Table
           columns={columns}
-          dataSource={filteredInstances}
+          // dataSource={itemInstances}
+          dataSource={itemInstances.filter((item) =>
+            item.instanceNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.item?.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.item?.partNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+          )}
+
           rowKey="id"
           loading={loading}
           pagination={{
-            showSizeChanger: true,
-            showQuickJumper: true,
+            ...pagination,
             showTotal: (total, range) =>
               `${range[0]}-${range[1]} of ${total} items`,
           }}
+          onChange={handleTableChange}
         />
       </Card>
 

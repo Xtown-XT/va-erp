@@ -20,12 +20,21 @@ class ItemInstanceController extends BaseController {
       const offset = (page - 1) * limit;
 
       const where = {};
+      const includeWhere = {};
+      
+      // Build search conditions
       if (search) {
         where[Op.or] = [
           { instanceNumber: { [Op.iLike]: `%${search}%` } },
           { notes: { [Op.iLike]: `%${search}%` } },
         ];
+        // Also search in related Item table
+        includeWhere[Op.or] = [
+          { itemName: { [Op.iLike]: `%${search}%` } },
+          { partNumber: { [Op.iLike]: `%${search}%` } },
+        ];
       }
+      
       if (status) {
         where.status = status;
       }
@@ -45,6 +54,8 @@ class ItemInstanceController extends BaseController {
             model: Item,
             as: "item",
             attributes: ["id", "itemName", "partNumber", "groupName", "units", "canBeFitted"],
+            where: search ? includeWhere : undefined,
+            required: search ? false : false, // Use LEFT JOIN to include items even if search doesn't match
           },
           {
             model: Vehicle,

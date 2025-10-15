@@ -66,9 +66,9 @@ const PurchaseOrderComplete = () => {
     try {
       const [posRes, suppliersRes, addressesRes, itemsRes] = await Promise.all([
         api.get(`/api/pos?page=${page}&limit=${limit}`),
-        api.get("/api/suppliers"),
-        api.get("/api/address"),
-        api.get("/api/items"),
+        api.get("/api/suppliers?limit=1000"),
+        api.get("/api/address?limit=1000"),
+        api.get("/api/items?limit=1000"),
       ]);
       
       setPurchaseOrders(posRes.data.data || []);

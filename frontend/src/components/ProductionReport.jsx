@@ -41,7 +41,7 @@ const ProductionReport = () => {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
       
-      let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}`;
+      let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
       if (selectedSite) {
         url += `&siteId=${selectedSite}`;
       }
@@ -348,7 +348,7 @@ const ProductionReport = () => {
   // Fetch sites and vehicles
   const fetchSites = async () => {
     try {
-      const res = await api.get('/api/sites');
+      const res = await api.get('/api/sites?limit=1000');
       setSites(res.data.data || []);
     } catch (error) {
       console.error('Error fetching sites:', error);
@@ -356,7 +356,7 @@ const ProductionReport = () => {
   };
   const fetchMachines = async () => {
     try {
-      const res = await api.get('/api/vehicles');
+      const res = await api.get('/api/vehicles?limit=1000');
       setMachines(res.data.data || []);
     } catch (error) {
       console.error('Error fetching machines:', error);
@@ -485,7 +485,12 @@ const ProductionReport = () => {
           dataSource={productionData}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} entries`,
+          }}
           scroll={{ x: 1200 }}
           size="small"
           summary={() => (

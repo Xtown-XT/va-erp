@@ -54,17 +54,23 @@ const ServiceManagement = () => {
   const [serviceHistory, setServiceHistory] = useState([]);
   const [activeTab, setActiveTab] = useState("vehicles");
 
+  const [historyPagination, setHistoryPagination] = useState({
+  current: 1,
+  pageSize: 10,
+  total: 0
+});
+
   // Fetch data
   const fetchData = async () => {
     setLoading(true);
     try {
       const [vehiclesRes, compressorsRes, itemsRes, servicesRes, serviceAlertsRes, serviceHistoryRes] = await Promise.all([
-        api.get("/api/vehicles"),
-        api.get("/api/compressors"),
-        api.get("/api/items"),
-        api.get("/api/services"),
-        api.get("/api/service-alerts"),
-        api.get("/api/services/history"),
+        api.get("/api/vehicles?limit=1000"),
+        api.get("/api/compressors?limit=1000"),
+        api.get("/api/items?limit=1000"),
+        api.get("/api/services?limit=1000"),
+        api.get("/api/service-alerts?limit=100"),
+        api.get("/api/services/history?limit=1000"),
       ]);
       
       const vehiclesData = vehiclesRes.data.data || [];
@@ -83,8 +89,28 @@ const ServiceManagement = () => {
     }
   };
 
+  // Fetch service history with pagination
+  const fetchServiceHistory = async (page = 1, pageSize = 10) => {
+    setLoading(true);
+    try {
+      const response = await api.get(`/api/services/history?page=${page}&limit=${pageSize}`);
+      setServiceHistory(response.data.data || []);
+      setHistoryPagination({
+        current: response.data.pagination?.page || page,
+        pageSize: response.data.pagination?.limit || pageSize,
+        total: response.data.pagination?.total || 0,
+      });
+    } catch (err) {
+      message.error("Error fetching service history");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    // fetchServiceHistory();
+    fetchServiceHistory(historyPagination.current, historyPagination.pageSize);
   }, []);
 
   // Handle mark service as done
@@ -140,6 +166,7 @@ const ServiceManagement = () => {
       setServiceType(null);
       form.resetFields();
       fetchData(); // Refresh data
+      fetchServiceHistory(historyPagination.current, historyPagination.pageSize); // Refresh service history
     } catch (err) {
       message.error("Error marking service as done");
     }
@@ -160,8 +187,8 @@ const ServiceManagement = () => {
     setEditingSchedule({
       id: item.id,
       type: type,
-      name: type === 'vehicle' ? item.vehicleNumber : item.compressorName,
-      currentRPM: type === 'vehicle' ? item.vehicleRPM : item.compressorRPM,
+      name: item.name,
+      currentRPM: item.currentRPM,
       nextServiceRPM: item.nextServiceRPM || null
     });
     setShowEditScheduleModal(true);
@@ -929,7 +956,15 @@ const ServiceManagement = () => {
                   dataSource={serviceHistory}
                   rowKey="id"
                   loading={loading}
-                  pagination={{ pageSize: 20 }}
+                  // pagination={{ pageSize: 20 }}
+                  pagination={{
+    current: historyPagination.current,
+    pageSize: historyPagination.pageSize,
+    total: historyPagination.total,
+    onChange: (page, pageSize) => {
+      fetchServiceHistory(page, pageSize);
+    }
+  }}
                   scroll={{ x: 1000 }}
                 />
               </Card>

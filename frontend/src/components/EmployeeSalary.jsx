@@ -75,6 +75,7 @@ const EmployeeSalary = () => {
 
   useEffect(() => {
     fetchEmployees();
+    fetchSalaryRecords()
   }, []);
 
   // Handle form submit

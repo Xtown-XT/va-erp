@@ -48,7 +48,7 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await api.get("/api/users");
+      const res = await api.get("/api/users?limit=20");
       setUsers(res.data.data || []);
     } catch (err) {
       console.error("Error fetching users", err);

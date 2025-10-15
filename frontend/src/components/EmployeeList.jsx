@@ -163,6 +163,7 @@ const EmployeeList = () => {
               ${(employees || [])
                 .filter((e) =>
                   e.name?.toLowerCase().includes(searchTerm.toLowerCase())
+                  || e.empId?.toLowerCase().includes(searchTerm.toLowerCase())
                 )
                 .map(
                   (emp) => `
@@ -365,7 +366,7 @@ const EmployeeList = () => {
       {/* Search */}
       <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
         <Input.Search
-          placeholder="Search by employee name"
+          placeholder="Search by employee name or ID"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 300 }}
@@ -382,7 +383,8 @@ const EmployeeList = () => {
       <Table
         columns={columns}
         dataSource={(employees || []).filter((e) =>
-          e.name?.toLowerCase().includes(searchTerm.toLowerCase())
+          e.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          e.empId?.toLowerCase().includes(searchTerm.toLowerCase())
         )}
         rowKey="id"
         loading={loading}
@@ -392,6 +394,9 @@ const EmployeeList = () => {
         }}
         onChange={handleTableChange}
       />
+
+   
+
     </div>
   );
 };

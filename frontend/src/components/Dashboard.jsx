@@ -88,16 +88,19 @@ const Dashboard = () => {
         api.get("/api/employeeAttendance").catch(() => ({ data: { data: [] } })),
       ]);
 
+
       setStats({
-        employees: employeesRes.data.data?.length || 0,
-        vehicles: vehiclesRes.data.data?.length || 0,
-        sites: sitesRes.data.data?.length || 0,
-        suppliers: suppliersRes.data.data?.length || 0,
-        items: itemsRes.data.data?.length || 0,
-        purchaseOrders: purchaseOrdersRes.data.data?.length || 0,
-        services: servicesRes.data.data?.length || 0,
-        compressors: compressorsRes.data.data?.length || 0,
+        // employees: employeesRes.data.data?.length || 0,
+        employees: employeesRes.data?.total ?? employeesRes.data?.data?.length ?? 0,
+        vehicles: vehiclesRes.data?.total ?? vehiclesRes.data?.data?.length ?? 0,
+        sites: sitesRes.data?.total ?? sitesRes.data?.data?.length ?? 0,
+        suppliers: suppliersRes.data?.total ?? suppliersRes.data?.data?.length ?? 0,
+        items: itemsRes.data?.total ?? itemsRes.data?.data?.length ?? 0,
+        purchaseOrders: purchaseOrdersRes.data?.total ?? purchaseOrdersRes.data?.data?.length ?? 0,
+        services: servicesRes.data?.total ?? servicesRes.data?.data?.length ?? 0,
+        compressors: compressorsRes.data?.total ?? compressorsRes.data?.data?.length ?? 0,
       });
+
 
       // Fetch today's attendance
       const today = dayjs().format("YYYY-MM-DD");
@@ -109,6 +112,7 @@ const Dashboard = () => {
           site: att.site || (att.siteId && (sitesRes.data.data || []).find(s => s.id === att.siteId)) || {},
         }));
       setTodayAttendance(todayAttendances.slice(0, 5));
+      
 
       // Check service alerts for vehicles and compressors
       const alerts = [];

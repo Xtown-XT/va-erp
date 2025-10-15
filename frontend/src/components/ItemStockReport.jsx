@@ -23,8 +23,8 @@ const ItemStockReport = () => {
     setLoading(true);
     try {
       const [itemsRes, instancesRes] = await Promise.all([
-        api.get("/api/items"),
-        api.get("/api/itemInstances")
+        api.get("/api/items?limit=1000"), // Fetch all items with high limit
+        api.get("/api/itemInstances?limit=5000") // Fetch all instances with high limit
       ]);
       
       const items = itemsRes.data.data || [];
@@ -299,7 +299,12 @@ const ItemStockReport = () => {
           dataSource={reportData}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
+          }}
           scroll={{ x: 1200 }}
         />
         {reportData.length === 0 && !loading && (

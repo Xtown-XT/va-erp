@@ -28,7 +28,7 @@ export class BaseController {
   //  READ ALL
   getAll = async (req, res, next) => {
     try {
-      const { page = 1, limit = 10 } = req.query;
+      const { page = 1, limit = 10  } = req.query;
       const items = await this.service.getAll(page, limit);
       return res.json({ success: true, ...items });
     } catch (error) {

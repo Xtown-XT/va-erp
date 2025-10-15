@@ -70,7 +70,7 @@ const Vehicle = () => {
 
   const fetchBrands = async () => {
     try {
-      const res = await api.get("/api/brands");
+      const res = await api.get("/api/brands?limit=1000");
       setBrands(res.data.data || []);
     } catch (err) {
       console.error("Error fetching brands", err);
@@ -80,7 +80,7 @@ const Vehicle = () => {
 
   const fetchCompressors = async () => {
     try {
-      const res = await api.get("/api/compressors");
+      const res = await api.get("/api/compressors?limit=1000");
       setCompressors(res.data.data || []);
     } catch (err) {
       console.error("Error fetching compressors", err);

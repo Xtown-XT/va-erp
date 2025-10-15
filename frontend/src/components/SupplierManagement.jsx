@@ -72,8 +72,8 @@ const SupplierManagement = () => {
       const payload = {
         supplierName: values.supplierName.trim(),
         gstNumber: values.gstNumber?.trim(),
-        phone: values.phone?.trim(),
-        email: values.email?.trim(),
+        phone: values.phone?.trim() ? values.phone.trim() : null,
+        email: values.email?.trim() ? values.email.trim() : null,
         address: values.address.trim(),
         status: values.status || "active",
       };
@@ -288,7 +288,7 @@ const SupplierManagement = () => {
               >
                 <Input />
               </Form.Item>
-              <Form.Item
+              {/* <Form.Item
                 name="phone"
                 label="Phone"
                 rules={[
@@ -305,11 +305,52 @@ const SupplierManagement = () => {
                 label="Email"
                 rules={[
                   { type: "email", message: "Please enter a valid email" },
-                  { max: 255, message: "Email must be no more than 255 characters" }
+                  { max: 255, message: "Email must be no more than 255 characters", whitespace: true }
+                  
                 ]}
               >
                 <Input />
-              </Form.Item>
+              </Form.Item> */}
+
+              <Form.Item
+  name="phone"
+  label="Phone"
+  rules={[
+    {
+      validator: (_, value) => {
+        // Allow empty, null, or undefined
+        if (!value || value.trim() === '') return Promise.resolve();
+        // Validate if value is provided
+        return /^[0-9]{10}$/.test(value.trim())
+          ? Promise.resolve()
+          : Promise.reject("Phone number must be exactly 10 digits");
+      },
+    },
+  ]}
+>
+  <Input placeholder="Enter 10-digit phone number" />
+</Form.Item>
+
+<Form.Item
+  name="email"
+  label="Email"
+  rules={[
+    {
+      validator: (_, value) => {
+        // Allow empty, null, or undefined
+        if (!value || value.trim() === '') return Promise.resolve();
+        // Validate if value is provided
+        return /\S+@\S+\.\S+/.test(value.trim())
+          ? Promise.resolve()
+          : Promise.reject("Please enter a valid email");
+      },
+    },
+  ]}
+>
+  <Input placeholder="Optional" />
+</Form.Item>
+
+
               <Form.Item
                 name="status"
                 label="Status"

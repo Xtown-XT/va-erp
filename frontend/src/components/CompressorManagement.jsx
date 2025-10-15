@@ -32,13 +32,30 @@ const CompressorManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+    showQuickJumper: true,
+  });
 
   // Fetch compressors
-  const fetchCompressors = async () => {
+  const fetchCompressors = async (page = 1, limit = 10, search = searchTerm) => {
     setLoading(true);
     try {
-      const res = await api.get("/api/compressors");
+      let queryParams = `page=${page}&limit=${limit}`;
+      if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+      
+      const res = await api.get(`/api/compressors?${queryParams}`);
       setCompressors(res.data.data || []);
+      
+      // Update pagination state
+      setPagination(prev => ({
+        ...prev,
+        current: res.data.page || page,
+        total: res.data.total || 0,
+      }));
     } catch (err) {
       console.error("Error fetching compressors", err);
       setCompressors([]);
@@ -48,8 +65,17 @@ const CompressorManagement = () => {
   };
 
   useEffect(() => {
-    fetchCompressors();
+    fetchCompressors(pagination.current, pagination.pageSize);
   }, []);
+  
+  // Trigger search when searchTerm changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchCompressors(1, pagination.pageSize, searchTerm);
+    }, 300); // Debounce search
+    
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   // Handle form submit (create or update)
   const handleSubmit = async (values) => {
@@ -75,7 +101,7 @@ const CompressorManagement = () => {
       setShowForm(false);
       setEditingId(null);
       form.resetFields();
-      fetchCompressors();
+      fetchCompressors(pagination.current, pagination.pageSize, searchTerm);
     } catch (err) {
       console.error("Error saving compressor", err);
     }
@@ -96,7 +122,7 @@ const CompressorManagement = () => {
   const handleDelete = async (id) => {
     try {
       await api.delete(`/api/compressors/${id}/hard`);
-      setCompressors(compressors.filter((compressor) => compressor.id !== id));
+      fetchCompressors(pagination.current, pagination.pageSize, searchTerm);
     } catch (err) {
       console.error("Error deleting compressor", err);
     }
@@ -348,12 +374,19 @@ const CompressorManagement = () => {
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(compressors || []).filter((c) =>
-          c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase())
+        // dataSource={compressors}
+        dataSource={compressors.filter(c =>
+        c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) 
         )}
+
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        pagination={{
+          ...pagination,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} compressors`,
+        }}
+        onChange={(paginationConfig) => fetchCompressors(paginationConfig.current, paginationConfig.pageSize, searchTerm)}
       />
     </div>
   );

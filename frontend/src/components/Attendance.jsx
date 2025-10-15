@@ -123,16 +123,28 @@ const Attendance = () => {
 
   const fetchEmployees = async () => {
     try {
-      const res = await api.get("/api/employeeLists");
+      // Fetch all employees without pagination limit
+      const res = await api.get("/api/employeeLists?limit=1000");
       setEmployees(res.data.data || []);
+      console.log("Total employees loaded:", res.data.data?.length || 0);
     } catch (err) {
       message.error("Error fetching employees");
     }
   };
 
+  // const fetchEmployees = async () => {
+  //   try {
+  //     const res = await api.get("/api/employeeLists");
+  //     setEmployees(res.data.data || []);
+  //     console.log(res.data.data || [])
+  //   } catch (err) {
+  //     message.error("Error fetching employees");
+  //   }
+  // };
+
   const fetchSites = async () => {
     try {
-      const res = await api.get("/api/sites");
+      const res = await api.get("/api/sites?limit=1000");
       setSites(res.data.data || []);
     } catch (err) {
       message.error("Error fetching sites");
@@ -141,7 +153,7 @@ const Attendance = () => {
 
   const fetchVehicles = async () => {
     try {
-      const res = await api.get("/api/vehicles");
+      const res = await api.get("/api/vehicles?limit=1000");
       setVehicles(res.data.data || []);
     } catch (err) {
       message.error("Error fetching vehicles");
@@ -220,6 +232,7 @@ const Attendance = () => {
       fetchRecords();
       fetchEmployees();
       fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
+    
     } catch (err) {
       message.error("Error saving attendance");
     } finally {
@@ -312,8 +325,15 @@ const Attendance = () => {
 
   // Handle view table change
   const handleViewTableChange = (pagination) => {
-    fetchViewRecords(viewDate, viewSite, pagination.current, pagination.pageSize);
-  };
+  setViewPagination(prev => ({
+    ...prev,
+    current: pagination.current,
+    pageSize: pagination.pageSize,
+  }));
+
+  fetchViewRecords(viewDate, viewSite, pagination.current, pagination.pageSize);
+};
+
 
   // PDF Export for view records
   const exportToPDF = () => {

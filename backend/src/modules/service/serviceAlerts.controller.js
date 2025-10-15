@@ -13,7 +13,6 @@ class ServiceAlertsController {
       // Get all active vehicles
       const vehicles = await Vehicle.findAll({
         where: {
-          status: "active",
           deletedAt: null
         },
         attributes: ["id", "vehicleNumber", "vehicleType", "vehicleRPM", "nextServiceRPM"]
@@ -29,21 +28,31 @@ class ServiceAlertsController {
           
           let priority, message, isAlert;
           
-          if (overdue > 100) {
-            priority = "high";
-            message = `Machine ${vehicle.vehicleNumber} service OVERDUE by ${overdue} RPM`;
-            isAlert = true;
-          } else if (overdue > 50) {
-            priority = "medium";
-            message = `Machine ${vehicle.vehicleNumber} service OVERDUE by ${overdue} RPM`;
-            isAlert = true;
+          // Check if overdue first
+          if (currentRPM >= nextServiceRPM) {
+            // Service is overdue
+            if (overdue > 100) {
+              priority = "high";
+              message = `Machine ${vehicle.vehicleNumber} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            } else if (overdue > 50) {
+              priority = "medium";
+              message = `Machine ${vehicle.vehicleNumber} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            } else {
+              priority = "medium";
+              message = `Machine ${vehicle.vehicleNumber} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            }
           } else if (remaining <= 50) {
+            // Service due soon
             priority = "low";
-            message = `Machine ${vehicle.vehicleNumber} service due soon (${remaining} RPM)`;
+            message = `Machine ${vehicle.vehicleNumber} service due soon (${Math.round(remaining)} RPM remaining)`;
             isAlert = true;
           } else {
+            // Service is good
             priority = "good";
-            message = `Machine ${vehicle.vehicleNumber} - Service in ${remaining} RPM`;
+            message = `Machine ${vehicle.vehicleNumber} - Service in ${Math.round(remaining)} RPM`;
             isAlert = false;
           }
           
@@ -95,21 +104,31 @@ class ServiceAlertsController {
           
           let priority, message, isAlert;
           
-          if (overdue > 100) {
-            priority = "high";
-            message = `Compressor ${compressor.compressorName} service OVERDUE by ${overdue} RPM`;
-            isAlert = true;
-          } else if (overdue > 50) {
-            priority = "medium";
-            message = `Compressor ${compressor.compressorName} service OVERDUE by ${overdue} RPM`;
-            isAlert = true;
+          // Check if overdue first
+          if (currentRPM >= nextServiceRPM) {
+            // Service is overdue
+            if (overdue > 100) {
+              priority = "high";
+              message = `Compressor ${compressor.compressorName} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            } else if (overdue > 50) {
+              priority = "medium";
+              message = `Compressor ${compressor.compressorName} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            } else {
+              priority = "medium";
+              message = `Compressor ${compressor.compressorName} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            }
           } else if (remaining <= 50) {
+            // Service due soon
             priority = "low";
-            message = `Compressor ${compressor.compressorName} service due soon (${remaining} RPM)`;
+            message = `Compressor ${compressor.compressorName} service due soon (${Math.round(remaining)} RPM remaining)`;
             isAlert = true;
           } else {
+            // Service is good
             priority = "good";
-            message = `Compressor ${compressor.compressorName} - Service in ${remaining} RPM`;
+            message = `Compressor ${compressor.compressorName} - Service in ${Math.round(remaining)} RPM`;
             isAlert = false;
           }
           
@@ -176,21 +195,31 @@ class ServiceAlertsController {
           
           let priority, message, isAlert;
           
-          if (overdue > 100) {
-            priority = "high";
-            message = `Item ${instance.item?.itemName} service OVERDUE by ${overdue} RPM`;
-            isAlert = true;
-          } else if (overdue > 50) {
-            priority = "medium";
-            message = `Item ${instance.item?.itemName} service OVERDUE by ${overdue} RPM`;
-            isAlert = true;
+          // Check if overdue first
+          if (currentRPM >= nextServiceRPM) {
+            // Service is overdue
+            if (overdue > 100) {
+              priority = "high";
+              message = `Item ${instance.item?.itemName} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            } else if (overdue > 50) {
+              priority = "medium";
+              message = `Item ${instance.item?.itemName} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            } else {
+              priority = "medium";
+              message = `Item ${instance.item?.itemName} service OVERDUE by ${Math.round(overdue)} RPM`;
+              isAlert = true;
+            }
           } else if (remaining <= 50) {
+            // Service due soon
             priority = "low";
-            message = `Item ${instance.item?.itemName} service due soon (${remaining} RPM)`;
+            message = `Item ${instance.item?.itemName} service due soon (${Math.round(remaining)} RPM remaining)`;
             isAlert = true;
           } else {
+            // Service is good
             priority = "good";
-            message = `Item ${instance.item?.itemName} - Service in ${remaining} RPM`;
+            message = `Item ${instance.item?.itemName} - Service in ${Math.round(remaining)} RPM`;
             isAlert = false;
           }
           
