@@ -151,7 +151,9 @@ const UserManagement = () => {
       key: "role",
       render: (role) => {
         const colors = { admin: "red", editor: "blue", viewer: "green" };
-        return <Tag color={colors[role] || "default"}>{role}</Tag>;
+        return <Tag color={colors[role] || "default"}>
+          {role ? role.charAt(0).toUpperCase() + role.slice(1).toLowerCase() : "-"}
+        </Tag>;
       },
     },
     {

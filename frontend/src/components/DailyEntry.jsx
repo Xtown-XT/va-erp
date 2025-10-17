@@ -172,10 +172,16 @@ const DailyEntry = () => {
     const machine = machines.find(m => m.id === machineId);
     setSelectedMachine(machine);
 
+    // Debug logging
+    console.log('Selected Machine:', machine?.vehicleNumber, 'Machine ID:', machine?.id);
+    console.log('Machine compressorId:', machine?.compressorId);
+
     // Check if machine is crawler type
     const isCrawler = machine && machine.vehicleType.toLowerCase().includes('crawler');
+    const isCamper = machine && machine.vehicleType.toLowerCase().includes('camper');
+    const isTruck = machine && machine.vehicleType.toLowerCase().includes('truck');
 
-    if (isCrawler) {
+    if (isCrawler || isCamper || isTruck) {
       // Auto-fill machine opening RPM for crawler machines
       const vehicleOpeningRPM = machine?.vehicleRPM || 0;
       form.setFieldValue('vehicleOpeningRPM', vehicleOpeningRPM);
@@ -188,6 +194,7 @@ const DailyEntry = () => {
 
       if (machine && machine.compressorId) {
         const compressor = compressors.find(c => c.id === machine.compressorId);
+        console.log('Found Compressor:', compressor?.compressorName, 'Compressor ID:', compressor?.id);
         setSelectedCompressor(compressor);
 
         // Auto-select compressor in form
@@ -202,18 +209,20 @@ const DailyEntry = () => {
           ...prev,
           compressorOpening: compressorOpeningRPM
         }));
-      } else {
+      }
+      
+      else {
         setSelectedCompressor(null);
         form.setFieldValue('compressorId', null);
       }
     } else {
       // Set RPM to 0 for non-crawler machines (camper, truck, etc.)
-      form.setFieldValue('vehicleOpeningRPM', 0);
-      form.setFieldValue('vehicleClosingRPM', 0);
-      form.setFieldValue('compressorOpeningRPM', 0);
-      form.setFieldValue('compressorClosingRPM', 0);
-      setSelectedCompressor(null);
-      form.setFieldValue('compressorId', null);
+      // form.setFieldValue('vehicleOpeningRPM', 0);
+      // form.setFieldValue('vehicleClosingRPM', 0);
+      // form.setFieldValue('compressorOpeningRPM', 0);
+      // form.setFieldValue('compressorClosingRPM', 0);
+      // setSelectedCompressor(null);
+      // form.setFieldValue('compressorId', null);
       
       // Reset RPM state
       setRpmValues({
@@ -229,6 +238,31 @@ const DailyEntry = () => {
 
     // Fetch fitted machine items for this machine
     fetchFittedItems(machineId);
+  };
+
+  // Handle compressor selection
+  const handleCompressorChange = (compressorId) => {
+    const compressor = compressors.find(c => c.id === compressorId);
+    setSelectedCompressor(compressor);
+
+    // Auto-fill compressor opening RPM
+    if (compressor) {
+      const compressorOpeningRPM = compressor.compressorRPM || 0;
+      form.setFieldValue('compressorOpeningRPM', compressorOpeningRPM);
+      
+      // Update RPM state for real-time calculation
+      setRpmValues(prev => ({
+        ...prev,
+        compressorOpening: compressorOpeningRPM
+      }));
+    } else {
+      // If cleared, reset to 0
+      form.setFieldValue('compressorOpeningRPM', 0);
+      setRpmValues(prev => ({
+        ...prev,
+        compressorOpening: 0
+      }));
+    }
   };
 
   // Handle RPM field changes for real-time calculation
@@ -591,11 +625,11 @@ const DailyEntry = () => {
         <Space>
           {canEdit() && (
             <Button
-              size="small"
+             
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              Edit
+              
             </Button>
           )}
           {canDelete() && (
@@ -605,8 +639,8 @@ const DailyEntry = () => {
               okText="Yes"
               cancelText="No"
             >
-              <Button size="small" danger icon={<DeleteOutlined />}>
-                Delete
+              <Button danger icon={<DeleteOutlined />}>
+                
               </Button>
             </Popconfirm>
           )}
@@ -770,16 +804,20 @@ const DailyEntry = () => {
                     >
                       <Select
                         placeholder="Select compressor"
-                        disabled={!selectedCompressor}
+                        onChange={handleCompressorChange}
+                        showSearch
+                        optionFilterProp="children"
+                        allowClear
                       >
-                        {selectedCompressor && (
-                          <Select.Option key={selectedCompressor.id} value={selectedCompressor.id}>
-                            {selectedCompressor.compressorName} - {selectedCompressor.compressorType}
+                        {compressors.map((compressor) => (
+                          <Select.Option key={compressor.id} value={compressor.id}>
+                            {compressor.compressorName} - {compressor.compressorType}
                           </Select.Option>
-                        )}
+                        ))}
                       </Select>
                     </Form.Item>
                   </Col>
+
                 </Row>
               </Panel>
 
@@ -787,7 +825,7 @@ const DailyEntry = () => {
               <Panel header="RPM Tracking" key="rpm">
                 <Row gutter={16}>
                   {/* Machine RPM only for crawler */}
-                  {selectedMachine && selectedMachine.vehicleType.toLowerCase().includes('crawler') && (
+                  {selectedMachine && (selectedMachine.vehicleType.toLowerCase().includes('crawler') || selectedMachine.vehicleType.toLowerCase().includes('truck') || selectedMachine.vehicleType.toLowerCase().includes('camper')) && (
                     <Col xs={24} sm={12}>
                       <Card title={`${selectedMachine?.vehicleType || 'Machine'} RPM`} size="small">
                         <Row gutter={8}>
@@ -855,7 +893,7 @@ const DailyEntry = () => {
                     </Col>
                   )}
                   {/* Compressor RPM always visible (when compressor selected) */}
-                  <Col xs={24} sm={selectedMachine && selectedMachine.vehicleType.toLowerCase().includes('crawler') ? 12 : 24}>
+                  <Col xs={24} sm={selectedMachine && (selectedMachine.vehicleType.toLowerCase().includes('crawler') || selectedMachine.vehicleType.toLowerCase().includes('truck') || selectedMachine.vehicleType.toLowerCase().includes('camper')) ? 12 : 24}>
                     <Card title="Compressor RPM" size="small">
                       <Row gutter={8}>
                         <Col span={12}>

@@ -206,11 +206,11 @@ const ItemInstanceManagement = () => {
         <Space>
           {canEdit() && (
             <Button
-              size="small"
+            
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              Edit
+        
             </Button>
           )}
           {canDelete() && (
@@ -219,11 +219,11 @@ const ItemInstanceManagement = () => {
               onConfirm={() => handleDelete(record.id)}
             >
               <Button
-                size="small"
+              
                 icon={<DeleteOutlined />}
                 danger
               >
-                Delete
+           
               </Button>
             </Popconfirm>
           )}

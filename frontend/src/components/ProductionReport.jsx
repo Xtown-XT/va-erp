@@ -40,7 +40,7 @@ const ProductionReport = () => {
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      
+
       let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
       if (selectedSite) {
         url += `&siteId=${selectedSite}`;
@@ -48,10 +48,10 @@ const ProductionReport = () => {
       if (selectedMachine) {
         url += `&vehicleId=${selectedMachine}`;
       }
-      
+
       const res = await api.get(url);
       const entries = res.data.data || [];
-      
+
       // Calculate production metrics
       const calculations = calculateProductionMetrics(entries);
       setProductionData(calculations.dailyData);
@@ -75,23 +75,112 @@ const ProductionReport = () => {
     let totalCompressorRPM = 0;
     let totalHoles = 0;
 
-    const dailyData = entries.map(entry => {
-      // Vehicle HSD should come from vehicleHSD, not dieselUsed (which is overall)
-      const vehicleHSD = entry.vehicleHSD || 0;
-      const meter = entry.meter || 0;
-      const vehicleRPM = (entry.vehicleClosingRPM || 0) - (entry.vehicleOpeningRPM || 0);
-      const compressorRPM = (entry.compressorClosingRPM || 0) - (entry.compressorOpeningRPM || 0);
-      const holes = entry.noOfHoles || 0;
-      const compressorHSD = entry.compressorHSD || 0;
+    // const dailyData = entries.map(entry => {
+    //   // Vehicle HSD should come from vehicleHSD, not dieselUsed (which is overall)
+    //   const vehicleHSD = entry.vehicleHSD || 0;
+    //   const meter = entry.meter || 0;
+    //   const vehicleRPM = (entry.vehicleClosingRPM || 0) - (entry.vehicleOpeningRPM || 0);
+    //   const compressorRPM = (entry.compressorClosingRPM || 0) - (entry.compressorOpeningRPM || 0);
+    //   const holes = entry.noOfHoles || 0;
+    //   const compressorHSD = entry.compressorHSD || 0;
 
-      // Find machine type
-      // Prefer server-provided vehicle info; fallback to machines cache
+    //   // Find machine type
+    //   // Prefer server-provided vehicle info; fallback to machines cache
+    //   const machineTypeSrc = (entry.vehicle?.vehicleType) || (machines.find(m => m.id === entry.vehicleId)?.vehicleType) || '';
+    //   const machineType = machineTypeSrc.toString().trim().toLowerCase();
+    //   const isCrawler = machineType === 'crawler' || machineType.includes('crawler');
+    //   const isCamper = machineType === 'camper' || machineType.includes('camper') || machineType.includes('truck');
+
+    //   // Calculate HSD breakdown
+    //   let crawlerHSD = 0;
+    //   let camperHSD = 0;
+    //   let crawlerRPM = 0;
+
+    //   if (isCrawler) {
+    //     crawlerHSD = vehicleHSD;
+    //     crawlerRPM = vehicleRPM;
+    //   } else if (isCamper) {
+    //     camperHSD = vehicleHSD;
+    //   }
+
+    //   const totalHSD = crawlerHSD + camperHSD + compressorHSD;
+
+    //   // Calculate ratios
+    //   const hsdMtr = meter > 0 ? ((totalHSD) / meter).toFixed(2) : 0;
+    //   const mtrRPM = compressorRPM > 0 ? (meter / compressorRPM).toFixed(2) : 0;
+    //   const crawlerHsdPerRpm = crawlerRPM > 0 ? (crawlerHSD / crawlerRPM).toFixed(2) : 0;
+    //   const compHsdPerRpm = compressorRPM > 0 ? (compressorHSD / compressorRPM).toFixed(2) : 0;
+    //   const depthAvg = holes > 0 ? (meter / holes).toFixed(2) : 0;
+
+    //   // Add to totals
+    //   totalCrawlerHSD += crawlerHSD;
+    //   totalCamperHSD += camperHSD;
+    //   totalCompressorHSD += compressorHSD;
+    //   totalTotalHSD += totalHSD;
+    //   totalMeter += meter;
+    //   totalCrawlerRPM += crawlerRPM;
+    //   totalCompressorRPM += compressorRPM;
+    //   totalHoles += holes;
+
+    //   return {
+    //     ...entry,
+    //     isCrawler,
+    //     isCamper,
+    //     crawlerHSD,
+    //     camperHSD,
+    //     compressorHSD,
+    //     totalHSD,
+    //     crawlerRPM,
+    //     compressorRPM,
+    //     hsdMtr,
+    //     mtrRPM,
+    //     crawlerHsdPerRpm,
+    //     compHsdPerRpm,
+    //     depthAvg,
+    //     // Display-only values: blank when not applicable
+    //     crawlerHSDDisplay: isCrawler ? (crawlerHSD || 0) : '',
+    //     camperHSDDisplay: isCamper ? (camperHSD || 0) : '',
+    //     crawlerRPMDisplay: isCrawler ? (crawlerRPM || 0) : '',
+    //   };
+    // });
+
+    // Calculate totals for summary
+
+
+    // const totals = {
+    //   totalCrawlerHSD,
+    //   totalCamperHSD,
+    //   totalCompressorHSD,
+    //   totalTotalHSD,
+    //   totalMeter,
+    //   totalCrawlerRPM,
+    //   totalCompressorRPM,
+    //   totalHoles,
+    //   totalHsdMtr: totalMeter > 0 ? (totalTotalHSD / totalMeter).toFixed(2) : 0,
+    //   totalMtrRPM: totalCompressorRPM > 0 ? (totalMeter / totalCompressorRPM).toFixed(2) : 0,
+    //   totalCrawlerHsdPerRpm: totalCrawlerRPM > 0 ? (totalCrawlerHSD / totalCrawlerRPM).toFixed(2) : 0,
+    //   totalCompHsdPerRpm: totalCompressorRPM > 0 ? (totalCompressorHSD / totalCompressorRPM).toFixed(2) : 0,
+    //   totalDepthAvg: totalHoles > 0 ? (totalMeter / totalHoles).toFixed(2) : 0,
+    // };
+
+
+
+    const dailyData = entries.map(entry => {
+
+      const vehicleHSD = parseFloat(entry.vehicleHSD) || 0;
+      const meter = parseFloat(entry.meter) || 0;
+      const vehicleRPM = (parseFloat(entry.vehicleClosingRPM) || 0) - (parseFloat(entry.vehicleOpeningRPM) || 0);
+      const compressorRPM = (parseFloat(entry.compressorClosingRPM) || 0) - (parseFloat(entry.compressorOpeningRPM) || 0);
+      const holes = parseFloat(entry.noOfHoles) || 0;
+      const compressorHSD = parseFloat(entry.compressorHSD) || 0;
+
+
       const machineTypeSrc = (entry.vehicle?.vehicleType) || (machines.find(m => m.id === entry.vehicleId)?.vehicleType) || '';
       const machineType = machineTypeSrc.toString().trim().toLowerCase();
       const isCrawler = machineType === 'crawler' || machineType.includes('crawler');
       const isCamper = machineType === 'camper' || machineType.includes('camper') || machineType.includes('truck');
 
-      // Calculate HSD breakdown
+
       let crawlerHSD = 0;
       let camperHSD = 0;
       let crawlerRPM = 0;
@@ -103,16 +192,17 @@ const ProductionReport = () => {
         camperHSD = vehicleHSD;
       }
 
-      const totalHSD = crawlerHSD + camperHSD + compressorHSD;
 
-      // Calculate ratios
-      const hsdMtr = meter > 0 ? ((totalHSD) / meter).toFixed(2) : 0;
-      const mtrRPM = compressorRPM > 0 ? (meter / compressorRPM).toFixed(2) : 0;
-      const crawlerHsdPerRpm = crawlerRPM > 0 ? (crawlerHSD / crawlerRPM).toFixed(2) : 0;
-      const compHsdPerRpm = compressorRPM > 0 ? (compressorHSD / compressorRPM).toFixed(2) : 0;
-      const depthAvg = holes > 0 ? (meter / holes).toFixed(2) : 0;
+      const totalHSD = parseFloat((crawlerHSD + camperHSD + compressorHSD).toFixed(2));
 
-      // Add to totals
+
+      const hsdMtr = meter > 0 ? parseFloat((totalHSD / meter).toFixed(2)) : 0;
+      const mtrRPM = compressorRPM > 0 ? parseFloat((meter / compressorRPM).toFixed(2)) : 0;
+      const crawlerHsdPerRpm = crawlerRPM > 0 ? parseFloat((crawlerHSD / crawlerRPM).toFixed(2)) : 0;
+      const compHsdPerRpm = compressorRPM > 0 ? parseFloat((compressorHSD / compressorRPM).toFixed(2)) : 0;
+      const depthAvg = holes > 0 ? parseFloat((meter / holes).toFixed(2)) : 0;
+
+
       totalCrawlerHSD += crawlerHSD;
       totalCamperHSD += camperHSD;
       totalCompressorHSD += compressorHSD;
@@ -126,39 +216,42 @@ const ProductionReport = () => {
         ...entry,
         isCrawler,
         isCamper,
-        crawlerHSD,
-        camperHSD,
-        compressorHSD,
+        crawlerHSD: parseFloat(crawlerHSD.toFixed(2)),
+        camperHSD: parseFloat(camperHSD.toFixed(2)),
+        compressorHSD: parseFloat(compressorHSD.toFixed(2)),
         totalHSD,
+        meter,
         crawlerRPM,
         compressorRPM,
         hsdMtr,
         mtrRPM,
         crawlerHsdPerRpm,
         compHsdPerRpm,
+        holes,
         depthAvg,
-        // Display-only values: blank when not applicable
-        crawlerHSDDisplay: isCrawler ? (crawlerHSD || 0) : '',
-        camperHSDDisplay: isCamper ? (camperHSD || 0) : '',
-        crawlerRPMDisplay: isCrawler ? (crawlerRPM || 0) : '',
+        // Display-only values
+        crawlerHSDDisplay: isCrawler ? crawlerHSD : '',
+        camperHSDDisplay: isCamper ? camperHSD : '',
+        crawlerRPMDisplay: isCrawler ? crawlerRPM : '',
       };
     });
 
-    // Calculate totals for summary
     const totals = {
-      totalCrawlerHSD,
-      totalCamperHSD,
-      totalCompressorHSD,
-      totalTotalHSD,
-      totalMeter,
-      totalCrawlerRPM,
-      totalCompressorRPM,
-      totalHoles,
-      totalHsdMtr: totalMeter > 0 ? (totalTotalHSD / totalMeter).toFixed(2) : 0,
-      totalMtrRPM: totalCompressorRPM > 0 ? (totalMeter / totalCompressorRPM).toFixed(2) : 0,
-      totalCrawlerHsdPerRpm: totalCrawlerRPM > 0 ? (totalCrawlerHSD / totalCrawlerRPM).toFixed(2) : 0,
-      totalCompHsdPerRpm: totalCompressorRPM > 0 ? (totalCompressorHSD / totalCompressorRPM).toFixed(2) : 0,
-      totalDepthAvg: totalHoles > 0 ? (totalMeter / totalHoles).toFixed(2) : 0,
+      totalCrawlerHSD: parseFloat(totalCrawlerHSD.toFixed(2)),
+      totalCamperHSD: parseFloat(totalCamperHSD.toFixed(2)),
+      totalCompressorHSD: parseFloat(totalCompressorHSD.toFixed(2)),
+      totalTotalHSD: parseFloat(totalTotalHSD.toFixed(2)),
+      totalMeter: parseFloat(totalMeter.toFixed(2)),
+      totalCrawlerRPM: parseFloat(totalCrawlerRPM.toFixed(2)),
+      totalCompressorRPM: parseFloat(totalCompressorRPM.toFixed(2)),
+      totalHoles: parseFloat(totalHoles.toFixed(2)),
+
+      // FIXED: Proper ratio calculations
+      totalHsdMtr: totalMeter > 0 ? parseFloat((totalTotalHSD / totalMeter).toFixed(2)) : 0,
+      totalMtrRPM: totalCompressorRPM > 0 ? parseFloat((totalMeter / totalCompressorRPM).toFixed(2)) : 0,
+      totalCrawlerHsdPerRpm: totalCrawlerRPM > 0 ? parseFloat((totalCrawlerHSD / totalCrawlerRPM).toFixed(2)) : 0,
+      totalCompHsdPerRpm: totalCompressorRPM > 0 ? parseFloat((totalCompressorHSD / totalCompressorRPM).toFixed(2)) : 0,
+      totalDepthAvg: totalHoles > 0 ? parseFloat((totalMeter / totalHoles).toFixed(2)) : 0,
     };
 
     return { dailyData, totals };
@@ -499,47 +592,61 @@ const ProductionReport = () => {
                 <Table.Summary.Cell index={0}>
                   <Text strong>Total</Text>
                 </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={1}>
+                  <Text strong>{totals.totalMeter || 0}</Text>
+                </Table.Summary.Cell>
+
+                <Table.Summary.Cell index={2}>
                   <Text strong>{totals.totalCrawlerHSD || 0}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={2}>
-                  <Text strong>{totals.totalCamperHSD || 0}</Text>
-                </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={3}>
                   <Text strong>{totals.totalCompressorHSD || 0}</Text>
                 </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={4}>
+                  <Text strong>{totals.totalCamperHSD || 0}</Text>
+                </Table.Summary.Cell>
+
+                <Table.Summary.Cell index={5}>
                   <Text strong>{totals.totalTotalHSD || 0}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={5}>
-                  <Text strong>{totals.totalMeter || 0}</Text>
-                </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={6}>
                   <Text strong>{totals.totalCrawlerRPM || 0}</Text>
                 </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={7}>
                   <Text strong>{totals.totalCompressorRPM || 0}</Text>
                 </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={8}>
-                  <Text strong>{totals.totalHoles || 0}</Text>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={9}>
                   <Text strong>{totals.totalHsdMtr}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={10}>
+
+                <Table.Summary.Cell index={9}>
                   <Text strong>{totals.totalMtrRPM}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={11}>
+
+                <Table.Summary.Cell index={10}>
                   <Text strong>{totals.totalCrawlerHsdPerRpm > 0 ? totals.totalCrawlerHsdPerRpm : '-'}</Text>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={12}>
+
+                <Table.Summary.Cell index={11}>
                   <Text strong>{totals.totalCompHsdPerRpm > 0 ? totals.totalCompHsdPerRpm : '-'}</Text>
                 </Table.Summary.Cell>
+
+                <Table.Summary.Cell index={12}>
+                  <Text strong>{totals.totalHoles || 0}</Text>
+                </Table.Summary.Cell>
+
                 <Table.Summary.Cell index={13}>
                   <Text strong>{totals.totalDepthAvg}</Text>
                 </Table.Summary.Cell>
               </Table.Summary.Row>
             </Table.Summary>
+
           )}
         />
       </Card>

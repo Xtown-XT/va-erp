@@ -250,11 +250,11 @@ const ItemManagement = () => {
         <Space>
           {canEdit() && (
             <Button
-              type="link"
+             
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              Edit
+          
             </Button>
           )}
           {canDelete() && (
@@ -264,8 +264,8 @@ const ItemManagement = () => {
               okText="Yes"
               cancelText="No"
             >
-              <Button type="link" danger icon={<DeleteOutlined />}>
-                Delete
+              <Button  danger icon={<DeleteOutlined />}>
+              
               </Button>
             </Popconfirm>
           )}

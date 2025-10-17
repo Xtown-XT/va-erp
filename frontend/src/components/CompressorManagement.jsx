@@ -40,6 +40,8 @@ const CompressorManagement = () => {
     showQuickJumper: true,
   });
 
+  const [statusFilter, setStatusFilter] = useState(null);
+
   // Fetch compressors
   const fetchCompressors = async (page = 1, limit = 10, search = searchTerm) => {
     setLoading(true);
@@ -212,7 +214,9 @@ const CompressorManagement = () => {
       key: "status",
       render: (status) => {
         const colors = { active: "green", inactive: "red" };
-        return <Tag color={colors[status] || "default"}>{status}</Tag>;
+        return <Tag color={colors[status] || "default"}>
+          {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}
+        </Tag>;
       },
     },
     {
@@ -363,9 +367,22 @@ const CompressorManagement = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 300 }}
         />
+         <Select
+          placeholder="Filter by Status"
+          allowClear
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value)}
+          style={{ width: 180 }}
+        >
+          <Select.Option value="active">Active</Select.Option>
+          <Select.Option value="inactive">Inactive</Select.Option>
+        </Select>
         <Button
-          onClick={() => setSearchTerm('')}
-          disabled={!searchTerm}
+          onClick={() => {
+            setSearchTerm('');
+            setStatusFilter(null);
+          }}
+          disabled={!searchTerm && !statusFilter}
         >
           Clear Filters
         </Button>
@@ -375,10 +392,17 @@ const CompressorManagement = () => {
       <Table
         columns={columns}
         // dataSource={compressors}
-        dataSource={compressors.filter(c =>
-        c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        dataSource={(compressors || []).filter((c) => {
+        const searchMatch = c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) 
-        )}
+          
+        const statusMatch = statusFilter
+            ? c.status?.toLowerCase() === statusFilter.toLowerCase()
+            : true;
+
+            return searchMatch && statusMatch;
+        }
+      )}
 
         rowKey="id"
         loading={loading}

@@ -60,6 +60,8 @@ const PurchaseOrderComplete = () => {
     showQuickJumper: true,
   });
 
+  const [statusFilter, setStatusFilter] = useState(null);
+
   // Fetch data
   const fetchData = async (page = 1, limit = 10) => {
     setLoading(true);
@@ -70,12 +72,12 @@ const PurchaseOrderComplete = () => {
         api.get("/api/address?limit=1000"),
         api.get("/api/items?limit=1000"),
       ]);
-      
+
       setPurchaseOrders(posRes.data.data || []);
       setSuppliers(suppliersRes.data.data || []);
       setAddresses(addressesRes.data.data || []);
       setItems(itemsRes.data.data || []);
-      
+
       // Update pagination state
       setPagination(prev => ({
         ...prev,
@@ -85,7 +87,7 @@ const PurchaseOrderComplete = () => {
       }));
     } catch (err) {
       message.error("Error fetching data");
-    
+
     } finally {
       setLoading(false);
     }
@@ -149,7 +151,7 @@ const PurchaseOrderComplete = () => {
       if (editingId) {
         await api.put(`/api/pos/${editingId}`, payload);
         message.success("Purchase order updated successfully");
-        
+
       } else {
         const res = await api.post("/api/pos", payload);
         setPurchaseOrders([res.data.data, ...purchaseOrders]);
@@ -185,59 +187,59 @@ const PurchaseOrderComplete = () => {
   // };
 
   const handleEdit = async (record) => {
-  try {
-    setEditingId(record.id);
-    setShowCreateForm(true);
+    try {
+      setEditingId(record.id);
+      setShowCreateForm(true);
 
-    // Fetch full PO details to ensure we have shipping and billing addresses distinctly
-    const res = await api.get(`/api/pos/${record.id}`);
-    const fullPO = res?.data?.data || record;
+      // Fetch full PO details to ensure we have shipping and billing addresses distinctly
+      const res = await api.get(`/api/pos/${record.id}`);
+      const fullPO = res?.data?.data || record;
 
-    setGstInclude(!!fullPO.gstInclude);
+      setGstInclude(!!fullPO.gstInclude);
 
-    // Pre-fill PO Items
-    setPoItems((fullPO.poItems || []).map(pi => ({
-      id: pi.id,
-      itemId: pi.itemId,
-      quantity: pi.quantity,
-      rate: pi.rate,
-      total: pi.total ?? (Number(pi.quantity) * Number(pi.rate)),
-      item: pi.item
-    })));
+      // Pre-fill PO Items
+      setPoItems((fullPO.poItems || []).map(pi => ({
+        id: pi.id,
+        itemId: pi.itemId,
+        quantity: pi.quantity,
+        rate: pi.rate,
+        total: pi.total ?? (Number(pi.quantity) * Number(pi.rate)),
+        item: pi.item
+      })));
 
-    // Pre-fill form fields with distinct addresses
-    createForm.setFieldsValue({
-      orderNumber: fullPO.orderNumber,
-      orderDate: fullPO.orderDate ? dayjs(fullPO.orderDate) : null,
-      gstInclude: !!fullPO.gstInclude,
-      gstPercent: fullPO.gstPercent,
-      supplierId: fullPO.supplierId,
-      addressId: fullPO.addressId,
-      shippingAddressId: fullPO.shippingAddressId || undefined,
-      notes: fullPO.notes,
-    });
-  } catch (e) {
-    // Fallback to existing record if detail fetch fails
-    setGstInclude(record.gstInclude);
-    setPoItems(record.poItems?.map(pi => ({
-      id: pi.id,
-      itemId: pi.itemId,
-      quantity: pi.quantity,
-      rate: pi.rate,
-      total: pi.total,
-      item: pi.item
-    })) || []);
-    createForm.setFieldsValue({
-      orderNumber: record.orderNumber,
-      orderDate: record.orderDate ? dayjs(record.orderDate) : null,
-      gstInclude: record.gstInclude,
-      gstPercent: record.gstPercent,
-      supplierId: record.supplierId,
-      addressId: record.addressId,
-      shippingAddressId: record.shippingAddressId || undefined,
-      notes: record.notes,
-    });
-  }
+      // Pre-fill form fields with distinct addresses
+      createForm.setFieldsValue({
+        orderNumber: fullPO.orderNumber,
+        orderDate: fullPO.orderDate ? dayjs(fullPO.orderDate) : null,
+        gstInclude: !!fullPO.gstInclude,
+        gstPercent: fullPO.gstPercent,
+        supplierId: fullPO.supplierId,
+        addressId: fullPO.addressId,
+        shippingAddressId: fullPO.shippingAddressId || undefined,
+        notes: fullPO.notes,
+      });
+    } catch (e) {
+      // Fallback to existing record if detail fetch fails
+      setGstInclude(record.gstInclude);
+      setPoItems(record.poItems?.map(pi => ({
+        id: pi.id,
+        itemId: pi.itemId,
+        quantity: pi.quantity,
+        rate: pi.rate,
+        total: pi.total,
+        item: pi.item
+      })) || []);
+      createForm.setFieldsValue({
+        orderNumber: record.orderNumber,
+        orderDate: record.orderDate ? dayjs(record.orderDate) : null,
+        gstInclude: record.gstInclude,
+        gstPercent: record.gstPercent,
+        supplierId: record.supplierId,
+        addressId: record.addressId,
+        shippingAddressId: record.shippingAddressId || undefined,
+        notes: record.notes,
+      });
+    }
   };
 
 
@@ -278,7 +280,7 @@ const PurchaseOrderComplete = () => {
       total: Number(values.quantity) * Number(values.rate),
       item: selectedItem
     };
-    
+
     setPoItems([...poItems, newItem]);
     setShowItemForm(false);
     itemForm.resetFields();
@@ -298,7 +300,7 @@ const PurchaseOrderComplete = () => {
     const gstIncludeValue = createForm.getFieldValue('gstInclude');
     const taxTotal = gstIncludeValue ? subTotal * (gstPercent / 100) : 0;
     const grandTotal = subTotal + taxTotal;
-    
+
     return { subTotal, taxTotal, grandTotal };
   };
 
@@ -328,7 +330,7 @@ const PurchaseOrderComplete = () => {
   const viewPODetails = (record) => {
     const supplier = suppliers.find(s => s.id === record.supplierId);
     const address = addresses.find(a => a.id === record.addressId);
-    
+
     setSelectedPO({
       ...record,
       supplier,
@@ -340,26 +342,26 @@ const PurchaseOrderComplete = () => {
   // Generate PO PDF - Exact Format Implementation
   const generatePOPDF = (po) => {
     const printWindow = window.open("", "_blank");
-    
+
     // Get supplier and address details
     const supplier = po.supplier;
     const address = po.address;
-    
+
     // Calculate totals
     let subTotal = 0;
     let totalGST = 0;
     let grandTotal = 0;
-    
+
     const itemsWithCalculations = (po.poItems || []).map((poItem, index) => {
       const unitPrice = poItem.rate;
       const amount = poItem.quantity * unitPrice;
       const gstAmount = po.gstInclude && po.gstPercent ? (amount * po.gstPercent) / 100 : 0;
       const totalAmount = amount + gstAmount;
-      
+
       subTotal += amount;
       totalGST += gstAmount;
       grandTotal += totalAmount;
-      
+
       return {
         ...poItem,
         unitPrice,
@@ -597,12 +599,16 @@ const PurchaseOrderComplete = () => {
   const getFilteredData = () => {
     let filtered = [...purchaseOrders];
 
+    if (statusFilter) {
+      filtered = filtered.filter(po => po.status === statusFilter);
+    }
+
     if (dateFilter && dateFilter.length === 2) {
       const [startDate, endDate] = dateFilter;
       filtered = filtered.filter(po => {
         const poDate = dayjs(po.orderDate);
-        return poDate.isAfter(dayjs(startDate).subtract(1, 'day')) && 
-               poDate.isBefore(dayjs(endDate).add(1, 'day'));
+        return poDate.isAfter(dayjs(startDate).subtract(1, 'day')) &&
+          poDate.isBefore(dayjs(endDate).add(1, 'day'));
       });
     }
 
@@ -614,20 +620,21 @@ const PurchaseOrderComplete = () => {
     }
 
     if (searchTerm) {
-      filtered = filtered.filter(po => 
+      filtered = filtered.filter(po =>
         po.orderNumber.toString().includes(searchTerm) ||
         po.supplier?.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
+
 
     return filtered;
   };
 
   // Table columns
   const columns = [
-    { 
-      title: "PO Number", 
-      dataIndex: "orderNumber", 
+    {
+      title: "PO Number",
+      dataIndex: "orderNumber",
       key: "orderNumber",
       sorter: (a, b) => a.orderNumber - b.orderNumber,
     },
@@ -638,8 +645,8 @@ const PurchaseOrderComplete = () => {
       render: (date) => (date ? dayjs(date).format("DD/MM/YYYY") : "-"),
       sorter: (a, b) => dayjs(a.orderDate).unix() - dayjs(b.orderDate).unix(),
     },
-    { 
-      title: "Supplier", 
+    {
+      title: "Supplier",
       key: "supplierName",
       render: (_, record) => {
         const supplier = record.supplier || suppliers.find(s => s.id === record.supplierId);
@@ -710,15 +717,15 @@ const PurchaseOrderComplete = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             onClick={() => viewPODetails(record)}
             title="View Details"
           >
             View
           </Button>
-          <Button 
-            size="small" 
+          <Button
+            size="small"
             type="primary"
             icon={<FilePdfOutlined />}
             onClick={() => generatePOPDF(record)}
@@ -726,24 +733,24 @@ const PurchaseOrderComplete = () => {
           >
             PDF
           </Button>
-          
+
           {record.status === 'pending' ? (
-              <Button 
-                size="small" 
-                type="primary"
-                title="Mark as Received"
-                style={{ pointerEvents: 'auto' }}
-                onClick={() => markAsReceived(record)}
-              >
-                Receive
-              </Button>
+            <Button
+              size="small"
+              type="primary"
+              title="Mark as Received"
+              style={{ pointerEvents: 'auto' }}
+              onClick={() => markAsReceived(record)}
+            >
+              Receive
+            </Button>
           ) : record.status === 'received' ? (
             <Tag color="green">Received</Tag>
           ) : null}
           {canEdit() && (
-            <Button 
-              size="small" 
-              icon={<EditOutlined />} 
+            <Button
+
+              icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
               title="Edit"
             />
@@ -753,9 +760,9 @@ const PurchaseOrderComplete = () => {
               title="Are you sure to delete this purchase order?"
               onConfirm={() => handleDelete(record.id)}
             >
-              <Button 
-                size="small" 
-                icon={<DeleteOutlined />} 
+              <Button
+
+                icon={<DeleteOutlined />}
                 danger
                 title="Delete"
               />
@@ -834,12 +841,30 @@ const PurchaseOrderComplete = () => {
             />
           </Col>
           <Col xs={24} sm={6}>
-            <Button 
+           <div style={{ display: "flex", flexDirection: "column", }}>
+             <Text strong>Status:</Text>
+            <Select
+              placeholder="Filter by Status"
+              allowClear
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              style={{ width: 140 }}
+            >
+              <Select.Option value="pending">Pending</Select.Option>
+              <Select.Option value="received">Received</Select.Option>
+            </Select>
+           </div>
+
+          </Col>
+
+          <Col xs={24} sm={6}>
+            <Button
               onClick={() => {
                 setDateFilter(null);
                 setMonthFilter(null);
                 setSearchTerm("");
               }}
+              disabled={!searchTerm && !statusFilter}
               className="w-full mt-6"
             >
               Clear Filters
@@ -858,10 +883,10 @@ const PurchaseOrderComplete = () => {
                   name="orderNumber"
                   label="PO Number (Auto-generated)"
                 >
-                  <Input 
-                    className="w-full" 
-                    placeholder="Will be auto-generated" 
-                    disabled 
+                  <Input
+                    className="w-full"
+                    placeholder="Will be auto-generated"
+                    disabled
                     style={{ backgroundColor: '#f5f5f5', color: '#666' }}
                   />
                 </Form.Item>
@@ -896,7 +921,7 @@ const PurchaseOrderComplete = () => {
                   label="Billing Address"
                   rules={[{ required: true, message: "Please select billing address" }]}
                 >
-                  <Select 
+                  <Select
                     placeholder="Select billing address"
                     showSearch
                     optionFilterProp="children"
@@ -921,7 +946,7 @@ const PurchaseOrderComplete = () => {
                   label="Shipping Address"
                   rules={[{ required: true, message: "Please select shipping address" }]}
                 >
-                  <Select 
+                  <Select
                     placeholder="Select shipping address"
                     showSearch
                     optionFilterProp="children"
@@ -952,7 +977,7 @@ const PurchaseOrderComplete = () => {
                   </Select>
                 </Form.Item>
                 <div className="text-xs text-gray-500 mt-1">
-                  {gstInclude 
+                  {gstInclude
                     ? "Item prices include GST. GST amount will be calculated separately."
                     : "Item prices are without GST. No tax will be added."
                   }
@@ -969,11 +994,11 @@ const PurchaseOrderComplete = () => {
                       { type: "number", min: 0, max: 100 },
                     ]}
                   >
-                    <InputNumber 
-                      className="w-full" 
-                      min={0} 
-                      max={100} 
-                      step={0.01} 
+                    <InputNumber
+                      className="w-full"
+                      min={0}
+                      max={100}
+                      step={0.01}
                       placeholder="18.00"
                     />
                   </Form.Item>
@@ -991,11 +1016,11 @@ const PurchaseOrderComplete = () => {
 
             {/* Items Section */}
             <Divider>Items</Divider>
-            
+
             <div className="flex justify-between items-center mb-4">
               <Title level={4}>PO Items</Title>
-              <Button 
-                type="primary" 
+              <Button
+                type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => setShowItemForm(true)}
               >
@@ -1016,8 +1041,8 @@ const PurchaseOrderComplete = () => {
                     title: "Actions",
                     key: "actions",
                     render: (_, record) => (
-                      <Button 
-                        size="small" 
+                      <Button
+                        size="small"
                         danger
                         onClick={() => removeItemFromPO(record.id)}
                       >
@@ -1054,8 +1079,8 @@ const PurchaseOrderComplete = () => {
 
             <Form.Item>
               <Space>
-                <Button 
-                  type="primary" 
+                <Button
+                  type="primary"
                   htmlType="submit"
                   disabled={poItems.length === 0}
                 >
@@ -1098,9 +1123,9 @@ const PurchaseOrderComplete = () => {
           <Button key="close" onClick={() => setShowPODetails(false)}>
             Close
           </Button>,
-          <Button 
-            key="pdf" 
-            type="primary" 
+          <Button
+            key="pdf"
+            type="primary"
             icon={<FilePdfOutlined />}
             onClick={() => generatePOPDF(selectedPO)}
           >
@@ -1124,13 +1149,13 @@ const PurchaseOrderComplete = () => {
                 <p><strong>GST Include:</strong> {selectedPO.gstInclude ? 'Yes' : 'No'}</p>
               </Col>
             </Row>
-            
+
             <Divider />
-            
+
             <div className="flex justify-between items-center mb-4">
               <Title level={4}>Items</Title>
             </div>
-            
+
             <Table
               dataSource={selectedPO.poItems || []}
               columns={[
@@ -1143,9 +1168,9 @@ const PurchaseOrderComplete = () => {
               pagination={false}
               size="small"
             />
-            
+
             <Divider />
-            
+
             <Row gutter={16}>
               <Col span={12}>
                 <Title level={4}>Billing Address</Title>
@@ -1179,9 +1204,9 @@ const PurchaseOrderComplete = () => {
                 )}
               </Col>
             </Row>
-            
+
             <Divider />
-            
+
             <Row gutter={16}>
               <Col span={24}>
                 <Title level={4}>Totals</Title>
@@ -1214,8 +1239,8 @@ const PurchaseOrderComplete = () => {
             label="Select Item"
             rules={[{ required: true, message: "Please select an item" }]}
           >
-            <Select 
-              placeholder="Select item" 
+            <Select
+              placeholder="Select item"
               showSearch
               onChange={(itemId) => {
                 const selectedItem = items.find(item => item.id === itemId);
@@ -1236,7 +1261,7 @@ const PurchaseOrderComplete = () => {
               ))}
             </Select>
           </Form.Item>
-          
+
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -1244,9 +1269,9 @@ const PurchaseOrderComplete = () => {
                 label="Quantity"
                 rules={[{ required: true, message: "Please enter quantity" }]}
               >
-                <InputNumber 
-                  className="w-full" 
-                  min={0.1} 
+                <InputNumber
+                  className="w-full"
+                  min={0.1}
                   step={0.1}
                   precision={1}
                   placeholder="Enter quantity"
@@ -1265,10 +1290,10 @@ const PurchaseOrderComplete = () => {
                 label="Rate (₹)"
                 rules={[{ required: true, message: "Please enter rate" }]}
               >
-                <InputNumber 
-                  className="w-full" 
-                  min={0} 
-                  step={0.01} 
+                <InputNumber
+                  className="w-full"
+                  min={0}
+                  step={0.01}
                   placeholder="Enter rate"
                   onChange={(value) => {
                     // Auto-update total when rate changes
@@ -1280,7 +1305,7 @@ const PurchaseOrderComplete = () => {
               </Form.Item>
             </Col>
           </Row>
-          
+
           <Form.Item>
             <Space>
               <Button type="primary" htmlType="submit">

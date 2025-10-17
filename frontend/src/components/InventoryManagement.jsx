@@ -266,7 +266,8 @@ import {
   Statistic,
   message,
 } from "antd";
-import { ReloadOutlined } from "@ant-design/icons";
+import { MdOutlineInventory2, MdInventory } from "react-icons/md";
+import { ReloadOutlined, ToolOutlined, DatabaseOutlined, InboxOutlined, DropboxOutlined } from "@ant-design/icons";
 import api from "../service/api";
 
 const { Title, Text } = Typography;
@@ -423,8 +424,10 @@ const InventoryManagement = () => {
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12} lg={6}>
           <Card>
+            
             <Statistic
               title="Total Items"
+              prefix={<ToolOutlined style={{ fontSize: '22px', color: '#1890ff', marginRight: '5px', marginTop: "5px" }} />}
               value={summary.totalItems}
               valueStyle={{ color: "#1890ff" }}
             />
@@ -435,6 +438,7 @@ const InventoryManagement = () => {
             <Statistic
               title="Total Stock"
               value={summary.totalStock}
+              prefix={<DatabaseOutlined style={{ fontSize: '22px', color: '#52c41a', marginRight: '5px', marginTop: "5px" }}/>}
               valueStyle={{ color: "#1890ff" }}
             />
           </Card>
@@ -444,6 +448,7 @@ const InventoryManagement = () => {
             <Statistic
               title="Items In Stock"
               value={summary.itemsInStock}
+              prefix={<InboxOutlined style={{ fontSize: '22px', color: '#52c41a', marginRight: '5px', marginTop: "5px" }}/>}
               valueStyle={{ color: "#52c41a" }}
             />
           </Card>
@@ -453,6 +458,7 @@ const InventoryManagement = () => {
             <Statistic
               title="Items Out of Stock"
               value={summary.itemsOutOfStock}
+              prefix={<DropboxOutlined style={{ fontSize: '22px', color: '#ff4d4f', marginRight: '5px', marginTop: "5px" }}/>}
               valueStyle={{ color: "#ff4d4f" }}
             />
           </Card>

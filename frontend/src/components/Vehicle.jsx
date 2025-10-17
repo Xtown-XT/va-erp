@@ -41,13 +41,15 @@ const Vehicle = () => {
     showQuickJumper: true,
   });
 
+  const [statusFilter, setStatusFilter] = useState(null);
+
   // Fetch data
   const fetchVehicles = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
       const res = await api.get(`/api/vehicles?page=${page}&limit=${limit}`);
       setVehicles(res.data.data || []);
-      
+
       // Update pagination state
       setPagination(prev => ({
         ...prev,
@@ -108,19 +110,19 @@ const Vehicle = () => {
       if (values.status) {
         payload.status = values.status;
       }
-      
+
       if (values.vehicleRPM !== undefined && values.vehicleRPM !== null && values.vehicleRPM !== '') {
         payload.vehicleRPM = Number(values.vehicleRPM);
       }
-      
+
       if (values.nextServiceRPM !== undefined && values.nextServiceRPM !== null && values.nextServiceRPM !== '') {
         payload.nextServiceRPM = Number(values.nextServiceRPM);
       }
-      
+
       if (values.compressorId) {
         payload.compressorId = values.compressorId;
       }
-      
+
 
 
       if (editingId) {
@@ -205,21 +207,21 @@ const Vehicle = () => {
             </thead>
             <tbody>
               ${(vehicles || [])
-                .filter((v) =>
-                  v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map(
-                  (vehicle) => {
-                    // Get brand name
-                    const brandName = vehicle.brand?.brandName || 
-                      brands.find(b => b.id === vehicle.brandId)?.brandName || "-";
-                    
-                    
-                    // Get compressor name
-                    const compressorName = vehicle.compressor?.compressorName || 
-                      compressors.find(c => c.id === vehicle.compressorId)?.compressorName || "-";
-                    
-                    return `
+        .filter((v) =>
+          v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .map(
+          (vehicle) => {
+            // Get brand name
+            const brandName = vehicle.brand?.brandName ||
+              brands.find(b => b.id === vehicle.brandId)?.brandName || "-";
+
+
+            // Get compressor name
+            const compressorName = vehicle.compressor?.compressorName ||
+              compressors.find(c => c.id === vehicle.compressorId)?.compressorName || "-";
+
+            return `
                     <tr>
                       <td>${vehicle.vehicleType}</td>
                       <td>${vehicle.vehicleNumber}</td>
@@ -229,9 +231,9 @@ const Vehicle = () => {
                       <td>${compressorName}</td>
                       <td>${vehicle.status}</td>
                     </tr>`;
-                  }
-                )
-                .join("")}
+          }
+        )
+        .join("")}
             </tbody>
           </table>
         </body>
@@ -245,8 +247,8 @@ const Vehicle = () => {
   const columns = [
     { title: "Machine Type", dataIndex: "vehicleType", key: "vehicleType" },
     { title: "Machine Number", dataIndex: "vehicleNumber", key: "vehicleNumber" },
-    { 
-      title: "Brand", 
+    {
+      title: "Brand",
       key: "brandName",
       render: (_, record) => {
         // Try different ways to get brand name
@@ -263,8 +265,8 @@ const Vehicle = () => {
     },
     { title: "Machine RPM", dataIndex: "vehicleRPM", key: "vehicleRPM" },
     { title: "Next Service RPM", dataIndex: "nextServiceRPM", key: "nextServiceRPM", render: (value) => value || "-" },
-    { 
-      title: "Compressor", 
+    {
+      title: "Compressor",
       key: "compressorName",
       render: (_, record) => {
         // Try different ways to get compressor name
@@ -285,7 +287,10 @@ const Vehicle = () => {
       key: "status",
       render: (status) => {
         const colors = { active: "green", inactive: "red" };
-        return <Tag color={colors[status] || "default"}>{status}</Tag>;
+        return <Tag color={colors[status] || "default"}>
+          {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}
+          
+        </Tag>;
       },
     },
     {
@@ -305,8 +310,8 @@ const Vehicle = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button 
-            icon={<ToolOutlined />} 
+          <Button
+            icon={<ToolOutlined />}
             onClick={() => navigate(`/reports/vehicle-service/${record.id}`)}
             title="View Service History"
           />
@@ -377,8 +382,8 @@ const Vehicle = () => {
                 label="Machine Number"
                 rules={[{ required: true }]}
               >
-                <Input 
-                  placeholder="e.g., TN01AB1234" 
+                <Input
+                  placeholder="e.g., TN01AB1234"
                 />
               </Form.Item>
               <Form.Item
@@ -448,9 +453,24 @@ const Vehicle = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 300 }}
         />
+        <Select
+          placeholder="Filter by Status"
+          allowClear
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value)}
+          style={{ width: 180 }}
+        >
+          <Select.Option value="active">Active</Select.Option>
+          <Select.Option value="inactive">Inactive</Select.Option>
+        </Select>
+
         <Button
-          onClick={() => setSearchTerm('')}
-          disabled={!searchTerm}
+          onClick={() => {
+            setSearchTerm('');
+            setStatusFilter(null);
+          }
+          }
+          disabled={!searchTerm && !statusFilter}
         >
           Clear Filters
         </Button>
@@ -459,8 +479,16 @@ const Vehicle = () => {
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(vehicles || []).filter((v) =>
-          v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+        dataSource={(vehicles || []).filter((v) => {
+
+          const searchMatch = v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+
+          const statusMatch = statusFilter
+            ? v.status?.toLowerCase() === statusFilter.toLowerCase()
+            : true;
+
+          return searchMatch && statusMatch;
+        }
         )}
         rowKey="id"
         loading={loading}

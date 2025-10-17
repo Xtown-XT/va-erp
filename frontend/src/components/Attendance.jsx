@@ -42,7 +42,8 @@ const Attendance = () => {
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [attendanceData, setAttendanceData] = useState({});
   const [saving, setSaving] = useState(false);
-  
+  const [searchTerm, setSearchTerm] = useState("");
+
   // View attendance states
   const [viewDate, setViewDate] = useState(dayjs());
   const [viewSite, setViewSite] = useState('');
@@ -61,6 +62,8 @@ const Attendance = () => {
   const [inlineEdit, setInlineEdit] = useState(null);
   const [inlineSaving, setInlineSaving] = useState(false);
 
+  const [presenceFilter, setPresenceFilter] = useState(null)
+
   // Fetch attendance records for selected date (for adding attendance)
   const fetchRecords = async (date = selectedDate) => {
     setLoading(true);
@@ -68,7 +71,7 @@ const Attendance = () => {
       const dateStr = date.format("YYYY-MM-DD");
       const res = await api.get(`/api/employeeAttendance?date=${dateStr}`);
       setRecords(res.data.data || []);
-      
+
       // Initialize attendance data for all employees
       const initialData = {};
       employees.forEach(emp => {
@@ -96,17 +99,17 @@ const Attendance = () => {
     setViewLoading(true);
     try {
       const dateStr = date.format("YYYY-MM-DD");
-      
+
       let url = `/api/employeeAttendance?date=${dateStr}&page=${page}&limit=${limit}`;
       if (siteId) {
         url += `&siteId=${siteId}`;
       }
-      
+
       const res = await api.get(url);
       const records = res.data.data || [];
-      
+
       setViewRecords(records);
-      
+
       // Update pagination state
       setViewPagination(prev => ({
         ...prev,
@@ -132,15 +135,7 @@ const Attendance = () => {
     }
   };
 
-  // const fetchEmployees = async () => {
-  //   try {
-  //     const res = await api.get("/api/employeeLists");
-  //     setEmployees(res.data.data || []);
-  //     console.log(res.data.data || [])
-  //   } catch (err) {
-  //     message.error("Error fetching employees");
-  //   }
-  // };
+
 
   const fetchSites = async () => {
     try {
@@ -203,7 +198,7 @@ const Attendance = () => {
     try {
       const currentUser = localStorage.getItem("username") || "Unknown";
       const dateStr = selectedDate.format("YYYY-MM-DD");
-      
+
       const promises = Object.entries(attendanceData).map(async ([employeeId, data]) => {
         const payload = {
           employeeId,
@@ -232,7 +227,7 @@ const Attendance = () => {
       fetchRecords();
       fetchEmployees();
       fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
-    
+
     } catch (err) {
       message.error("Error saving attendance");
     } finally {
@@ -325,20 +320,20 @@ const Attendance = () => {
 
   // Handle view table change
   const handleViewTableChange = (pagination) => {
-  setViewPagination(prev => ({
-    ...prev,
-    current: pagination.current,
-    pageSize: pagination.pageSize,
-  }));
+    setViewPagination(prev => ({
+      ...prev,
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+    }));
 
-  fetchViewRecords(viewDate, viewSite, pagination.current, pagination.pageSize);
-};
+    fetchViewRecords(viewDate, viewSite, pagination.current, pagination.pageSize);
+  };
 
 
   // PDF Export for view records
   const exportToPDF = () => {
     const selectedSiteName = viewSite ? sites.find(s => s.id === viewSite)?.siteName : 'All Sites';
-    
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -383,11 +378,11 @@ const Attendance = () => {
             </thead>
             <tbody>
               ${viewRecords
-                .map(record => {
-                  const employee = employees.find(emp => emp.id === record.employeeId);
-                  const site = sites.find(s => s.id === record.siteId);
-                  const vehicle = vehicles.find(v => v.id === record.vehicleId);
-                  return `
+        .map(record => {
+          const employee = employees.find(emp => emp.id === record.employeeId);
+          const site = sites.find(s => s.id === record.siteId);
+          const vehicle = vehicles.find(v => v.id === record.vehicleId);
+          return `
                     <tr>
                       <td>${employee?.name || "-"}</td>
                       <td>${employee?.empId || "-"}</td>
@@ -398,8 +393,8 @@ const Attendance = () => {
                       <td>${vehicle ? `${vehicle.vehicleNumber} (${vehicle.vehicleType})` : "-"}</td>
                       <td>${dayjs(record.date).format('DD/MM/YYYY')}</td>
                     </tr>`;
-                })
-                .join("")}
+        })
+        .join("")}
             </tbody>
           </table>
           <div style="margin-top: 20px; text-align: center; color: #666;">
@@ -418,7 +413,7 @@ const Attendance = () => {
   const workingCount = allEmployees.filter(emp => attendanceData[emp.id]?.workStatus === 'working').length;
   const totalEmployees = allEmployees.length;
   const attendancePercentage = totalEmployees > 0 ? (presentCount / totalEmployees) * 100 : 0;
-  
+
   // Calculate saved attendance statistics
   const savedAttendanceCount = allEmployees.filter(emp => {
     const data = attendanceData[emp.id] || {};
@@ -459,7 +454,7 @@ const Attendance = () => {
       key: "workStatus",
       render: (_, record) => (
         <Tag color={record.workStatus === 'working' ? 'blue' : 'orange'}>
-          {record.workStatus || 'N/A'}
+          {record.workStatus ? record.workStatus.charAt(0).toUpperCase() + record.workStatus.slice(1) : "-" || 'N/A'}
         </Tag>
       ),
     },
@@ -477,8 +472,8 @@ const Attendance = () => {
         const employee = employees.find(emp => emp.id === record.employeeId);
         const advance = employee?.advancedAmount || 0;
         return (
-          <Text 
-            strong 
+          <Text
+            strong
             style={{ color: advance > 0 ? '#ff4d4f' : '#52c41a' }}
           >
             ₹{advance.toLocaleString()}
@@ -516,23 +511,21 @@ const Attendance = () => {
         <Space>
           {canEdit() && (
             <Button
-              type="link"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
-              size="small"
             >
-              Edit
+
             </Button>
           )}
           {canDelete() && (
             <Button
-              type="link"
+
               danger
               icon={<DeleteOutlined />}
               onClick={() => handleDelete(record.id)}
-              size="small"
+
             >
-              Delete
+
             </Button>
           )}
         </Space>
@@ -638,26 +631,26 @@ const Attendance = () => {
         const data = attendanceData[employee.id] || {};
         const hasAttendanceSaved = data.recordId !== null && data.recordId !== undefined;
         const isPresent = data.presence === 'present';
-        
+
         return (
-          <div 
+          <div
             style={{
               padding: '8px',
               borderRadius: '4px',
-              backgroundColor: hasAttendanceSaved 
-                ? (isPresent ? '#f6ffed' : '#fff2f0') 
+              backgroundColor: hasAttendanceSaved
+                ? (isPresent ? '#f6ffed' : '#fff2f0')
                 : 'transparent',
-              border: hasAttendanceSaved 
-                ? `2px solid ${isPresent ? '#52c41a' : '#ff4d4f'}` 
+              border: hasAttendanceSaved
+                ? `2px solid ${isPresent ? '#52c41a' : '#ff4d4f'}`
                 : '2px solid transparent'
             }}
           >
-            <div 
+            <div
               className="font-medium"
-              style={{ 
-                color: hasAttendanceSaved 
-                  ? (isPresent ? '#52c41a' : '#ff4d4f') 
-                  : 'inherit' 
+              style={{
+                color: hasAttendanceSaved
+                  ? (isPresent ? '#52c41a' : '#ff4d4f')
+                  : 'inherit'
               }}
             >
               {employee.name}
@@ -785,9 +778,9 @@ const Attendance = () => {
       render: (_, employee) => {
         const advance = employee.advancedAmount || 0;
         return (
-          <Text 
-            strong 
-            style={{ 
+          <Text
+            strong
+            style={{
               color: advance > 0 ? '#ff4d4f' : '#52c41a',
               backgroundColor: advance > 0 ? '#fff2f0' : '#f6ffed',
               padding: '2px 8px',
@@ -824,8 +817,52 @@ const Attendance = () => {
                   fetchRecords(date);
                 }}
                 format="DD/MM/YYYY"
+                style={{ marginBottom: 10 }}
               />
+              <div className="flex flex-col mt-2">
+                <Text strong >Search Employee:</Text>
+                <Input.Search
+                  placeholder="Search By Employee Name or ID"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{ maxWidth: 300 }}
+                />
+              </div>
+
+
+              <div>
+
+                <div className="flex flex-col mt-2">
+                  <Text strong>Select Presence:</Text>
+                  <Select
+                    placeholder="Filter by Presence"
+                    allowClear
+                    value={presenceFilter}
+                    onChange={(value) => setPresenceFilter(value)}
+                    style={{ maxWidth: 300 }}
+                  >
+                    <Select.Option value="present">Present</Select.Option>
+                    <Select.Option value="absent">Absent</Select.Option>
+
+                  </Select>
+                </div>
+
+
+                <Button
+                  onClick={() => {
+                    setSearchTerm('');
+                    setPresenceFilter(null);
+                  }}
+                  disabled={!searchTerm && !presenceFilter}
+
+                  style={{ marginTop: 10 }}
+                >
+                  Clear Filters
+                </Button>
+              </div>
+
             </Col>
+
             <Col xs={24} sm={16}>
               <Row gutter={16}>
                 <Col span={6}>
@@ -855,9 +892,9 @@ const Attendance = () => {
                     title="Attendance %"
                     value={Math.round(attendancePercentage)}
                     suffix="%"
-                    valueStyle={{ 
-                      color: attendancePercentage >= 80 ? '#3f8600' : 
-                             attendancePercentage >= 60 ? '#faad14' : '#cf1322' 
+                    valueStyle={{
+                      color: attendancePercentage >= 80 ? '#3f8600' :
+                        attendancePercentage >= 60 ? '#faad14' : '#cf1322'
                     }}
                   />
                 </Col>
@@ -880,19 +917,19 @@ const Attendance = () => {
                   />
                 </Col>
                 <Col span={12}>
-                  <div style={{ 
-                    padding: '8px 16px', 
+                  <div style={{
+                    padding: '8px 16px',
                     backgroundColor: savedAttendanceCount > 0 ? '#f6ffed' : '#fff7e6',
                     border: `1px solid ${savedAttendanceCount > 0 ? '#52c41a' : '#faad14'}`,
                     borderRadius: '4px',
                     textAlign: 'center'
                   }}>
-                    <Text style={{ 
+                    <Text style={{
                       color: savedAttendanceCount > 0 ? '#52c41a' : '#faad14',
                       fontWeight: 'bold'
                     }}>
-                      {savedAttendanceCount > 0 
-                        ? `✓ ${savedAttendanceCount} employees have attendance saved for today`
+                      {savedAttendanceCount > 0
+                        ? `✓ ${savedAttendanceCount} Employees have attendance saved for today`
                         : 'No attendance saved for today yet'
                       }
                     </Text>
@@ -907,10 +944,22 @@ const Attendance = () => {
         {/* Attendance Table for Adding */}
         <Table
           columns={columns}
-          dataSource={allEmployees}
+          dataSource={(allEmployees || []).filter((e) => {
+
+            const searchMatch = String(e.name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              String(e.empId)?.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const presenceMatch = presenceFilter ?
+              (attendanceData[e.id]?.presence || 'present') === presenceFilter
+              : true;
+
+            return searchMatch && presenceMatch;
+
+          }
+          )}
           rowKey="id"
           loading={loading}
-          pagination={{ 
+          pagination={{
             pageSize: 50,
             showSizeChanger: true,
             showQuickJumper: true,
@@ -940,7 +989,7 @@ const Attendance = () => {
       </div>
 
       {/* SECTION 2: VIEW ATTENDANCE RECORDS */}
-      <div className="bg-white rounded-lg p-6">
+      <div className="bg-white rounded-lg p-6 overflow-hidden">
         <div className="flex justify-between items-center mb-6">
           <div>
             <Title level={2} className="mb-2">View Attendance Records</Title>
@@ -991,11 +1040,40 @@ const Attendance = () => {
               </Select>
             </Col>
             <Col xs={24} sm={8}>
+
+              <Text strong >Search Employee:</Text>
+              <Input.Search
+                placeholder="Search By Employee Name or ID"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{ maxWidth: 300 }}
+              />
+
+            </Col>
+            <Col xs={24} sm={8}>
+              <div className="flex flex-col mt-2">
+                <Text strong>Select Presence:</Text>
+                <Select
+                  placeholder="Filter by Presence"
+                  allowClear
+                  value={presenceFilter}
+                  onChange={(value) => setPresenceFilter(value)}
+                  style={{ maxWidth: 300 }}
+                >
+                  <Select.Option value="present">Present</Select.Option>
+                  <Select.Option value="absent">Absent</Select.Option>
+
+                </Select>
+              </div>
+            </Col>
+            <Col xs={24} sm={8}>
               <Text strong>Actions:</Text>
               <div className="mt-1">
                 <Button
                   onClick={() => {
                     setViewSite('');
+                    setSearchTerm('');
+
                     fetchViewRecords(viewDate, '', viewPagination.current, viewPagination.pageSize);
                   }}
                   className="w-full"
@@ -1018,7 +1096,33 @@ const Attendance = () => {
         {/* View Records Table with inline editor */}
         <Table
           columns={viewColumns}
-          dataSource={viewRecords}
+          // dataSource={(viewRecords || []).filter((v) => {
+
+          //   const searchMatch = String(v.name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          //     v.empId?.toLowerCase().includes(searchTerm.toLowerCase());
+
+          //   const presenceMatch = presenceFilter ?
+          //     (attendanceData[v.id]?.presence || 'present') === presenceFilter
+          //     : true;
+
+          //   return searchMatch && presenceMatch;
+
+          // }
+
+          dataSource={(viewRecords || []).filter((v) => {
+            const employee = employees.find(emp => emp.id === v.employeeId);
+
+            const searchMatch = searchTerm
+              ? (employee?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                employee?.empId?.toLowerCase().includes(searchTerm.toLowerCase()))
+              : true;
+
+            const presenceMatch = presenceFilter ? (v.presence === presenceFilter) : true;
+
+            return searchMatch && presenceMatch;
+          })}
+
+
           rowKey="id"
           loading={viewLoading}
           pagination={{
@@ -1041,7 +1145,7 @@ const Attendance = () => {
             expandedRowRender: (record) => renderInlineEditor(record),
           }}
         />
-        
+
       </div>
     </div>
   );

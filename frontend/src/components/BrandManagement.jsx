@@ -34,6 +34,8 @@ const BrandManagement = () => {
     showQuickJumper: true,
   });
 
+  const [statusFilter, setStatusFilter] = useState(null);
+
   // Fetch brands
   const fetchBrands = async (page = 1, limit = 10) => {
     setLoading(true);
@@ -167,7 +169,9 @@ const BrandManagement = () => {
       key: "brandStatus",
       render: (status) => {
         const colors = { active: "green", inactive: "red" };
-        return <Tag color={colors[status] || "default"}>{status}</Tag>;
+        return <Tag color={colors[status] || "default"}>
+            {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}  
+        </Tag>;
       },
     },
     {
@@ -267,18 +271,52 @@ const BrandManagement = () => {
       )}
 
       {/* Search */}
+    <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
       <Input.Search
         placeholder="Search by brand name"
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ maxWidth: 300, marginBottom: 20 }}
+        style={{ maxWidth: 300,  }}
       />
+
+        <Select
+          placeholder="Filter by Status"
+          allowClear
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value)}
+          style={{ width: 180 }}
+        >
+          <Select.Option value="active">Active</Select.Option>
+          <Select.Option value="inactive">Inactive</Select.Option>
+        </Select>
+
+        
+        <Button
+          onClick={() => {
+            setSearchTerm('');
+            setStatusFilter(null);
+          }
+          }
+          disabled={!searchTerm && !statusFilter}
+        >
+          Clear Filters
+        </Button>
+        
+      </div>
 
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(brands || []).filter((b) =>
-          b.brandName?.toLowerCase().includes(searchTerm.toLowerCase())
+        dataSource={(brands || []).filter((b) => {
+          const searchMatch = b.brandName?.toLowerCase().includes(searchTerm.toLowerCase());
+
+          const statusMatch = statusFilter ? 
+            b.status?.toLowerCase() === statusFilter.toLowerCase()
+            : true;
+
+          return searchMatch && statusMatch;
+
+          }
         )}
         rowKey="id"
         loading={loading}

@@ -27,15 +27,17 @@ import {
   ClockCircleOutlined,
   ExclamationCircleOutlined,
   EditOutlined,
-  CarOutlined,
+  // CarOutlined,
   FilePdfOutlined,
   HistoryOutlined,
   SettingOutlined,
   InfoCircleOutlined,
+  ReloadOutlined
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit } from "../service/auth";
 import dayjs from "dayjs";
+import { FaTruck } from "react-icons/fa";
 
 const { Title, Text } = Typography;
 
@@ -447,7 +449,7 @@ const ServiceManagement = () => {
       width: 120,
       render: (type) => {
         const typeConfig = {
-          vehicle: { color: "blue", text: "Machine", icon: <CarOutlined /> },
+          vehicle: { color: "blue", text: "Machine", icon: <FaTruck /> },
           compressor: { color: "orange", text: "Compressor", icon: <SettingOutlined /> },
           item: { color: "purple", text: "Item", icon: <ToolOutlined /> },
         };
@@ -671,7 +673,7 @@ const ServiceManagement = () => {
           <Title level={2} className="mb-2">Service Management</Title>
           <Text type="secondary">Track and manage vehicle and compressor service schedules</Text>
         </div>
-        <Button onClick={fetchData} loading={loading} icon={<SettingOutlined />}>
+        <Button onClick={fetchData} loading={loading} icon={<ReloadOutlined />}>
           Refresh
         </Button>
       </div>
@@ -683,7 +685,7 @@ const ServiceManagement = () => {
             <Statistic
               title="Total Machines"
               value={summary.totalVehicles}
-              prefix={<CarOutlined />}
+              prefix={<FaTruck />}
               valueStyle={{ color: '#1890ff' }}
             />
           </Card>

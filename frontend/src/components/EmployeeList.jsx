@@ -39,13 +39,15 @@ const EmployeeList = () => {
     showQuickJumper: true,
   });
 
+  const [statusFilter, setStatusFilter] = useState(null);
+
   // Fetch employees
   const fetchEmployees = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
       const res = await api.get(`/api/employeeLists?page=${page}&limit=${limit}`);
       setEmployees(res.data.data || []);
-      
+
       // Update pagination state
       setPagination(prev => ({
         ...prev,
@@ -89,13 +91,13 @@ const EmployeeList = () => {
       if (editingId) {
         payload.updatedBy = currentUser;
         await api.put(`/api/employeeLists/${editingId}`, payload);
-        
+
       } else {
         payload.createdBy = currentUser;
         const res = await api.post("/api/employeeLists", payload);
         setEmployees([res.data.data, ...employees]);
-        
-        
+
+
       }
 
       setShowForm(false);
@@ -127,6 +129,7 @@ const EmployeeList = () => {
       console.error("Error deleting employee", err);
     }
   };
+
 
   // PDF Export
   const exportToPDF = () => {
@@ -161,26 +164,25 @@ const EmployeeList = () => {
             </thead>
             <tbody>
               ${(employees || [])
-                .filter((e) =>
-                  e.name?.toLowerCase().includes(searchTerm.toLowerCase())
-                  || e.empId?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map(
-                  (emp) => `
+        .filter((e) =>
+          e.name?.toLowerCase().includes(searchTerm.toLowerCase())
+          || e.empId?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .map(
+          (emp) => `
                 <tr>
                   <td>${emp.empId}</td>
                   <td>${emp.name}</td>
                   <td>${emp.designation || "-"}</td>
                   <td>${emp.phone || "-"}</td>
-                  <td>${
-                    emp.joiningDate
-                      ? dayjs(emp.joiningDate).format("YYYY-MM-DD")
-                      : "-"
-                  }</td>
+                  <td>${emp.joiningDate
+              ? dayjs(emp.joiningDate).format("YYYY-MM-DD")
+              : "-"
+            }</td>
                   <td>${emp.status}</td>
                 </tr>`
-                )
-                .join("")}
+        )
+        .join("")}
             </tbody>
           </table>
         </body>
@@ -208,7 +210,9 @@ const EmployeeList = () => {
       key: "status",
       render: (status) => {
         const colors = { active: "green", inactive: "orange", resigned: "red" };
-        return <Tag color={colors[status] || "default"}>{status}</Tag>;
+        return <Tag color={colors[status] || "default"}>
+         {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}  
+        </Tag>;
       },
     },
     {
@@ -238,14 +242,14 @@ const EmployeeList = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button
+          {/* <Button
             size="small"
             icon={<EyeOutlined />}
             onClick={() => window.location.href = `/employee/details/${record.id}`}
             title="View Details"
           >
             View
-          </Button>
+          </Button> */}
           {canEdit() && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           )}
@@ -310,13 +314,13 @@ const EmployeeList = () => {
               <Form.Item name="designation" label="Designation">
                 <Input />
               </Form.Item>
-              <Form.Item 
-                name="phone" 
+              <Form.Item
+                name="phone"
                 label="Phone"
                 rules={[
-                  { 
-                    pattern: /^[0-9]{10}$/, 
-                    message: "Phone number must be exactly 10 digits" 
+                  {
+                    pattern: /^[0-9]{10}$/,
+                    message: "Phone number must be exactly 10 digits"
                   }
                 ]}
               >
@@ -350,7 +354,7 @@ const EmployeeList = () => {
                   formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                   parser={value => value.replace(/₹\s?|(,*)/g, '')}
                   placeholder="Enter advanced amount"
-                  
+
                 />
               </Form.Item>
             </div>
@@ -371,9 +375,24 @@ const EmployeeList = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 300 }}
         />
+        <Select
+          placeholder="Filter by Status"
+          allowClear
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value)}
+          style={{ width: 180 }}
+        >
+          <Select.Option value="active">Active</Select.Option>
+          <Select.Option value="inactive">Inactive</Select.Option>
+          <Select.Option value="resigned">Resigned</Select.Option>
+        </Select>
+
         <Button
-          onClick={() => setSearchTerm('')}
-          disabled={!searchTerm}
+          onClick={() => {
+            setSearchTerm('');
+            setStatusFilter(null);
+          }}
+          disabled={!searchTerm && !statusFilter}
         >
           Clear Filters
         </Button>
@@ -382,10 +401,19 @@ const EmployeeList = () => {
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(employees || []).filter((e) =>
-          e.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          e.empId?.toLowerCase().includes(searchTerm.toLowerCase())
-        )}
+        dataSource={(employees || []).filter((e) => {
+          // Search filter
+          const searchMatch =
+            e.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            e.empId?.toLowerCase().includes(searchTerm.toLowerCase());
+
+          // Status filter
+          const statusMatch = statusFilter
+            ? e.status?.toLowerCase() === statusFilter.toLowerCase()
+            : true;
+
+          return searchMatch && statusMatch;
+        })}
         rowKey="id"
         loading={loading}
         pagination={{
@@ -394,8 +422,6 @@ const EmployeeList = () => {
         }}
         onChange={handleTableChange}
       />
-
-   
 
     </div>
   );

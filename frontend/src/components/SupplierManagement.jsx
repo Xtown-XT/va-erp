@@ -34,13 +34,15 @@ const SupplierManagement = () => {
     showQuickJumper: true,
   });
 
+  const [statusFilter, setStatusFilter] = useState(null);
+
   // Fetch suppliers
   const fetchSuppliers = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
       const res = await api.get(`/api/suppliers?page=${page}&limit=${limit}`);
       setSuppliers(res.data.data || []);
-      
+
       // Update pagination state
       setPagination(prev => ({
         ...prev,
@@ -153,11 +155,11 @@ const SupplierManagement = () => {
             </thead>
             <tbody>
               ${(suppliers || [])
-                .filter((s) =>
-                  s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
-                .map(
-                  (supplier) => `
+        .filter((s) =>
+          s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .map(
+          (supplier) => `
                 <tr>
                   <td>${supplier.supplierName}</td>
                   <td>${supplier.gstNumber || "-"}</td>
@@ -166,8 +168,8 @@ const SupplierManagement = () => {
                   <td>${supplier.address || "-"}</td>
                   <td>${supplier.status}</td>
                 </tr>`
-                )
-                .join("")}
+        )
+        .join("")}
             </tbody>
           </table>
         </body>
@@ -183,9 +185,9 @@ const SupplierManagement = () => {
     { title: "GST Number", dataIndex: "gstNumber", key: "gstNumber" },
     { title: "Phone", dataIndex: "phone", key: "phone" },
     { title: "Email", dataIndex: "email", key: "email" },
-    { 
-      title: "Address", 
-      dataIndex: "address", 
+    {
+      title: "Address",
+      dataIndex: "address",
       key: "address",
       render: (text) => (
         <div style={{ maxWidth: 300, wordWrap: "break-word" }}>
@@ -199,7 +201,9 @@ const SupplierManagement = () => {
       key: "status",
       render: (status) => {
         const colors = { active: "green", inactive: "red" };
-        return <Tag color={colors[status] || "default"}>{status}</Tag>;
+        return <Tag color={colors[status] || "default"}>
+          {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}
+        </Tag>;
       },
     },
     {
@@ -313,42 +317,42 @@ const SupplierManagement = () => {
               </Form.Item> */}
 
               <Form.Item
-  name="phone"
-  label="Phone"
-  rules={[
-    {
-      validator: (_, value) => {
-        // Allow empty, null, or undefined
-        if (!value || value.trim() === '') return Promise.resolve();
-        // Validate if value is provided
-        return /^[0-9]{10}$/.test(value.trim())
-          ? Promise.resolve()
-          : Promise.reject("Phone number must be exactly 10 digits");
-      },
-    },
-  ]}
->
-  <Input placeholder="Enter 10-digit phone number" />
-</Form.Item>
+                name="phone"
+                label="Phone"
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      // Allow empty, null, or undefined
+                      if (!value || value.trim() === '') return Promise.resolve();
+                      // Validate if value is provided
+                      return /^[0-9]{10}$/.test(value.trim())
+                        ? Promise.resolve()
+                        : Promise.reject("Phone number must be exactly 10 digits");
+                    },
+                  },
+                ]}
+              >
+                <Input placeholder="Enter 10-digit phone number" />
+              </Form.Item>
 
-<Form.Item
-  name="email"
-  label="Email"
-  rules={[
-    {
-      validator: (_, value) => {
-        // Allow empty, null, or undefined
-        if (!value || value.trim() === '') return Promise.resolve();
-        // Validate if value is provided
-        return /\S+@\S+\.\S+/.test(value.trim())
-          ? Promise.resolve()
-          : Promise.reject("Please enter a valid email");
-      },
-    },
-  ]}
->
-  <Input placeholder="Optional" />
-</Form.Item>
+              <Form.Item
+                name="email"
+                label="Email"
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      // Allow empty, null, or undefined
+                      if (!value || value.trim() === '') return Promise.resolve();
+                      // Validate if value is provided
+                      return /\S+@\S+\.\S+/.test(value.trim())
+                        ? Promise.resolve()
+                        : Promise.reject("Please enter a valid email");
+                    },
+                  },
+                ]}
+              >
+                <Input placeholder="Optional" />
+              </Form.Item>
 
 
               <Form.Item
@@ -383,19 +387,49 @@ const SupplierManagement = () => {
       )}
 
       {/* Search */}
-      <Input.Search
-        placeholder="Search by supplier name"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ maxWidth: 300, marginBottom: 20 }}
-      />
+      <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <Input.Search
+          placeholder="Search by supplier name"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ maxWidth: 300 }}
+        />
+           <Select
+          placeholder="Filter by Status"
+          allowClear
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value)}
+          style={{ width: 180 }}
+        >
+          <Select.Option value="active">Active</Select.Option>
+          <Select.Option value="inactive">Inactive</Select.Option>
+        </Select>
+
+        <Button
+          onClick={() => {
+            setSearchTerm('');
+            setStatusFilter(null);
+          }
+          }
+          disabled={!searchTerm && !statusFilter}
+        >
+          Clear Filters
+        </Button>
+      </div>
 
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(suppliers || []).filter((s) =>
-          s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
-        )}
+        dataSource={(suppliers || []).filter((s) => {
+          const searchMatch = s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
+        
+          const statusMatch = statusFilter
+          ? s.status?.toLowerCase() === statusFilter.toLowerCase() 
+          : true  
+
+          return searchMatch && statusMatch;
+        }
+      )}
         rowKey="id"
         loading={loading}
         pagination={{

@@ -1,1 +1,1 @@
-select * from employeeList;
+show tables;
