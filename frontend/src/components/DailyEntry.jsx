@@ -808,6 +808,7 @@ const DailyEntry = () => {
                         showSearch
                         optionFilterProp="children"
                         allowClear
+                        value={selectedCompressor?.id}
                       >
                         {compressors.map((compressor) => (
                           <Select.Option key={compressor.id} value={compressor.id}>
