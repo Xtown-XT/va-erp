@@ -348,7 +348,18 @@ const ProductionReport = () => {
   ];
 
   // Export to PDF
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const startDate = dateRange[0].format('YYYY-MM-DD');
+    const endDate = dateRange[1].format('YYYY-MM-DD');
+    let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
+    if (selectedSite) url += `&siteId=${selectedSite}`;
+    if (selectedMachine) url += `&vehicleId=${selectedMachine}`;
+
+    const res = await api.get(url);
+    const entries = res.data.data || [];
+    const { dailyData, totals } = calculateProductionMetrics(entries);
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -393,7 +404,9 @@ const ProductionReport = () => {
               </tr>
             </thead>
             <tbody>
-              ${productionData.map(entry => `
+              ${dailyData
+        // productionData
+        .map(entry => `
                 <tr>
                   <td>${dayjs(entry.date).format("DD/MM/YYYY")}</td>
                   <td>${entry.meter || 0}</td>

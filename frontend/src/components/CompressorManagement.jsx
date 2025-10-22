@@ -131,7 +131,11 @@ const CompressorManagement = () => {
   };
 
   // PDF Export
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/compressors?page=1&limit=1000");
+    const allCompressors = res.data.data || [];
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -161,7 +165,8 @@ const CompressorManagement = () => {
               </tr>
             </thead>
             <tbody>
-              ${(compressors || [])
+              ${allCompressors
+            // (compressors || [])
         .filter((c) =>
           c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase())
         )

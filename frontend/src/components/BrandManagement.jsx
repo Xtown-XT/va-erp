@@ -112,7 +112,11 @@ const BrandManagement = () => {
   };
 
   // PDF Export
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/brands?page=1&limit=1000");
+    const allBrands = res.data.data || [] 
+    
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -139,7 +143,8 @@ const BrandManagement = () => {
               </tr>
             </thead>
             <tbody>
-              ${(brands || [])
+              ${allBrands
+            // (brands || [])
                 .filter((b) =>
                   b.brandName?.toLowerCase().includes(searchTerm.toLowerCase())
                 )

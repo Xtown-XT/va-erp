@@ -45,6 +45,7 @@ app.use(helmet());
 app.use(morgan("dev"));
 app.use("/api", apiLimiter);
 
+
 // Connect DB
 // const initializeDatabase = async () => {
 //   try {

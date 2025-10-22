@@ -37,7 +37,7 @@ import {
 import api from "../service/api";
 import { canEdit } from "../service/auth";
 import dayjs from "dayjs";
-import { FaTruck } from "react-icons/fa";
+import { FaTruck, FaCompressArrowsAlt } from "react-icons/fa";
 
 const { Title, Text } = Typography;
 
@@ -695,7 +695,7 @@ const ServiceManagement = () => {
             <Statistic
               title="Total Compressors"
               value={summary.totalCompressors}
-              prefix={<SettingOutlined />}
+              prefix={<FaCompressArrowsAlt />}
               valueStyle={{ color: '#52c41a' }}
             />
           </Card>

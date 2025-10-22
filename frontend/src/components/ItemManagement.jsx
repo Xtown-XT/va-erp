@@ -127,7 +127,11 @@ const ItemManagement = () => {
   };
 
   // Export to PDF
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/items?page=1&limit=1000"); 
+    const allItems = res.data.data || [];
+    
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -152,14 +156,18 @@ const ItemManagement = () => {
           
           <div class="summary">
             <h3>Summary</h3>
-            <p><strong>Total Items:</strong> ${items.length}</p>
-            <p><strong>Total Stock Value:</strong> ₹${items.reduce((sum, item) => sum + ((item.stock || 0) * (item.purchaseRate || 0)), 0).toLocaleString()}</p>
-            <p><strong>Items with Stock:</strong> ${items.filter(item => (item.stock || 0) > 0).length}</p>
-            <p><strong>Items Out of Stock:</strong> ${items.filter(item => (item.stock || 0) === 0).length}</p>
+            <p><strong>Total Items:</strong> ${allItems.length}</p>
+            <p><strong>Total Stock Value:</strong> ₹${allItems.reduce((sum, item) => sum + ((item.stock || 0) * (item.purchaseRate || 0)), 0).toLocaleString()}</p>
+            <p><strong>Items with Stock:</strong> ${allItems.filter(item => (item.stock || 0) > 0).length}</p>
+            <p><strong>Items Out of Stock:</strong> ${allItems.filter(item => (item.stock || 0) === 0).length}</p>
           </div>
           
           <h3>Item Details</h3>
-          ${items.map(item => `
+    
+          ${allItems
+          // items
+          
+          .map(item => `
             <div class="item-detail">
               <h4>${item.itemName} (${item.partNumber || 'No Part Number'})</h4>
               <p><strong>Group:</strong> ${item.groupName || 'N/A'} | <strong>Units:</strong> ${item.units || 'N/A'}</p>

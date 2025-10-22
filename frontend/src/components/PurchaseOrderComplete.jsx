@@ -387,7 +387,8 @@ const PurchaseOrderComplete = () => {
             .document-border {
               border: 2px solid #000;
               padding: 10px;
-              min-height: 100vh;
+              // min-height: 100vh;
+              height: auto;
             }
             .company-name { 
               font-size: 20px; 

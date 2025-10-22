@@ -132,7 +132,11 @@ const EmployeeList = () => {
 
 
   // PDF Export
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/employeeLists?page=1&limit=1000"); 
+    const allEmployees = res.data.data || [];
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -163,7 +167,9 @@ const EmployeeList = () => {
               </tr>
             </thead>
             <tbody>
-              ${(employees || [])
+
+            // (employees || [])
+            ${allEmployees
         .filter((e) =>
           e.name?.toLowerCase().includes(searchTerm.toLowerCase())
           || e.empId?.toLowerCase().includes(searchTerm.toLowerCase())

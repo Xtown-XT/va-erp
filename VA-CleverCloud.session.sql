@@ -1,1 +1,2 @@
-show tables;
+ALTER USER 'ub1qeh2a6fxltxip'@'%' WITH MAX_USER_CONNECTIONS 10;
+FLUSH PRIVILEGES;

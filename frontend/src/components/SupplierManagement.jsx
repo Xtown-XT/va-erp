@@ -123,7 +123,11 @@ const SupplierManagement = () => {
   };
 
   // PDF Export
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/suppliers?page=1&limit=1000"); 
+    const allSuppliers = res.data.data || [];
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -154,7 +158,9 @@ const SupplierManagement = () => {
               </tr>
             </thead>
             <tbody>
-              ${(suppliers || [])
+              ${allSuppliers
+            // (suppliers || [])
+            
         .filter((s) =>
           s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -181,7 +187,16 @@ const SupplierManagement = () => {
 
   // Table columns
   const columns = [
-    { title: "Supplier Name", dataIndex: "supplierName", key: "supplierName" },
+    { 
+      title: "Supplier Name", 
+      dataIndex: "supplierName", 
+      key: "supplierName",
+       render: (title) => (
+        <div style={{ minWidth: 180, wordWrap: "break-word" }}>
+          {title}
+        </div>
+      ),
+    },
     { title: "GST Number", dataIndex: "gstNumber", key: "gstNumber" },
     { title: "Phone", dataIndex: "phone", key: "phone" },
     { title: "Email", dataIndex: "email", key: "email" },

@@ -125,6 +125,8 @@ export class EmployeeAttendanceController extends BaseController {
         ...req.body,
         updatedBy: username,
       };
+
+      
       const updatedAttendance = await this.service.update(id, updatePayload, { transaction });
 
       // Handle salary deduction if salary changed

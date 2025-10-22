@@ -9,6 +9,7 @@ import api from "../service/api";
 import { MdDashboard } from "react-icons/md";
 import { TbReport } from "react-icons/tb";
 import { FaUsers, FaList, FaWpforms, FaClipboardList, FaShoppingCart, FaBox, FaCog, FaWarehouse, FaTruck, FaCompressArrowsAlt, FaChartBar, FaTags, FaMapMarkerAlt, FaAddressBook, FaUsersCog } from 'react-icons/fa';
+import { FaShop } from "react-icons/fa6";
 
 const { Text } = Typography;
 
@@ -40,7 +41,7 @@ const navArray = [
   },
   { icon: <FaTags />, label: "Brand", path: "/brand" },
   { icon: <FaMapMarkerAlt />, label: "Site", path: "/site" },
-  { icon: <FaTruck />, label: "Supplier", path: "/supplier" },
+  { icon: <FaShop />, label: "Supplier", path: "/supplier" },
   { icon: <FaAddressBook />, label: "Address", path: "/address" },
   { icon: <FaUsersCog />, label: "User Management", path: "/user-management", adminOnly: true },
 ];

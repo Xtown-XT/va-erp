@@ -88,54 +88,54 @@
 //     }
 //   };
 
-//   // PDF Export
-//   const exportToPDF = () => {
-//     const printWindow = window.open("", "_blank");
-//     printWindow.document.write(`
-//       <html>
-//         <head>
-//           <title>Site List</title>
-//           <style>
-//             body { font-family: Arial, sans-serif; }
-//             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-//             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-//             th { background-color: #f2f2f2; }
-//             .header { text-align: center; margin-bottom: 20px; }
-//           </style>
-//         </head>
-//         <body>
-//           <div class="header">
-//             <h1>Site List</h1>
-//             <p>Generated on: ${new Date().toLocaleDateString()}</p>
-//           </div>
-//           <table>
-//             <thead>
-//               <tr>
-//                 <th>Site Name</th>
-//                 <th>Status</th>
-//               </tr>
-//             </thead>
-//             <tbody>
-//               ${(sites || [])
-//                 .filter((s) =>
-//                   s.siteName?.toLowerCase().includes(searchTerm.toLowerCase())
-//                 )
-//                 .map(
-//                   (site) => `
-//                 <tr>
-//                   <td>${site.siteName}</td>
-//                   <td>${site.siteStatus ? "Active" : "Inactive"}</td>
-//                 </tr>`
-//                 )
-//                 .join("")}
-//             </tbody>
-//           </table>
-//         </body>
-//       </html>
-//     `);
-//     printWindow.document.close();
-//     printWindow.print();
-//   };
+  // // PDF Export
+  // const exportToPDF = () => {
+  //   const printWindow = window.open("", "_blank");
+  //   printWindow.document.write(`
+  //     <html>
+  //       <head>
+  //         <title>Site List</title>
+  //         <style>
+  //           body { font-family: Arial, sans-serif; }
+  //           table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  //           th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+  //           th { background-color: #f2f2f2; }
+  //           .header { text-align: center; margin-bottom: 20px; }
+  //         </style>
+  //       </head>
+  //       <body>
+  //         <div class="header">
+  //           <h1>Site List</h1>
+  //           <p>Generated on: ${new Date().toLocaleDateString()}</p>
+  //         </div>
+  //         <table>
+  //           <thead>
+  //             <tr>
+  //               <th>Site Name</th>
+  //               <th>Status</th>
+  //             </tr>
+  //           </thead>
+  //           <tbody>
+  //             ${(sites || [])
+  //               .filter((s) =>
+  //                 s.siteName?.toLowerCase().includes(searchTerm.toLowerCase())
+  //               )
+  //               .map(
+  //                 (site) => `
+  //               <tr>
+  //                 <td>${site.siteName}</td>
+  //                 <td>${site.siteStatus ? "Active" : "Inactive"}</td>
+  //               </tr>`
+  //               )
+  //               .join("")}
+  //           </tbody>
+  //         </table>
+  //       </body>
+  //     </html>
+  //   `);
+  //   printWindow.document.close();
+  //   printWindow.print();
+  // };
 
 //   // Table columns
 //   const columns = [
@@ -372,6 +372,61 @@ const SiteManagement = () => {
     }
   };
 
+    // PDF Export
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/sites?page=1&limit=1000"); 
+    const allSites = res.data.data || [];
+
+    const printWindow = window.open("", "_blank");
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Site List</title>
+          <style>
+            body { font-family: Arial, sans-serif; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f2f2f2; }
+            .header { text-align: center; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Site List</h1>
+            <p>Generated on: ${new Date().toLocaleDateString()}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Site Name</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${allSites
+            // (sites || [])
+                .filter((s) =>
+                  s.siteName?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+                .map(
+                  (site) => `
+                <tr>
+                  <td>${site.siteName}</td>
+                  <td>${site.siteStatus ? "Active" : "Inactive"}</td>
+                </tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+
   // Table columns
   const columns = [
     { title: "Site Name", dataIndex: "siteName", key: "siteName" },
@@ -413,7 +468,11 @@ const SiteManagement = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Site Management</h1>
         <Space>
-          <Button icon={<FilePdfOutlined />} type="primary" danger>
+          <Button 
+            icon={<FilePdfOutlined />}  
+            onClick={exportToPDF} 
+            type="primary" danger 
+          >
             Export PDF
           </Button>
           {canCreate() && (

@@ -174,7 +174,11 @@ const Vehicle = () => {
   };
 
   // PDF Export
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const res = await api.get("/api/vehicles?page=1&limit=1000");
+    const allVehicles = res.data.data || []
+
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
       <html>
@@ -206,7 +210,8 @@ const Vehicle = () => {
               </tr>
             </thead>
             <tbody>
-              ${(vehicles || [])
+              ${allVehicles
+            // (vehicles || [])
         .filter((v) =>
           v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase())
         )

@@ -41,6 +41,7 @@ const Attendance = () => {
   const [vehicles, setVehicles] = useState([]);
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [attendanceData, setAttendanceData] = useState({});
+  const [modifiedEmployees, setModifiedEmployees] = useState(new Set());
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -69,7 +70,7 @@ const Attendance = () => {
     setLoading(true);
     try {
       const dateStr = date.format("YYYY-MM-DD");
-      const res = await api.get(`/api/employeeAttendance?date=${dateStr}`);
+      const res = await api.get(`/api/employeeAttendance?date=${dateStr}&limit=1000`);
       setRecords(res.data.data || []);
 
       // Initialize attendance data for all employees
@@ -86,6 +87,8 @@ const Attendance = () => {
         };
       });
       setAttendanceData(initialData);
+      // Clear modified employees when fetching new records
+      setModifiedEmployees(new Set());
     } catch (err) {
       message.error("Error fetching attendance");
       setRecords([]);
@@ -162,7 +165,7 @@ const Attendance = () => {
         fetchSites(),
         fetchVehicles()
       ]);
-      fetchRecords();
+      // fetchRecords();
       fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
     };
     initializeData();
@@ -190,45 +193,125 @@ const Attendance = () => {
         [employeeId]: nextEntry,
       };
     });
+    
+    // Track that this employee has been modified
+    setModifiedEmployees(prev => new Set(prev).add(employeeId));
   };
 
-  // Save all attendance records
+  // Save all attendance records with batch processing
   const saveAllAttendance = async () => {
     setSaving(true);
+    const hideLoading = message.loading('Saving attendance records...', 0);
+    
     try {
       const currentUser = localStorage.getItem("username") || "Unknown";
       const dateStr = selectedDate.format("YYYY-MM-DD");
 
-      const promises = Object.entries(attendanceData).map(async ([employeeId, data]) => {
-        const payload = {
-          employeeId,
-          presence: data.presence || 'present',
-          workStatus: data.workStatus || 'working',
-          salary: Number(data.salary) || 0,
-          date: dateStr,
-          siteId: data.siteId || null,
-          vehicleId: data.vehicleId || null,
-        };
+      // Save ALL employees in attendanceData
+      const entriesToSave = Object.entries(attendanceData);
 
-        if (data.recordId) {
-          // Update existing record
-          payload.updatedBy = currentUser;
-          return api.put(`/api/employeeAttendance/${data.recordId}`, payload);
-        } else {
-          // Create new record
-          payload.createdBy = currentUser;
-          return api.post("/api/employeeAttendance", payload);
+      let successCount = 0;
+      let failCount = 0;
+      const failedEmployees = [];
+      const batchSize = 10; // Optimized batch size for large datasets
+      const totalRecords = entriesToSave.length;
+
+      if (totalRecords === 0) {
+        hideLoading();
+        message.info('No changes to save. Modify attendance data before saving.');
+        setSaving(false);
+        return;
+      }
+
+      console.log(`Starting to save ${totalRecords} attendance records in batches of ${batchSize}`);
+
+      // Process in batches with delay to avoid overwhelming the server
+      for (let i = 0; i < entriesToSave.length; i += batchSize) {
+        const batch = entriesToSave.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(entriesToSave.length / batchSize);
+        const progress = Math.round((i / totalRecords) * 100);
+        
+        console.log(`Processing batch ${batchNumber}/${totalBatches} (${progress}% complete)`);
+        
+        const batchPromises = batch.map(async ([employeeId, data]) => {
+          const emp = employees.find(e => e.id === employeeId);
+          const empName = emp?.name || employeeId;
+          
+          try {
+            const payload = {
+              employeeId,
+              presence: data.presence || 'present',
+              workStatus: data.workStatus || 'working',
+              salary: Number(data.salary) || 0,
+              date: dateStr,
+              siteId: data.siteId || null,
+              vehicleId: data.vehicleId || null,
+            };
+
+            if (data.recordId) {
+              // Update existing record
+              payload.updatedBy = currentUser;
+              await api.put(`/api/employeeAttendance/${data.recordId}`, payload);
+            } else {
+              // Create new record
+              payload.createdBy = currentUser;
+              await api.post("/api/employeeAttendance", payload);
+            }
+            return { success: true, employeeId, name: empName };
+          } catch (error) {
+            console.error(`✗ Failed to save ${empName}:`, error.response?.data || error.message);
+            return { success: false, employeeId, name: empName, error: error.message };
+          }
+        });
+
+        const results = await Promise.all(batchPromises);
+        const batchSuccess = results.filter(r => r.success).length;
+        const batchFail = results.filter(r => !r.success).length;
+        
+        successCount += batchSuccess;
+        failCount += batchFail;
+        
+        // Track failed employees
+        results.filter(r => !r.success).forEach(r => {
+          failedEmployees.push({
+            name: r.name,
+            id: r.employeeId,
+            error: r.error
+          });
+        });
+        
+        console.log(`Batch ${batchNumber} completed: ${batchSuccess} success, ${batchFail} failed (${Math.round(((i + batch.length) / totalRecords) * 100)}% done)`);
+        
+        // Add small delay between batches to prevent transaction conflicts
+        if (i + batchSize < entriesToSave.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
-      });
+      }
 
-      await Promise.all(promises);
-      message.success("Attendance saved successfully!");
+      hideLoading();
+
+      // Clear modified employees set after successful save
+      setModifiedEmployees(new Set());
+
+      if (failCount > 0) {
+        message.warning({
+          content: `Saved ${successCount} records. ${failCount} failed. Check console for details.`,
+          duration: 5
+        });
+        console.error('Failed employees details:', failedEmployees);
+      } else {
+        message.success(`All ${successCount} attendance records saved successfully!`);
+      }
+
       // Refresh attendance and employees to reflect updated remaining amounts
-      fetchRecords();
-      fetchEmployees();
-      fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
+      await fetchRecords();
+      await fetchEmployees();
+      await fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
 
     } catch (err) {
+      hideLoading();
+      console.error("Error saving attendance:", err);
       message.error("Error saving attendance");
     } finally {
       setSaving(false);
@@ -331,8 +414,16 @@ const Attendance = () => {
 
 
   // PDF Export for view records
-  const exportToPDF = () => {
+  const exportToPDF = async () => {
+
+    const dateStr = viewDate.format("YYYY-MM-DD");
+    const siteId = viewSite;
+    if (siteId) url += `&siteId=${siteId}`;
+
     const selectedSiteName = viewSite ? sites.find(s => s.id === viewSite)?.siteName : 'All Sites';
+
+    const res = await api.get("/api/employeeAttendance?page=1&limit=1000");
+    const allRecords = res.data.data || [];
 
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
@@ -377,7 +468,8 @@ const Attendance = () => {
               </tr>
             </thead>
             <tbody>
-              ${viewRecords
+              ${allRecords
+            // viewRecords
         .map(record => {
           const employee = employees.find(emp => emp.id === record.employeeId);
           const site = sites.find(s => s.id === record.siteId);
@@ -398,7 +490,7 @@ const Attendance = () => {
             </tbody>
           </table>
           <div style="margin-top: 20px; text-align: center; color: #666;">
-            <p>Total Records: ${viewRecords.length}</p>
+            <p>Total Records: ${allRecords.length}</p>
           </div>
         </body>
       </html>
@@ -518,15 +610,14 @@ const Attendance = () => {
             </Button>
           )}
           {canDelete() && (
-            <Button
-
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete(record.id)}
-
+       
+             <Popconfirm
+              title="Are you sure to delete this record permanently?"
+              onConfirm={() => handleDelete(record.id)}
             >
-
-            </Button>
+              <Button icon={<DeleteOutlined />} danger />
+            </Popconfirm>
+   
           )}
         </Space>
       ),
@@ -960,7 +1051,7 @@ const Attendance = () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            pageSize: 50,
+            pageSize: 10,
             showSizeChanger: true,
             showQuickJumper: true,
             pageSizeOptions: ['20', '50', '100', '150'],
@@ -974,16 +1065,18 @@ const Attendance = () => {
         {/* Save Button at Bottom */}
         {canEdit() && (
           <div className="mt-6 text-center">
-            <Button
-              icon={<SaveOutlined />}
-              onClick={saveAllAttendance}
-              type="primary"
-              loading={saving}
-              size="large"
-              className="min-w-[200px]"
-            >
-              Save All Attendance
-            </Button>
+            <Space size="large">
+              <Button
+                icon={<SaveOutlined />}
+                onClick={saveAllAttendance}
+                type="primary"
+                loading={saving}
+                size="large"
+                className="min-w-[200px]"
+              >
+                Save All Attendance
+              </Button>
+            </Space>
           </div>
         )}
       </div>
@@ -1152,3 +1245,5 @@ const Attendance = () => {
 };
 
 export default Attendance;
+
+
