@@ -134,7 +134,7 @@ const EmployeeList = () => {
   // PDF Export
   const exportToPDF = async () => {
 
-    const res = await api.get("/api/employeeLists?page=1&limit=1000"); 
+    const res = await api.get("/api/employeeLists?page=1&limit=1000");
     const allEmployees = res.data.data || [];
 
     const printWindow = window.open("", "_blank");
@@ -217,7 +217,7 @@ const EmployeeList = () => {
       render: (status) => {
         const colors = { active: "green", inactive: "orange", resigned: "red" };
         return <Tag color={colors[status] || "default"}>
-         {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}  
+          {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}
         </Tag>;
       },
     },
@@ -324,13 +324,25 @@ const EmployeeList = () => {
                 name="phone"
                 label="Phone"
                 rules={[
-                  {
-                    pattern: /^[0-9]{10}$/,
-                    message: "Phone number must be exactly 10 digits"
-                  }
+                  { required: true, message: "Phone number is required" },
+                  { pattern: /^\d{10,11}$/, message: "Phone number must be exactly 10 digits" }
                 ]}
               >
-                <Input placeholder="Enter 10-digit phone number" />
+                <Input placeholder="Enter 10-digit phone number"
+
+                  maxLength={11} 
+                  onKeyPress={(e) => {
+                    if (!/[0-9]/.test(e.key)) {
+                      e.preventDefault(); 
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const pasteData = e.clipboardData.getData("Text");
+                    if (!/^\d+$/.test(pasteData)) {
+                      e.preventDefault(); 
+                    }
+                  }}
+                />
               </Form.Item>
               <Form.Item name="joiningDate" label="Joining Date">
                 <DatePicker className="w-full" />

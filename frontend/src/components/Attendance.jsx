@@ -178,145 +178,217 @@ const Attendance = () => {
   }, [employees.length, selectedDate]);
 
   // Update attendance data for an employee
-  const updateAttendanceData = (employeeId, field, value) => {
-    setAttendanceData(prev => {
-      const prevEntry = prev[employeeId] || {};
-      const nextEntry = { ...prevEntry, [field]: value };
+  // const updateAttendanceData = (employeeId, field, value) => {
+  //   setAttendanceData(prev => {
+  //     const prevEntry = prev[employeeId] || {};
+  //     const nextEntry = { ...prevEntry, [field]: value };
 
-      // Business rule: if absent, force non-working (but allow salary to be set manually)
-      if (field === 'presence' && value === 'absent') {
-        nextEntry.workStatus = 'non-working';
-      }
+  //     // Business rule: if absent, force non-working (but allow salary to be set manually)
+  //     if (field === 'presence' && value === 'absent') {
+  //       nextEntry.workStatus = 'non-working';
+  //     }
 
-      return {
-        ...prev,
-        [employeeId]: nextEntry,
-      };
-    });
+  //     return {
+  //       ...prev,
+  //       [employeeId]: nextEntry,
+  //     };
+  //   });
     
-    // Track that this employee has been modified
-    setModifiedEmployees(prev => new Set(prev).add(employeeId));
-  };
+  //   // Track that this employee has been modified
+  //   setModifiedEmployees(prev => new Set(prev).add(employeeId));
+  // };
 
   // Save all attendance records with batch processing
-  const saveAllAttendance = async () => {
-    setSaving(true);
-    const hideLoading = message.loading('Saving attendance records...', 0);
+  // const saveAllAttendance = async () => {
+  //   setSaving(true);
+  //   const hideLoading = message.loading('Saving attendance records...', 0);
     
-    try {
-      const currentUser = localStorage.getItem("username") || "Unknown";
-      const dateStr = selectedDate.format("YYYY-MM-DD");
+  //   try {
+  //     const currentUser = localStorage.getItem("username") || "Unknown";
+  //     const dateStr = selectedDate.format("YYYY-MM-DD");
 
-      // Save ALL employees in attendanceData
-      const entriesToSave = Object.entries(attendanceData);
+  //     // Save ALL employees in attendanceData
+  //     // const entriesToSave = Object.entries(attendanceData);
 
-      let successCount = 0;
-      let failCount = 0;
-      const failedEmployees = [];
-      const batchSize = 10; // Optimized batch size for large datasets
-      const totalRecords = entriesToSave.length;
+  //     const entriesToSave = Array.from(modifiedEmployees).map(employeeId => [employeeId, attendanceData[employeeId]]);
 
-      if (totalRecords === 0) {
-        hideLoading();
-        message.info('No changes to save. Modify attendance data before saving.');
-        setSaving(false);
-        return;
-      }
 
-      console.log(`Starting to save ${totalRecords} attendance records in batches of ${batchSize}`);
+  //     let successCount = 0;
+  //     let failCount = 0;
+  //     const failedEmployees = [];
+  //     const batchSize = 20; 
+  //     const totalRecords = entriesToSave.length;
 
-      // Process in batches with delay to avoid overwhelming the server
-      for (let i = 0; i < entriesToSave.length; i += batchSize) {
-        const batch = entriesToSave.slice(i, i + batchSize);
-        const batchNumber = Math.floor(i / batchSize) + 1;
-        const totalBatches = Math.ceil(entriesToSave.length / batchSize);
-        const progress = Math.round((i / totalRecords) * 100);
+  //     if (totalRecords === 0) {
+  //       hideLoading();
+  //       message.info('No changes to save. Modify attendance data before saving.');
+  //       setSaving(false);
+  //       return;
+  //     }
+
+  //     console.log(`Starting to save ${totalRecords} attendance records in batches of ${batchSize}`);
+
+  //     // Process in batches with delay to avoid overwhelming the server
+  //     for (let i = 0; i < entriesToSave.length; i += batchSize) {
+  //       const batch = entriesToSave.slice(i, i + batchSize);
+  //       const batchNumber = Math.floor(i / batchSize) + 1;
+  //       const totalBatches = Math.ceil(entriesToSave.length / batchSize);
+  //       const progress = Math.round((i / totalRecords) * 100);
         
-        console.log(`Processing batch ${batchNumber}/${totalBatches} (${progress}% complete)`);
+  //       console.log(`Processing batch ${batchNumber}/${totalBatches} (${progress}% complete)`);
         
-        const batchPromises = batch.map(async ([employeeId, data]) => {
-          const emp = employees.find(e => e.id === employeeId);
-          const empName = emp?.name || employeeId;
+  //       const batchPromises = batch.map(async ([employeeId, data]) => {
+  //         const emp = employees.find(e => e.id === employeeId);
+  //         const empName = emp?.name || employeeId;
           
-          try {
-            const payload = {
-              employeeId,
-              presence: data.presence || 'present',
-              workStatus: data.workStatus || 'working',
-              salary: Number(data.salary) || 0,
-              date: dateStr,
-              siteId: data.siteId || null,
-              vehicleId: data.vehicleId || null,
-            };
+  //         try {
+  //           const payload = {
+  //             employeeId,
+  //             presence: data.presence || 'present',
+  //             workStatus: data.workStatus || 'working',
+  //             salary: Number(data.salary) || 0,
+  //             date: dateStr,
+  //             siteId: data.siteId || null,
+  //             vehicleId: data.vehicleId || null,
+  //           };
 
-            if (data.recordId) {
-              // Update existing record
-              payload.updatedBy = currentUser;
-              await api.put(`/api/employeeAttendance/${data.recordId}`, payload);
-            } else {
-              // Create new record
-              payload.createdBy = currentUser;
-              await api.post("/api/employeeAttendance", payload);
-            }
-            return { success: true, employeeId, name: empName };
-          } catch (error) {
-            console.error(`✗ Failed to save ${empName}:`, error.response?.data || error.message);
-            return { success: false, employeeId, name: empName, error: error.message };
-          }
-        });
+  //           if (data.recordId) {
+  //             // Update existing record
+  //             payload.updatedBy = currentUser;
+  //             await api.put(`/api/employeeAttendance/${data.recordId}`, payload);
+  //           } else {
+  //             // Create new record
+  //             payload.createdBy = currentUser;
+  //             await api.post("/api/employeeAttendance", payload);
+  //           }
+  //           return { success: true, employeeId, name: empName };
+  //         } catch (error) {
+  //           console.error(`✗ Failed to save ${empName}:`, error.response?.data || error.message);
+  //           return { success: false, employeeId, name: empName, error: error.message };
+  //         }
+  //       });
 
-        const results = await Promise.all(batchPromises);
-        const batchSuccess = results.filter(r => r.success).length;
-        const batchFail = results.filter(r => !r.success).length;
+  //       const results = await Promise.all(batchPromises);
+  //       const batchSuccess = results.filter(r => r.success).length;
+  //       const batchFail = results.filter(r => !r.success).length;
         
-        successCount += batchSuccess;
-        failCount += batchFail;
+  //       successCount += batchSuccess;
+  //       failCount += batchFail;
         
-        // Track failed employees
-        results.filter(r => !r.success).forEach(r => {
-          failedEmployees.push({
-            name: r.name,
-            id: r.employeeId,
-            error: r.error
-          });
-        });
+  //       // Track failed employees
+  //       results.filter(r => !r.success).forEach(r => {
+  //         failedEmployees.push({
+  //           name: r.name,
+  //           id: r.employeeId,
+  //           error: r.error
+  //         });
+  //       });
         
-        console.log(`Batch ${batchNumber} completed: ${batchSuccess} success, ${batchFail} failed (${Math.round(((i + batch.length) / totalRecords) * 100)}% done)`);
+  //       console.log(`Batch ${batchNumber} completed: ${batchSuccess} success, ${batchFail} failed (${Math.round(((i + batch.length) / totalRecords) * 100)}% done)`);
         
-        // Add small delay between batches to prevent transaction conflicts
-        if (i + batchSize < entriesToSave.length) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-      }
+  //       // Add small delay between batches to prevent transaction conflicts
+  //       if (i + batchSize < entriesToSave.length) {
+  //         await new Promise(resolve => setTimeout(resolve, 50));
+  //       }
+  //     }
 
-      hideLoading();
+  //     hideLoading();
 
-      // Clear modified employees set after successful save
-      setModifiedEmployees(new Set());
+  //     // Clear modified employees set after successful save
+  //     setModifiedEmployees(new Set());
 
-      if (failCount > 0) {
-        message.warning({
-          content: `Saved ${successCount} records. ${failCount} failed. Check console for details.`,
-          duration: 5
-        });
-        console.error('Failed employees details:', failedEmployees);
-      } else {
-        message.success(`All ${successCount} attendance records saved successfully!`);
-      }
+  //     if (failCount > 0) {
+  //       message.warning({
+  //         content: `Saved ${successCount} records. ${failCount} failed. Check console for details.`,
+  //         duration: 5
+  //       });
+  //       console.error('Failed employees details:', failedEmployees);
+  //     } else {
+  //       message.success(`All ${successCount} attendance records saved successfully!`);
+  //     }
 
-      // Refresh attendance and employees to reflect updated remaining amounts
-      await fetchRecords();
-      await fetchEmployees();
-      await fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
+  //     // Refresh attendance and employees to reflect updated remaining amounts
+  //     await fetchRecords();
+  //     await fetchEmployees();
+  //     await fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
 
-    } catch (err) {
-      hideLoading();
-      console.error("Error saving attendance:", err);
-      message.error("Error saving attendance");
-    } finally {
-      setSaving(false);
+  //   } catch (err) {
+  //     hideLoading();
+  //     console.error("Error saving attendance:", err);
+  //     message.error("Error saving attendance");
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // };
+
+  // Track modified employees safely
+const updateAttendanceData = (employeeId, field, value) => {
+  setAttendanceData(prev => {
+    const prevEntry = prev[employeeId] || {};
+    const nextEntry = { ...prevEntry, [field]: value };
+    if (field === 'presence' && value === 'absent') {
+      nextEntry.workStatus = 'non-working';
     }
-  };
+    return { ...prev, [employeeId]: nextEntry };
+  });
+
+  setModifiedEmployees(prev => new Set([...prev, employeeId])); // <- important
+};
+
+// Save function with debug
+const saveAllAttendance = async () => {
+  if (modifiedEmployees.size === 0) {
+    message.info("No changes to save.");
+    return;
+  }
+
+  setSaving(true);
+  const hideLoading = message.loading('Saving attendance records...', 0);
+  const currentUser = localStorage.getItem("username") || "Unknown";
+  const dateStr = selectedDate.format("YYYY-MM-DD");
+
+  try {
+    const entriesToSave = Array.from(modifiedEmployees)
+      .map(empId => [empId, attendanceData[empId]])
+      .filter(([_, data]) => data); // <- ensure data exists
+
+    console.log('Saving entries:', entriesToSave); // <-- debug
+
+    for (let [employeeId, data] of entriesToSave) {
+      const payload = {
+        employeeId,
+        presence: data.presence || 'present',
+        workStatus: data.workStatus || 'working',
+        salary: Number(data.salary) || 0,
+        date: dateStr,
+        siteId: data.siteId || null,
+        vehicleId: data.vehicleId || null,
+      };
+
+      if (data.recordId) payload.updatedBy = currentUser;
+      else payload.createdBy = currentUser;
+
+      try {
+        if (data.recordId) await api.put(`/api/employeeAttendance/${data.recordId}`, payload);
+        else await api.post("/api/employeeAttendance", payload);
+      } catch (err) {
+        console.error(`Failed to save employee ${employeeId}:`, err.response?.data || err.message);
+      }
+    }
+
+    hideLoading();
+    message.success(`Saved ${entriesToSave.length} attendance records successfully!`);
+    setModifiedEmployees(new Set());
+    await fetchRecords(selectedDate);
+  } catch (err) {
+    hideLoading();
+    console.error(err);
+    message.error("Error saving attendance");
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   // Handle individual record edit
   const handleEdit = (record) => {

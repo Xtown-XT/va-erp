@@ -182,11 +182,11 @@ const AddressManagement = () => {
         <Space>
           {canEdit() && (
             <Button
-             
+
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              
+
             </Button>
           )}
           {canDelete() && (
@@ -196,8 +196,8 @@ const AddressManagement = () => {
               okText="Yes"
               cancelText="No"
             >
-              <Button  danger icon={<DeleteOutlined />}>
-             
+              <Button danger icon={<DeleteOutlined />}>
+
               </Button>
             </Popconfirm>
           )}
@@ -276,14 +276,26 @@ const AddressManagement = () => {
                 <Form.Item
                   name="phone"
                   label="Phone Number"
+
                   rules={[
                     { required: true, message: "Phone number is required" },
-                    { pattern: /^\d{10}$/, message: "Phone number must be exactly 10 digits" }
+                    { pattern: /^\d{10, 11}$/, message: "Phone number must be exactly 10 digits" }
                   ]}
                 >
                   <Input
                     placeholder="Enter 10-digit phone number"
-                    maxLength={10}
+                    maxLength={11}
+                    onKeyPress={(e) => {
+                      if (!/[0-9]/.test(e.key)) {
+                        e.preventDefault(); 
+                      }
+                    }}
+                    onPaste={(e) => {
+                      const pasteData = e.clipboardData.getData("Text");
+                      if (!/^\d+$/.test(pasteData)) {
+                        e.preventDefault(); 
+                      }
+                    }}
                   />
                 </Form.Item>
               </Col>

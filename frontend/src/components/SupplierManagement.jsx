@@ -125,7 +125,7 @@ const SupplierManagement = () => {
   // PDF Export
   const exportToPDF = async () => {
 
-    const res = await api.get("/api/suppliers?page=1&limit=1000"); 
+    const res = await api.get("/api/suppliers?page=1&limit=1000");
     const allSuppliers = res.data.data || [];
 
     const printWindow = window.open("", "_blank");
@@ -159,8 +159,8 @@ const SupplierManagement = () => {
             </thead>
             <tbody>
               ${allSuppliers
-            // (suppliers || [])
-            
+        // (suppliers || [])
+
         .filter((s) =>
           s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -187,11 +187,11 @@ const SupplierManagement = () => {
 
   // Table columns
   const columns = [
-    { 
-      title: "Supplier Name", 
-      dataIndex: "supplierName", 
+    {
+      title: "Supplier Name",
+      dataIndex: "supplierName",
       key: "supplierName",
-       render: (title) => (
+      render: (title) => (
         <div style={{ minWidth: 180, wordWrap: "break-word" }}>
           {title}
         </div>
@@ -303,9 +303,15 @@ const SupplierManagement = () => {
               <Form.Item
                 name="gstNumber"
                 label="GST Number"
-                rules={[{ max: 255, message: "GST number must be no more than 255 characters" }]}
+                rules={[
+                  { pattern: /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/ },
+                  { max: 255, message: "GST number must be no more than 255 characters" }
+                  
+                ]}
               >
-                <Input />
+                <Input
+                  maxLength={15}
+                />
               </Form.Item>
               {/* <Form.Item
                 name="phone"
@@ -335,19 +341,24 @@ const SupplierManagement = () => {
                 name="phone"
                 label="Phone"
                 rules={[
-                  {
-                    validator: (_, value) => {
-                      // Allow empty, null, or undefined
-                      if (!value || value.trim() === '') return Promise.resolve();
-                      // Validate if value is provided
-                      return /^[0-9]{10}$/.test(value.trim())
-                        ? Promise.resolve()
-                        : Promise.reject("Phone number must be exactly 10 digits");
-                    },
-                  },
+                  { required: true, message: "Phone number is required" },
+                  { pattern: /^\d{10,11}$/, message: "Phone number must be exactly 10 digits" }
                 ]}
               >
-                <Input placeholder="Enter 10-digit phone number" />
+                <Input placeholder="Enter 10-digit phone number"
+                  maxLength={11}
+                  onKeyPress={(e) => {
+                    if (!/[0-9]/.test(e.key)) {
+                      e.preventDefault();
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const pasteData = e.clipboardData.getData("Text");
+                    if (!/^\d+$/.test(pasteData)) {
+                      e.preventDefault();
+                    }
+                  }}
+                />
               </Form.Item>
 
               <Form.Item
@@ -409,7 +420,7 @@ const SupplierManagement = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ maxWidth: 300 }}
         />
-           <Select
+        <Select
           placeholder="Filter by Status"
           allowClear
           value={statusFilter}
@@ -437,14 +448,14 @@ const SupplierManagement = () => {
         columns={columns}
         dataSource={(suppliers || []).filter((s) => {
           const searchMatch = s.supplierName?.toLowerCase().includes(searchTerm.toLowerCase())
-        
+
           const statusMatch = statusFilter
-          ? s.status?.toLowerCase() === statusFilter.toLowerCase() 
-          : true  
+            ? s.status?.toLowerCase() === statusFilter.toLowerCase()
+            : true
 
           return searchMatch && statusMatch;
         }
-      )}
+        )}
         rowKey="id"
         loading={loading}
         pagination={{
