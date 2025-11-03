@@ -31,6 +31,7 @@ import {
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
 import dayjs from "dayjs";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -189,17 +190,27 @@ const DailyEntry = () => {
     const isTruck = machine && machine.vehicleType.toLowerCase().includes('truck');
 
     if (isCrawler || isCamper || isTruck) {
-      // Auto-fill machine opening RPM for crawler machines
-      const vehicleOpeningRPM = machine?.vehicleRPM || 0;
+      // Auto-fill machine opening RPM from current database value (not form state)
+      // Ensure we get the latest machine data from the machines list
+      const currentMachine = machines.find(m => m.id === machineId) || machine;
+      const vehicleOpeningRPM = currentMachine?.vehicleRPM || 0;
+      
+      // Clear closing RPM first to ensure no old values carry over
+      if (!editingId) {
+        form.setFieldValue('vehicleClosingRPM', undefined);
+      }
+      
       form.setFieldValue('vehicleOpeningRPM', vehicleOpeningRPM);
       
       // Update RPM state for real-time calculation
       setRpmValues(prev => ({
         ...prev,
-        vehicleOpening: vehicleOpeningRPM
+        vehicleOpening: vehicleOpeningRPM,
+        vehicleClosing: editingId ? prev.vehicleClosing : 0
       }));
 
       if (machine && machine.compressorId) {
+        // Get fresh compressor data from compressors list
         const compressor = compressors.find(c => c.id === machine.compressorId);
         console.log('Found Compressor:', compressor?.compressorName, 'Compressor ID:', compressor?.id);
         setSelectedCompressor(compressor);
@@ -207,14 +218,21 @@ const DailyEntry = () => {
         // Auto-select compressor in form
         form.setFieldValue('compressorId', machine.compressorId);
 
-        // Auto-fill compressor opening RPM
+        // Auto-fill compressor opening RPM from current database value
         const compressorOpeningRPM = compressor?.compressorRPM || 0;
+        
+        // Clear closing RPM for new entries
+        if (!editingId) {
+          form.setFieldValue('compressorClosingRPM', undefined);
+        }
+        
         form.setFieldValue('compressorOpeningRPM', compressorOpeningRPM);
         
         // Update RPM state for real-time calculation
         setRpmValues(prev => ({
           ...prev,
-          compressorOpening: compressorOpeningRPM
+          compressorOpening: compressorOpeningRPM,
+          compressorClosing: editingId ? prev.compressorClosing : 0
         }));
       }
       
@@ -249,18 +267,26 @@ const DailyEntry = () => {
 
   // Handle compressor selection
   const handleCompressorChange = (compressorId) => {
+    // Get fresh compressor data from compressors list
     const compressor = compressors.find(c => c.id === compressorId);
     setSelectedCompressor(compressor);
 
-    // Auto-fill compressor opening RPM
+    // Auto-fill compressor opening RPM from current database value
     if (compressor) {
       const compressorOpeningRPM = compressor.compressorRPM || 0;
-      form.setFieldValue('compressorOpeningRPM', compressorOpeningRPM);
       
+      // Clear closing RPM for new entries
+      if (!editingId) {
+        form.setFieldValue('compressorClosingRPM', undefined);
+      }
+      
+      form.setFieldValue('compressorOpeningRPM', compressorOpeningRPM);
+        
       // Update RPM state for real-time calculation
       setRpmValues(prev => ({
         ...prev,
-        compressorOpening: compressorOpeningRPM
+        compressorOpening: compressorOpeningRPM,
+        compressorClosing: editingId ? prev.compressorClosing : 0
       }));
     } else {
       // If cleared, reset to 0
@@ -569,6 +595,10 @@ const DailyEntry = () => {
           });
         }
         
+        // Refresh machines and compressors to get updated RPM values
+        await fetchMachines();
+        await fetchCompressors();
+        
         // For new entry, reload the page to refresh the form
         message.success("Daily entry added successfully. Reloading...");
         setTimeout(() => {
@@ -725,9 +755,9 @@ const DailyEntry = () => {
         </div>
         <Space>
           <Button
+            icon={<ReloadOutlined />}
             onClick={() => fetchEntries(pagination.current, pagination.pageSize)}
             loading={loading}
-            icon={<ReloadOutlined />}
           >
             Refresh
           </Button>
@@ -744,6 +774,26 @@ const DailyEntry = () => {
                 setSelectedMachine(null);
                 setSelectedCompressor(null);
                 setServiceAlerts([]);
+                
+                // Clear all RPM fields to ensure fresh values
+                form.setFieldsValue({
+                  vehicleOpeningRPM: undefined,
+                  vehicleClosingRPM: undefined,
+                  compressorOpeningRPM: undefined,
+                  compressorClosingRPM: undefined,
+                });
+                
+                // Reset RPM values state
+                setRpmValues({
+                  vehicleOpening: 0,
+                  vehicleClosing: 0,
+                  compressorOpening: 0,
+                  compressorClosing: 0,
+                });
+                
+                // Refresh machines and compressors to get updated RPM values
+                await fetchMachines();
+                await fetchCompressors();
 
                 // Auto-generate reference number for new entry
                 const refNo = await generateRefNo();
@@ -961,7 +1011,7 @@ const DailyEntry = () => {
                         </Row>
                         <div className="text-center">
                           <Text strong>
-                            Total: {rpmValues.vehicleClosing - rpmValues.vehicleOpening} RPM
+                            Total: {truncateToFixed(rpmValues.vehicleClosing - rpmValues.vehicleOpening, 2)} RPM
                           </Text>
                         </div>
                       </Card>
@@ -1030,7 +1080,7 @@ const DailyEntry = () => {
                       </Row>
                       <div className="text-center">
                         <Text strong>
-                          Total: {rpmValues.compressorClosing - rpmValues.compressorOpening} RPM
+                          Total: {truncateToFixed(rpmValues.compressorClosing - rpmValues.compressorOpening, 2)} RPM
                         </Text>
                       </div>
                     </Card>
@@ -1052,7 +1102,7 @@ const DailyEntry = () => {
                           {
                             title: "Current RPM (Compressor)",
                             key: "currentRPM",
-                            render: () => (rpmValues.compressorClosing - rpmValues.compressorOpening) || 0
+                            render: () => truncateToFixed((rpmValues.compressorClosing - rpmValues.compressorOpening) || 0, 2)
                           },
                           {
                             title: "Service Due",
@@ -1062,7 +1112,8 @@ const DailyEntry = () => {
                               const currentRpm = (rpmValues.compressorClosing - rpmValues.compressorOpening) || 0;
                               const remaining = record.nextServiceRPM - currentRpm;
                               if (remaining <= 0) return "Overdue";
-                              return remaining <= 100 ? `Due soon (${remaining} RPM)` : `${remaining} RPM`;
+                              const formattedRemaining = truncateToFixed(remaining, 2);
+                              return remaining <= 100 ? `Due soon (${formattedRemaining} RPM)` : `${formattedRemaining} RPM`;
                             }
                           },
                           {
@@ -1370,7 +1421,11 @@ const DailyEntry = () => {
                       {selectedMachine && (
                         <div className="mt-2">
                           <Text type="secondary" className="text-sm">
-                            Current RPM: {selectedMachine.vehicleRPM || 0}
+                            Opening RPM: {truncateToFixed(rpmValues.vehicleOpening || selectedMachine.vehicleRPM || 0, 2)}
+                          </Text>
+                          <br />
+                          <Text type="secondary" className="text-sm">
+                            Current RPM: {truncateToFixed(selectedMachine.vehicleRPM || 0, 2)}
                           </Text>
                           <br />
                           <Text type="secondary" className="text-sm">
@@ -1396,7 +1451,11 @@ const DailyEntry = () => {
                       {selectedCompressor && (
                         <div className="mt-2">
                           <Text type="secondary" className="text-sm">
-                            Current RPM: {selectedCompressor.currentRPM || 0}
+                            Opening RPM: {truncateToFixed(rpmValues.compressorOpening || selectedCompressor.compressorRPM || 0, 2)}
+                          </Text>
+                          <br />
+                          <Text type="secondary" className="text-sm">
+                            Current RPM: {truncateToFixed(selectedCompressor.compressorRPM || 0, 2)}
                           </Text>
                           <br />
                           <Text type="secondary" className="text-sm">

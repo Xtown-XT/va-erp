@@ -34,6 +34,7 @@ import itemInstanceRoutes from "./src/modules/itemInstance/itemInstance.routes.j
 import { defineAssociations } from "./src/shared/models/associations.js";
 import Service from "./src/modules/service/service.model.js";
 import DailyEntryEmployee from "./src/modules/dailyEntry/dailyEntryEmployee.model.js";
+import DailyEntry from "./src/modules/dailyEntry/dailyEntry.model.js";
 import Compressor from "./src/modules/compressor/compressor.model.js";
 import Address from "./src/modules/address/address.model.js";
 
@@ -81,16 +82,21 @@ const initializeDatabase = async () => {
     // Sync all tables without alter (to avoid conflicts with existing tables)
     await sequelize.sync({ force: false, alter: false, logging: false });
     
-    // Manually alter only the specific tables we need to update
-    console.log("🔄 Adding missing columns to tables...");
+    // Manually sync/alter specific tables that need updates
+    console.log("🔄 Syncing tables with latest schema...");
     try {
+      // Sync DailyEntry tables (create if doesn't exist, alter if exists)
+      // Sync DailyEntryEmployee first (has foreign key to DailyEntry)
+      await DailyEntryEmployee.sync({ alter: true, logging: false });
+      console.log("✅ DailyEntryEmployee table synced");
+      
+      // Sync DailyEntry table (will create if dropped)
+      await DailyEntry.sync({ alter: true, logging: false });
+      console.log("✅ DailyEntry table synced");
+      
       // Alter Service table to add serviceName column
       await Service.sync({ alter: true, logging: false });
       console.log("✅ Service table columns updated");
-      
-      // Alter DailyEntryEmployee table to add role and shift columns
-      await DailyEntryEmployee.sync({ alter: true, logging: false });
-      console.log("✅ DailyEntryEmployee table columns updated");
       
       // Alter Compressor table to sync schema changes
       await Compressor.sync({ alter: true, logging: false });

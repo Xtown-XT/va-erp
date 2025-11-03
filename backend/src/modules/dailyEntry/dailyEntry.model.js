@@ -73,10 +73,10 @@ const DailyEntry = sequelize.define(
       allowNull: true,
     },
 
-    // Primary employee (required)
+    // Primary employee (optional - controller sets from employees array)
     employeeId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: "employeeList",
         key: "id",

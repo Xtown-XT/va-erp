@@ -47,6 +47,12 @@ const Attendance = () => {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [markAttendanceSiteFilter, setMarkAttendanceSiteFilter] = useState('');
+  const [markAttendancePagination, setMarkAttendancePagination] = useState({
+    current: 1,
+    pageSize: 50,
+    showSizeChanger: true,
+    pageSizeOptions: ['10', '20', '50', '100'],
+  });
 
   // View attendance states
   const [viewDate, setViewDate] = useState(dayjs());
@@ -58,7 +64,7 @@ const Attendance = () => {
     pageSize: 50,
     total: 0,
     showSizeChanger: true,
-    pageSizeOptions: ['10', '20', '50'],
+    pageSizeOptions: ['10', '20', '50', '100'],
   });
   // Inline edit state for View table
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
@@ -493,6 +499,15 @@ const saveAllAttendance = async () => {
     }));
 
     fetchViewRecords(viewDate, viewSite, pagination.current, pagination.pageSize);
+  };
+
+  // Handle mark attendance table change
+  const handleMarkAttendanceTableChange = (pagination) => {
+    setMarkAttendancePagination(prev => ({
+      ...prev,
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+    }));
   };
 
 
@@ -1149,11 +1164,10 @@ const saveAllAttendance = async () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            pageSize: 50,
-            showSizeChanger: true,
-            pageSizeOptions: ['10', '20', '50'],
+            ...markAttendancePagination,
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`
           }}
+          onChange={handleMarkAttendanceTableChange}
           scroll={{ x: 1000 }}
           size="small"
           className="attendance-table"
