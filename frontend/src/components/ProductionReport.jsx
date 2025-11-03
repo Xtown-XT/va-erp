@@ -538,6 +538,8 @@ const ProductionReport = () => {
                 setSelectedSiteName(site ? site.siteName : '');
               }}
               allowClear
+              showSearch
+              optionFilterProp="children"
             >
               {sites.map(site => (
                 <Select.Option key={site.id} value={site.id}>
@@ -558,6 +560,8 @@ const ProductionReport = () => {
                 setSelectedMachineName(machine ? `${machine.vehicleNumber} (${machine.vehicleType})` : '');
               }}
               allowClear
+              showSearch
+              optionFilterProp="children"
             >
               {machines.map(machine => (
                 <Select.Option key={machine.id} value={machine.id}>

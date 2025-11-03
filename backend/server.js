@@ -34,6 +34,8 @@ import itemInstanceRoutes from "./src/modules/itemInstance/itemInstance.routes.j
 import { defineAssociations } from "./src/shared/models/associations.js";
 import Service from "./src/modules/service/service.model.js";
 import DailyEntryEmployee from "./src/modules/dailyEntry/dailyEntryEmployee.model.js";
+import Compressor from "./src/modules/compressor/compressor.model.js";
+import Address from "./src/modules/address/address.model.js";
 
 const app = express();
 
@@ -89,6 +91,14 @@ const initializeDatabase = async () => {
       // Alter DailyEntryEmployee table to add role and shift columns
       await DailyEntryEmployee.sync({ alter: true, logging: false });
       console.log("✅ DailyEntryEmployee table columns updated");
+      
+      // Alter Compressor table to sync schema changes
+      await Compressor.sync({ alter: true, logging: false });
+      console.log("✅ Compressor table columns updated");
+      
+      // Alter Address table to allow null phone/email columns
+      await Address.sync({ alter: true, logging: false });
+      console.log("✅ Address table columns updated");
     } catch (alterError) {
       console.log("⚠️  Warning: Some table alterations failed (columns may already exist):", alterError.message);
       // Continue even if alter fails - columns might already exist

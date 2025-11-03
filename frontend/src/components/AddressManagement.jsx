@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Button,
   Input,
@@ -37,6 +37,7 @@ const AddressManagement = () => {
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const formRef = useRef(null);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -114,6 +115,11 @@ const AddressManagement = () => {
       phone: record.phone,
       email: record.email,
     });
+    
+    // Scroll to form after a brief delay to ensure it's rendered
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   // Handle delete
@@ -242,7 +248,7 @@ const AddressManagement = () => {
 
       {/* Address Form */}
       {showForm && (
-        <Card title={editingId ? "Edit Address" : "Add New Address"}>
+        <Card title={editingId ? "Edit Address" : "Add New Address"} ref={formRef}>
           <Form
             form={form}
             layout="vertical"
