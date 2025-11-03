@@ -509,7 +509,11 @@ const EmployeeDetails = () => {
               columns={attendanceColumns}
               dataSource={attendanceRecords}
               rowKey="id"
-              pagination={{ pageSize: 10 }}
+              pagination={{ 
+                pageSize: 10,
+                showSizeChanger: true,
+                pageSizeOptions: ['10', '20', '50']
+              }}
               scroll={{ x: 800 }}
             />
           </TabPane>
@@ -520,7 +524,11 @@ const EmployeeDetails = () => {
                 columns={dailyEntryColumns}
                 dataSource={dailyEntries}
                 rowKey="id"
-                pagination={{ pageSize: 10 }}
+                pagination={{ 
+                pageSize: 10,
+                showSizeChanger: true,
+                pageSizeOptions: ['10', '20', '50']
+              }}
                 scroll={{ x: 800 }}
               />
             ) : (

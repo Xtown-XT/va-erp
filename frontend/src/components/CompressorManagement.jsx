@@ -37,7 +37,7 @@ const CompressorManagement = () => {
     pageSize: 10,
     total: 0,
     showSizeChanger: true,
-    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50'],
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
@@ -84,7 +84,6 @@ const CompressorManagement = () => {
     try {
       const payload = {
         compressorName: values.compressorName,
-        compressorType: values.compressorType,
         status: values.status,
         serialNumber: values.serialNumber || null,
         purchaseDate: values.purchaseDate ? values.purchaseDate.format("YYYY-MM-DD") : null,
@@ -158,7 +157,6 @@ const CompressorManagement = () => {
             <thead>
               <tr>
                 <th>Compressor Name</th>
-                <th>Type</th>
                 <th>Compressor RPM</th>
                 <th>Next Service RPM</th>
                 <th>Status</th>
@@ -166,7 +164,6 @@ const CompressorManagement = () => {
             </thead>
             <tbody>
               ${allCompressors
-            // (compressors || [])
         .filter((c) =>
           c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase())
         )
@@ -174,7 +171,6 @@ const CompressorManagement = () => {
           (compressor) => `
                 <tr>
                   <td>${compressor.compressorName}</td>
-                  <td>${compressor.compressorType}</td>
                   <td>${compressor.compressorRPM || 0}</td>
                   <td>${compressor.nextServiceRPM || '-'}</td>
                   <td>${compressor.status}</td>
@@ -193,7 +189,6 @@ const CompressorManagement = () => {
   // Table columns
   const columns = [
     { title: "Compressor Name", dataIndex: "compressorName", key: "compressorName" },
-    { title: "Type", dataIndex: "compressorType", key: "compressorType" },
     { title: "Serial Number", dataIndex: "serialNumber", key: "serialNumber" },
     {
       title: "Purchase Date",
@@ -304,15 +299,6 @@ const CompressorManagement = () => {
               >
                 <Input />
               </Form.Item>
-              <Form.Item
-                name="compressorType"
-                label="Type"
-                rules={[{ required: false }]}
-                
-              >
-                <Input />
-              </Form.Item>
-
               <Form.Item
                 name="status"
                 label="Status"

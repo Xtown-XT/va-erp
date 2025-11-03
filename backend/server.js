@@ -32,6 +32,8 @@ import { addressRoutes } from "./src/modules/address/index.js";
 import stockTransactionRoutes from "./src/modules/stockTransaction/stockTransaction.routes.js";
 import itemInstanceRoutes from "./src/modules/itemInstance/itemInstance.routes.js";
 import { defineAssociations } from "./src/shared/models/associations.js";
+import Service from "./src/modules/service/service.model.js";
+import DailyEntryEmployee from "./src/modules/dailyEntry/dailyEntryEmployee.model.js";
 
 const app = express();
 
@@ -74,20 +76,31 @@ const initializeDatabase = async () => {
 
     defineAssociations();
    
-    // Add timeout to detect hanging sync
-    const syncPromise = sequelize.sync({ force: false, alter: false, logging: console.log });
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error("Database sync timeout after 30 seconds")), 30000)
-    );
+    // Sync all tables without alter (to avoid conflicts with existing tables)
+    await sequelize.sync({ force: false, alter: false, logging: false });
     
-    await Promise.race([syncPromise, timeoutPromise]);
+    // Manually alter only the specific tables we need to update
+    console.log("🔄 Adding missing columns to tables...");
+    try {
+      // Alter Service table to add serviceName column
+      await Service.sync({ alter: true, logging: false });
+      console.log("✅ Service table columns updated");
+      
+      // Alter DailyEntryEmployee table to add role and shift columns
+      await DailyEntryEmployee.sync({ alter: true, logging: false });
+      console.log("✅ DailyEntryEmployee table columns updated");
+    } catch (alterError) {
+      console.log("⚠️  Warning: Some table alterations failed (columns may already exist):", alterError.message);
+      // Continue even if alter fails - columns might already exist
+    }
     
     await seedAdminUser();
     console.log("✅ Step 4: Admin user seeded");
 
     console.log("✅ Database initialized successfully with associations");
   } catch (error) {
-    console.error("❌ Database initialization failed");
+    console.error("❌ Database initialization failed:", error.message);
+    console.error("Full error:", error);
     process.exit(1);
   }
 };

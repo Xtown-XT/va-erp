@@ -5,6 +5,7 @@ export const createServiceSchema = z.object({
   nextServiceRPM: z.number().min(0, "Next service RPM must be non-negative").optional(),
   serviceDate: z.string().date("Invalid date format").optional(),
   serviceType: z.enum(["vehicle", "compressor", "item"]),
+  serviceName: z.string().optional(),
   vehicleId: z.string().uuid("Invalid vehicle ID format").optional(),
   compressorId: z.string().uuid("Invalid compressor ID format").optional(),
   itemInstanceId: z.string().uuid("Invalid item instance ID format").optional(),

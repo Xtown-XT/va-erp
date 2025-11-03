@@ -42,7 +42,7 @@ const ItemInstanceManagement = () => {
     pageSize: 10,
     total: 0,
     showSizeChanger: true,
-    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50'],
   });
 
   // Fetch data

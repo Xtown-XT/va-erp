@@ -36,7 +36,7 @@ const EmployeeList = () => {
     pageSize: 10,
     total: 0,
     showSizeChanger: true,
-    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50'],
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
@@ -167,8 +167,6 @@ const EmployeeList = () => {
               </tr>
             </thead>
             <tbody>
-
-            // (employees || [])
             ${allEmployees
         .filter((e) =>
           e.name?.toLowerCase().includes(searchTerm.toLowerCase())

@@ -19,6 +19,16 @@ const DailyEntryEmployee = sequelize.define(
       allowNull: false,
       references: { model: "employeeList", key: "id" },
     },
+    role: {
+      type: DataTypes.ENUM("operator", "helper"),
+      allowNull: true,
+      defaultValue: "operator",
+    },
+    shift: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 1,
+    },
   },
   {
     tableName: "dailyEntryEmployee",

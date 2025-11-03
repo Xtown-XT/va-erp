@@ -57,7 +57,7 @@ class ServiceCustomController extends BaseController {
           {
             model: Compressor,
             as: "compressor", 
-            attributes: ["id", "compressorName", "compressorType", "compressorRPM"],
+            attributes: ["id", "compressorName", "compressorRPM"],
             required: false
           },
           {
@@ -95,7 +95,7 @@ class ServiceCustomController extends BaseController {
           serviceName = `${service.vehicle.vehicleNumber} (${service.vehicle.vehicleType})`;
           currentRPM = service.vehicle.vehicleRPM || 0;
         } else if (service.serviceType === "compressor" && service.compressor) {
-          serviceName = `${service.compressor.compressorName} (${service.compressor.compressorType})`;
+          serviceName = `${service.compressor.compressorName}`;
           currentRPM = service.compressor.compressorRPM || 0;
         } else if (service.serviceType === "item" && service.itemInstance) {
           serviceName = `${service.itemInstance.item.itemName} (${service.itemInstance.instanceNumber})`;
@@ -111,7 +111,8 @@ class ServiceCustomController extends BaseController {
         return {
           id: service.id,
           serviceType: service.serviceType,
-          serviceName,
+          serviceName: service.serviceName || null,
+          serviceNameDisplay: serviceName,
           serviceRPM: service.serviceRPM,
           currentRPM,
           serviceDate: service.serviceDate,
@@ -139,7 +140,7 @@ class ServiceCustomController extends BaseController {
       const service = await Service.findByPk(req.params.id, {
         include: [
           { model: Vehicle, as: "vehicle", attributes: ["id", "vehicleNumber", "vehicleType"] },
-          { model: Compressor, as: "compressor", attributes: ["id", "compressorName", "compressorType"] },
+          { model: Compressor, as: "compressor", attributes: ["id", "compressorName"] },
           { 
             model: ItemInstance, 
             as: "itemInstance", 

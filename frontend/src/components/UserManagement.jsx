@@ -297,7 +297,11 @@ const UserManagement = () => {
         )}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
+        pagination={{ 
+          pageSize: 10,
+          showSizeChanger: true,
+          pageSizeOptions: ['10', '20', '50']
+        }}
       />
 
       {/* Password Change Modal */}

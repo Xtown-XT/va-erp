@@ -14,10 +14,6 @@ const Compressor = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
-    compressorType: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
     status: {
       type: DataTypes.ENUM("active", "inactive"),
       allowNull: false,

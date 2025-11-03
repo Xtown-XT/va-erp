@@ -281,7 +281,7 @@ const InventoryManagement = () => {
     pageSize: 10,
     total: 0,
     showSizeChanger: true,
-    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50'],
   });
 
   const [summary, setSummary] = useState({

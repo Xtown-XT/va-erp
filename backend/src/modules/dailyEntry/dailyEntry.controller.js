@@ -247,10 +247,13 @@ class DailyEntryCustomController extends BaseController {
       compressorId, 
       compressorOpeningRPM, 
       compressorClosingRPM, 
-      vehicleServiceDone, 
-      compressorServiceDone, 
+      vehicleServiceDone,
+      vehicleServiceName,
+      compressorServiceDone,
+      compressorServiceName,
       employeeId, 
-      employeeIds = [],
+      employees = [],
+      additionalEmployeeIds = [],
       fittedItemInstanceIds = [],
       removedItemInstanceIds = [],
       notes,
@@ -260,21 +263,66 @@ class DailyEntryCustomController extends BaseController {
     // Auto-generate reference number if not provided
     const refNo = req.body.refNo || await this.generateRefNo();
 
+    // Handle employees array - new structure with roles and shifts
+    let processedEmployees = [];
+    let primaryEmployeeId = null;
+
+    if (employees && employees.length > 0) {
+      // New structure: employees array with role and shift
+      processedEmployees = employees.map(emp => ({
+        dailyEntryId: null, // Will be set after entry creation
+        employeeId: emp.employeeId,
+        role: emp.role || 'operator',
+        shift: emp.shift || 1
+      }));
+      
+      // Find first shift 1 operator for backward compatibility
+      const shift1Operator = employees.find(e => e.shift === 1 && e.role === 'operator');
+      primaryEmployeeId = shift1Operator ? shift1Operator.employeeId : employees[0]?.employeeId;
+    } else if (employeeId) {
+      // Legacy support: convert old format to new format
+      processedEmployees = [{ dailyEntryId: null, employeeId, role: 'operator', shift: 1 }];
+      primaryEmployeeId = employeeId;
+      
+      // Add additional employees with shift 2
+      if (additionalEmployeeIds && additionalEmployeeIds.length > 0) {
+        additionalEmployeeIds.forEach((eid, index) => {
+          processedEmployees.push({
+            dailyEntryId: null,
+            employeeId: eid,
+            role: 'operator',
+            shift: 2 + index
+          });
+        });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: "At least one employee (Shift 1 Operator) is required" });
+    }
+
+    // Validate: At least one shift 1 operator is required
+    const hasShift1Operator = processedEmployees.some(e => e.shift === 1 && e.role === 'operator');
+    if (!hasShift1Operator) {
+      return res.status(400).json({ success: false, message: "At least one Shift 1 Operator is required" });
+    }
+
     // Create entry first
     const entryPayload = { 
       ...req.body, 
       refNo,
-      notes: notes || null,             // FIX: include notes
-      compressorId: compressorId || null,  // FIX: include compressorId
-      compressorHSD: compressorHSD || null, // FIX: include compressorHSD
+      employeeId: primaryEmployeeId, // Keep for backward compatibility
+      notes: notes || null,
+      compressorId: compressorId || null,
+      compressorHSD: compressorHSD || null,
       createdBy: req.user.username 
     };
     const entry = await DailyEntry.create(entryPayload, { transaction });
 
-    // Attach all employees (primary + additional) - FIXED
-    const allEmployeeIds = [...new Set([employeeId, ...(req.body.additionalEmployeeIds || [])])];
-    if (allEmployeeIds.length) {
-      const rows = allEmployeeIds.map((eid) => ({ dailyEntryId: entry.id, employeeId: eid }));
+    // Attach all employees with role and shift
+    if (processedEmployees.length) {
+      const rows = processedEmployees.map(emp => ({
+        ...emp,
+        dailyEntryId: entry.id
+      }));
       await DailyEntryEmployee.bulkCreate(rows, { transaction });
     }
 
@@ -318,7 +366,7 @@ class DailyEntryCustomController extends BaseController {
       }, { transaction });
 
       const serviceCreates = [];
-      if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: vehicle.vehicleRPM, serviceType: "vehicle", vehicleId, compressorId: vehicle.compressorId, createdBy: req.user.username }, { transaction }));
+      if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: vehicle.vehicleRPM, serviceType: "vehicle", serviceName: vehicleServiceName || null, vehicleId, compressorId: vehicle.compressorId, createdBy: req.user.username }, { transaction }));
       if (serviceCreates.length) await Promise.all(serviceCreates);
     }
 
@@ -335,6 +383,7 @@ class DailyEntryCustomController extends BaseController {
           await Service.create({
             serviceRPM: compressor.compressorRPM,
             serviceType: "compressor",
+            serviceName: compressorServiceName || null,
             vehicleId,
             compressorId,
             createdBy: req.user.username
@@ -374,9 +423,12 @@ update = async (req, res, next) => {
       compressorId, 
       compressorOpeningRPM, 
       compressorClosingRPM, 
-      vehicleServiceDone, 
-      compressorServiceDone, 
+      vehicleServiceDone,
+      vehicleServiceName,
+      compressorServiceDone,
+      compressorServiceName,
       employeeId, 
+      employees = [],
       additionalEmployeeIds = [],
       fittedItemInstanceIds = [],
       removedItemInstanceIds = [],
@@ -390,30 +442,71 @@ update = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "DailyEntry not found" });
     }
 
+    // Handle employees array - new structure with roles and shifts
+    let processedEmployees = [];
+    let primaryEmployeeId = null;
+
+    if (employees && employees.length > 0) {
+      // New structure: employees array with role and shift
+      processedEmployees = employees.map(emp => ({
+        dailyEntryId: id,
+        employeeId: emp.employeeId,
+        role: emp.role || 'operator',
+        shift: emp.shift || 1
+      }));
+      
+      // Find first shift 1 operator for backward compatibility
+      const shift1Operator = employees.find(e => e.shift === 1 && e.role === 'operator');
+      primaryEmployeeId = shift1Operator ? shift1Operator.employeeId : employees[0]?.employeeId;
+    } else if (employeeId) {
+      // Legacy support: convert old format to new format
+      processedEmployees = [{ dailyEntryId: id, employeeId, role: 'operator', shift: 1 }];
+      primaryEmployeeId = employeeId;
+      
+      // Add additional employees with shift 2
+      if (additionalEmployeeIds && additionalEmployeeIds.length > 0) {
+        additionalEmployeeIds.forEach((eid, index) => {
+          processedEmployees.push({
+            dailyEntryId: id,
+            employeeId: eid,
+            role: 'operator',
+            shift: 2 + index
+          });
+        });
+      }
+    }
+
+    // Validate: At least one shift 1 operator is required if employees are being updated
+    if (req.body.hasOwnProperty('employees') || req.body.hasOwnProperty('employeeId')) {
+      const hasShift1Operator = processedEmployees.some(e => e.shift === 1 && e.role === 'operator');
+      if (!hasShift1Operator && processedEmployees.length > 0) {
+        return res.status(400).json({ success: false, message: "At least one Shift 1 Operator is required" });
+      }
+    }
+
     // Update the main entry
     const updatePayload = { 
-      ...req.body, 
-      notes: notes || null,
-      compressorId: compressorId || null,
-      compressorHSD: compressorHSD || null,
+      ...req.body,
+      employeeId: primaryEmployeeId || existingEntry.employeeId, // Keep for backward compatibility
+      notes: notes !== undefined ? (notes || null) : existingEntry.notes,
+      compressorId: compressorId !== undefined ? (compressorId || null) : existingEntry.compressorId,
+      compressorHSD: compressorHSD !== undefined ? (compressorHSD || null) : existingEntry.compressorHSD,
       updatedBy: req.user.username 
     };
     
     await existingEntry.update(updatePayload, { transaction });
 
-    // Handle additional employees - delete existing and create new
-    if (req.body.hasOwnProperty('additionalEmployeeIds')) {
+    // Handle employees - delete existing and create new
+    if (req.body.hasOwnProperty('employees') || req.body.hasOwnProperty('additionalEmployeeIds') || req.body.hasOwnProperty('employeeId')) {
       // Remove all existing employee relationships
       await DailyEntryEmployee.destroy({
         where: { dailyEntryId: id },
         transaction
       });
 
-      // Add all employees (primary + additional)
-      const allEmployeeIds = [...new Set([employeeId, ...additionalEmployeeIds])];
-      if (allEmployeeIds.length) {
-        const rows = allEmployeeIds.map((eid) => ({ dailyEntryId: id, employeeId: eid }));
-        await DailyEntryEmployee.bulkCreate(rows, { transaction });
+      // Add all employees with role and shift
+      if (processedEmployees.length) {
+        await DailyEntryEmployee.bulkCreate(processedEmployees, { transaction });
       }
     }
 
@@ -458,7 +551,7 @@ update = async (req, res, next) => {
         }, { transaction });
 
         const serviceCreates = [];
-        if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: vehicle.vehicleRPM, serviceType: "vehicle", vehicleId, compressorId: vehicle.compressorId, createdBy: req.user.username }, { transaction }));
+        if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: vehicle.vehicleRPM, serviceType: "vehicle", serviceName: vehicleServiceName || null, vehicleId, compressorId: vehicle.compressorId, createdBy: req.user.username }, { transaction }));
         if (serviceCreates.length) await Promise.all(serviceCreates);
       }
     }
@@ -476,6 +569,7 @@ update = async (req, res, next) => {
           await Service.create({
             serviceRPM: compressor.compressorRPM,
             serviceType: "compressor",
+            serviceName: compressorServiceName || null,
             vehicleId,
             compressorId,
             createdBy: req.user.username
@@ -530,10 +624,31 @@ update = async (req, res, next) => {
         where,
         include: [
           { model: EmployeeList, as: "primaryEmployee", attributes: ["id", "name", "empId"] },
-          { model: EmployeeList, as: "employees", attributes: ["id", "name", "empId"] },
+          { 
+            model: EmployeeList, 
+            as: "employees", 
+            attributes: ["id", "name", "empId"],
+            through: { attributes: ["role", "shift"] }
+          },
           { model: Vehicle, as: "vehicle", attributes: ["id", "vehicleType", "vehicleNumber"] },
         ],
       });
+      
+      // Transform employees to include role and shift from through table
+      if (items.data) {
+        items.data = items.data.map(item => {
+          const transformed = item.toJSON ? item.toJSON() : item;
+          if (transformed.employees) {
+            transformed.employees = transformed.employees.map(emp => ({
+              ...emp,
+              role: emp.DailyEntryEmployee?.role || 'operator',
+              shift: emp.DailyEntryEmployee?.shift || 1
+            }));
+          }
+          return transformed;
+        });
+      }
+      
       return res.json({ success: true, ...items });
     } catch (error) {
       next(error);
@@ -545,15 +660,31 @@ update = async (req, res, next) => {
       const entry = await DailyEntry.findByPk(req.params.id, {
         include: [
           { model: EmployeeList, as: "primaryEmployee", attributes: ["id", "name", "empId"] },
-          { model: EmployeeList, as: "employees", attributes: ["id", "name", "empId"] },
+          { 
+            model: EmployeeList, 
+            as: "employees", 
+            attributes: ["id", "name", "empId"],
+            through: { attributes: ["role", "shift"] }
+          },
         ],
       });
       if (!entry) return res.status(404).json({ success: false, message: "DailyEntry not found" });
-      return res.json({ success: true, data: entry });
+      
+      // Transform employees to include role and shift from through table
+      const transformed = entry.toJSON ? entry.toJSON() : entry;
+      if (transformed.employees) {
+        transformed.employees = transformed.employees.map(emp => ({
+          ...emp,
+          role: emp.DailyEntryEmployee?.role || 'operator',
+          shift: emp.DailyEntryEmployee?.shift || 1
+        }));
+      }
+      
+      return res.json({ success: true, data: transformed });
     } catch (error) {
       next(error);
     }
-  };
+};
 }
 
 export const DailyEntryController = new DailyEntryCustomController(

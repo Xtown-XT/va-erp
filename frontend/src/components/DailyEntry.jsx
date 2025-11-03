@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Button,
   Input,
@@ -50,7 +50,7 @@ const DailyEntry = () => {
     pageSize: 10,
     total: 0,
     showSizeChanger: true,
-    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50'],
   });
   const [notifications, setNotifications] = useState([]);
   const [items, setItems] = useState([]);
@@ -72,6 +72,9 @@ const DailyEntry = () => {
   const [availableItems, setAvailableItems] = useState([]);
   const [showFitItemModal, setShowFitItemModal] = useState(false);
   const [selectedItemInstances, setSelectedItemInstances] = useState([]);
+  const [shift1Employees, setShift1Employees] = useState([]); // [{role, id}]
+  const [shift2Employees, setShift2Employees] = useState([]); // [{role, id}]
+  const hasFetchedRef = useRef(false);
 
   // Fetch data
   const fetchEntries = async (page = 1, limit = 10) => {
@@ -146,6 +149,10 @@ const DailyEntry = () => {
   };
 
   useEffect(() => {
+    // Prevent duplicate fetch on mount
+    if (hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    
     fetchEntries();
     fetchSites();
     fetchMachines();
@@ -153,7 +160,6 @@ const DailyEntry = () => {
     fetchEmployees();
     fetchItems();
     fetchAvailableItems();
-    
   }, []);
 
   // Auto-generate reference number
@@ -320,8 +326,8 @@ const DailyEntry = () => {
         serviceRPM: values.serviceRPM,
         nextServiceRPM: values.nextServiceRPM || null,
         serviceType: serviceType,
+        serviceName: values.serviceName || null,
         serviceDate: values.date ? values.date.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
-        notes: values.notes || `Service completed for ${serviceType === 'vehicle' ? 'Machine' : 'Compressor'}`,
         createdBy: localStorage.getItem("username") || "admin"
       };
 
@@ -477,9 +483,33 @@ const DailyEntry = () => {
       const formValues = {
         ...values,
         notes: values.notes || "",
-        additionalEmployeeIds: values.additionalEmployeeIds || [],
       };
 
+      // Build employees array from shift structure
+      const employeesArray = [];
+      
+      // Shift 1 employees
+      shift1Employees.forEach((emp) => {
+        const employeeId = formValues[`shift1Employee_${emp.id}`];
+        if (employeeId) {
+          employeesArray.push({ employeeId, role: emp.role, shift: 1 });
+        }
+      });
+      
+      // Shift 2 employees
+      shift2Employees.forEach((emp) => {
+        const employeeId = formValues[`shift2Employee_${emp.id}`];
+        if (employeeId) {
+          employeesArray.push({ employeeId, role: emp.role, shift: 2 });
+        }
+      });
+
+      // Validate: At least one Shift 1 employee with operator role is required
+      const hasShift1Operator = employeesArray.some(e => e.shift === 1 && e.role === 'operator');
+      if (!hasShift1Operator) {
+        message.error("At least one Shift 1 Operator is required");
+        return;
+      }
 
       const payload = {
         refNo,
@@ -496,8 +526,7 @@ const DailyEntry = () => {
         compressorHSD: formValues.compressorHSD || 0,
         noOfHoles: formValues.noOfHoles || 0,
         meter: formValues.meter || 0,
-        employeeId: formValues.employeeId,
-        additionalEmployeeIds: Array.isArray(formValues.additionalEmployeeIds) ? formValues.additionalEmployeeIds : [],
+        employees: employeesArray,
         vehicleServiceDone: Boolean(formValues.vehicleServiceDone),
         compressorServiceDone: Boolean(formValues.compressorServiceDone),
         notes: String(formValues.notes || ""),
@@ -520,6 +549,8 @@ const DailyEntry = () => {
         // For edit, close the form
         setShowForm(false);
         setEditingId(null);
+        setShift1Employees([]);
+        setShift2Employees([]);
         form.resetFields();
         setFittedItems([]);
         setSelectedMachine(null);
@@ -552,17 +583,51 @@ const DailyEntry = () => {
   const handleEdit = (record) => {
     setEditingId(record.id);
     setShowForm(true);
+    setShift1Employees([]);
+    setShift2Employees([]);
 
-    // Set form values including notes, additional employees, and spare parts
-    form.setFieldsValue({
+    // Parse employees by shift
+    const shift1Emps = record.employees?.filter(e => e.shift === 1) || [];
+    const shift2Emps = record.employees?.filter(e => e.shift === 2) || [];
+
+    // Set shift 1 employees state
+    const shift1EmpsState = shift1Emps.map((emp, index) => ({
+      role: emp.role || 'operator',
+      id: Date.now() + index
+    }));
+    setShift1Employees(shift1EmpsState);
+
+    // Set shift 2 employees state
+    const shift2EmpsState = shift2Emps.map((emp, index) => ({
+      role: emp.role || 'operator',
+      id: Date.now() + 10000 + index // Different range to avoid ID conflicts
+    }));
+    setShift2Employees(shift2EmpsState);
+
+    // Set form values
+    const formValues = {
       ...record,
       date: record.date ? dayjs(record.date) : null,
       notes: record.notes || "",
-      // Derive additionalEmployeeIds from association, excluding primary employee
-      additionalEmployeeIds: (Array.isArray(record.employees)
-        ? record.employees.map(e => e.id).filter(id => id && id !== record.employeeId)
-        : []),
+    };
+
+    // Set shift 1 employee form values
+    shift1EmpsState.forEach((emp, index) => {
+      const empData = shift1Emps[index];
+      if (empData) {
+        formValues[`shift1Employee_${emp.id}`] = empData.id || empData.employeeId;
+      }
     });
+
+    // Set shift 2 employee form values
+    shift2EmpsState.forEach((emp, index) => {
+      const empData = shift2Emps[index];
+      if (empData) {
+        formValues[`shift2Employee_${emp.id}`] = empData.id || empData.employeeId;
+      }
+    });
+
+    form.setFieldsValue(formValues);
 
     if (record.vehicleId) {
       handleMachineChange(record.vehicleId);
@@ -664,6 +729,8 @@ const DailyEntry = () => {
               icon={<PlusOutlined />}
               onClick={async () => {
                 setEditingId(null);
+                setShift1Employees([]);
+                setShift2Employees([]);
                 form.resetFields();
                 setFittedItems([]);
                 setSelectedMachine(null);
@@ -729,7 +796,6 @@ const DailyEntry = () => {
             className="space-y-4"
             initialValues={{
               notes: "",
-              additionalEmployeeIds: [],
               vehicleServiceDone: false,
               compressorServiceDone: false,
             }}
@@ -812,7 +878,7 @@ const DailyEntry = () => {
                       >
                         {compressors.map((compressor) => (
                           <Select.Option key={compressor.id} value={compressor.id}>
-                            {compressor.compressorName} - {compressor.compressorType}
+                            {compressor.compressorName}
                           </Select.Option>
                         ))}
                       </Select>
@@ -1130,44 +1196,149 @@ const DailyEntry = () => {
               </Panel>   */}
 
               <Panel header="Employees" key="employees">
-                <Row gutter={16}>
-                  <Col xs={24} sm={12}>
-                    <Form.Item
-                      name="employeeId"
-                      label="Primary Employee"
-                      rules={[{ required: true, message: "Please select employee" }]}
+                {/* Shift 1 */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <Title level={5}>Shift One - Operator/Helper</Title>
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        setShift1Employees([...shift1Employees, { role: 'operator', id: Date.now() }]);
+                      }}
                     >
-                      <Select placeholder="Select employee" showSearch optionFilterProp="children">
-                        {employees.map(emp => (
-                          <Select.Option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.empId})
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                  </Col>
+                      Add Employee
+                    </Button>
+                  </div>
+                  
+                  {shift1Employees.map((emp, index) => (
+                    <Row gutter={16} key={emp.id} className="mb-3">
+                      <Col xs={24} sm={8}>
+                        <Select
+                          placeholder="Select role"
+                          value={emp.role}
+                          onChange={(value) => {
+                            const updated = [...shift1Employees];
+                            updated[index].role = value;
+                            setShift1Employees(updated);
+                          }}
+                          style={{ width: '100%' }}
+                        >
+                          <Select.Option value="operator">Operator</Select.Option>
+                          <Select.Option value="helper">Helper</Select.Option>
+                        </Select>
+                      </Col>
+                      <Col xs={24} sm={14}>
+                        <Form.Item
+                          name={`shift1Employee_${emp.id}`}
+                          rules={[{ required: true, message: "Please select employee" }]}
+                        >
+                          <Select 
+                            placeholder={`Select ${emp.role}`} 
+                            showSearch 
+                            optionFilterProp="children"
+                            style={{ width: '100%' }}
+                          >
+                            {employees.map(employee => (
+                              <Select.Option key={employee.id} value={employee.id}>
+                                {employee.name} ({employee.empId})
+                              </Select.Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={2}>
+                        <Button
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => {
+                            setShift1Employees(shift1Employees.filter((_, i) => i !== index));
+                            form.setFieldValue(`shift1Employee_${emp.id}`, undefined);
+                          }}
+                        />
+                      </Col>
+                    </Row>
+                  ))}
+                  
+                  {shift1Employees.length === 0 && (
+                    <div className="text-gray-500 text-center py-4">
+                      Click "Add Employee" to add operators or helpers for Shift 1
+                    </div>
+                  )}
+                </div>
 
-                  <Col xs={24} sm={12}>
-                    <Form.Item
-                      name="additionalEmployeeIds"
-                      label="Additional Employees"
+                {/* Shift 2 */}
+                <div className="mb-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <Title level={5}>Shift Two - Operator/Helper</Title>
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        setShift2Employees([...shift2Employees, { role: 'operator', id: Date.now() }]);
+                      }}
                     >
-                      <Select
-                        mode="multiple"
-                        placeholder="Select additional employees"
-                        showSearch
-                        optionFilterProp="children"
-                        allowClear
-                      >
-                        {employees.map(emp => (
-                          <Select.Option key={emp.id} value={emp.id}>
-                            {emp.name} ({emp.empId})
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
+                      Add Employee
+                    </Button>
+                  </div>
+                  
+                  {shift2Employees.map((emp, index) => (
+                    <Row gutter={16} key={emp.id} className="mb-3">
+                      <Col xs={24} sm={8}>
+                        <Select
+                          placeholder="Select role"
+                          value={emp.role}
+                          onChange={(value) => {
+                            const updated = [...shift2Employees];
+                            updated[index].role = value;
+                            setShift2Employees(updated);
+                          }}
+                          style={{ width: '100%' }}
+                        >
+                          <Select.Option value="operator">Operator</Select.Option>
+                          <Select.Option value="helper">Helper</Select.Option>
+                        </Select>
+                      </Col>
+                      <Col xs={24} sm={14}>
+                        <Form.Item
+                          name={`shift2Employee_${emp.id}`}
+                          rules={[{ required: true, message: "Please select employee" }]}
+                        >
+                          <Select 
+                            placeholder={`Select ${emp.role}`} 
+                            showSearch 
+                            optionFilterProp="children"
+                            style={{ width: '100%' }}
+                          >
+                            {employees.map(employee => (
+                              <Select.Option key={employee.id} value={employee.id}>
+                                {employee.name} ({employee.empId})
+                              </Select.Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} sm={2}>
+                        <Button
+                          type="text"
+                          danger
+                          icon={<DeleteOutlined />}
+                          onClick={() => {
+                            setShift2Employees(shift2Employees.filter((_, i) => i !== index));
+                            form.setFieldValue(`shift2Employee_${emp.id}`, undefined);
+                          }}
+                        />
+                      </Col>
+                    </Row>
+                  ))}
+                  
+                  {shift2Employees.length === 0 && (
+                    <div className="text-gray-500 text-center py-4">
+                      Click "Add Employee" to add operators or helpers for Shift 2
+                    </div>
+                  )}
+                </div>
               </Panel>
 
 
@@ -1238,6 +1409,8 @@ const DailyEntry = () => {
                 <Button onClick={() => {
                   setShowForm(false);
                   setEditingId(null);
+                  setShift1Employees([]);
+                  setShift2Employees([]);
                   form.resetFields();
                   setFittedItems([]);
                   setSelectedMachine(null);
@@ -1373,6 +1546,18 @@ const DailyEntry = () => {
                 <DatePicker className="w-full" />
               </Form.Item>
             </Col>
+            <Col span={24}>
+              <Form.Item
+                name="serviceName"
+                label="Service Type / Name"
+                tooltip="Enter the type of service performed (e.g., 'Oil Service', 'Engine Service', 'Filter Change')"
+              >
+                <Input
+                  placeholder="e.g., Oil Service, Engine Service, Filter Change"
+                  allowClear
+                />
+              </Form.Item>
+            </Col>
             <Col span={12}>
               <Form.Item
                 name="serviceRPM"
@@ -1400,17 +1585,6 @@ const DailyEntry = () => {
                   step={0.1}
                   precision={1}
                   placeholder="Enter next service RPM"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={24}>
-              <Form.Item
-                name="notes"
-                label="Service Notes"
-              >
-                <Input.TextArea
-                  rows={3}
-                  placeholder="Enter service notes (optional)"
                 />
               </Form.Item>
             </Col>

@@ -66,20 +66,18 @@ const ServiceManagement = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [vehiclesRes, compressorsRes, itemsRes, servicesRes, serviceAlertsRes, serviceHistoryRes] = await Promise.all([
+      const [vehiclesRes, compressorsRes, itemsRes, servicesRes, serviceAlertsRes] = await Promise.all([
         api.get("/api/vehicles?limit=1000"),
         api.get("/api/compressors?limit=1000"),
         api.get("/api/items?limit=1000"),
         api.get("/api/services?limit=1000"),
         api.get("/api/service-alerts?limit=100"),
-        api.get("/api/services/history?limit=1000"),
       ]);
       
       const vehiclesData = vehiclesRes.data.data || [];
       const compressorsData = compressorsRes.data.data || [];
       const itemsData = itemsRes.data.data || [];
       setVehicles(vehiclesData);
-      setServiceHistory(serviceHistoryRes.data.data || []);
       
       // Process service alerts from backend
       const alerts = serviceAlertsRes.data.data || [];
@@ -122,9 +120,9 @@ const ServiceManagement = () => {
         serviceRPM: values.serviceRPM || selectedItem.currentRPM,
         nextServiceRPM: values.nextServiceRPM || null,
         serviceType: serviceType,
+        serviceName: values.serviceName || null,
         serviceDate: values.date ? values.date.format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD"),
         vehicleId: selectedItem.vehicleId,
-        notes: values.notes || `Service completed for ${selectedItem.item}`,
         createdBy: localStorage.getItem("username") || "admin"
       };
 
@@ -463,12 +461,12 @@ const ServiceManagement = () => {
     },
     {
       title: "Item/Machine/Compressor",
-      dataIndex: "serviceName",
-      key: "serviceName",
+      dataIndex: "serviceNameDisplay",
+      key: "serviceNameDisplay",
       width: 250,
       render: (name, record) => (
         <div>
-          <Text strong>{name}</Text>
+          <Text strong>{name || record.serviceName || "N/A"}</Text>
           {record.itemDetails && (
             <>
               <br />
@@ -483,6 +481,13 @@ const ServiceManagement = () => {
           )}
         </div>
       ),
+    },
+    {
+      title: "Service Name",
+      dataIndex: "serviceName",
+      key: "serviceName",
+      width: 150,
+      render: (name) => <Text>{name || "N/A"}</Text>,
     },
     {
       title: "Service RPM",
@@ -619,6 +624,7 @@ const ServiceManagement = () => {
               <th>Date</th>
               <th>Service Type</th>
               <th>Item/Machine/Compressor</th>
+              <th>Service Name</th>
               <th>Service RPM</th>
               <th>Current RPM</th>
               <th>Performed By</th>
@@ -635,12 +641,13 @@ const ServiceManagement = () => {
                   </span>
                 </td>
                 <td>
-                  <strong>${service.serviceName}</strong>
+                  <strong>${service.serviceNameDisplay || service.serviceName || 'N/A'}</strong>
                   ${service.itemDetails ? `
                     <br><small>Part: ${service.itemDetails.partNumber}</small>
                     <br><small>Fitted to: ${service.itemDetails.fittedToVehicle}</small>
                   ` : ''}
                 </td>
+                <td>${service.serviceName || 'N/A'}</td>
                 <td><strong>${Number(service.serviceRPM).toFixed(1)}</strong></td>
                 <td>${Number(service.currentRPM).toFixed(1)}</td>
                 <td>${service.createdBy || 'System'}</td>
@@ -787,7 +794,11 @@ const ServiceManagement = () => {
                   }))}
                   rowKey="id"
                   loading={loading}
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ 
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    pageSizeOptions: ['10', '20', '50']
+                  }}
                   scroll={{ x: 800 }}
                 />
               </Card>
@@ -817,7 +828,11 @@ const ServiceManagement = () => {
                   }))}
                   rowKey="id"
                   loading={loading}
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ 
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    pageSizeOptions: ['10', '20', '50']
+                  }}
                   scroll={{ x: 800 }}
                 />
               </Card>
@@ -929,7 +944,11 @@ const ServiceManagement = () => {
                   }))}
                   rowKey="id"
                   loading={loading}
-                  pagination={{ pageSize: 10 }}
+                  pagination={{ 
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    pageSizeOptions: ['10', '20', '50']
+                  }}
                   scroll={{ x: 800 }}
                 />
               </Card>
@@ -963,6 +982,8 @@ const ServiceManagement = () => {
     current: historyPagination.current,
     pageSize: historyPagination.pageSize,
     total: historyPagination.total,
+    showSizeChanger: true,
+    pageSizeOptions: ['10', '20', '50'],
     onChange: (page, pageSize) => {
       fetchServiceHistory(page, pageSize);
     }
@@ -1001,6 +1022,18 @@ const ServiceManagement = () => {
 
             <Form layout="vertical" form={form} onFinish={handleMarkServiceDone}>
               <Row gutter={16}>
+                <Col span={24}>
+                  <Form.Item
+                    name="serviceName"
+                    label="Service Type / Name"
+                    tooltip="Enter the type of service performed (e.g., 'Oil Service', 'Engine Service', 'Filter Change')"
+                  >
+                    <Input
+                      placeholder="e.g., Oil Service, Engine Service, Filter Change"
+                      allowClear
+                    />
+                  </Form.Item>
+                </Col>
                 <Col span={12}>
                   <Form.Item
                     name="date"
@@ -1028,14 +1061,6 @@ const ServiceManagement = () => {
                     tooltip="Leave blank to clear next service schedule"
                   >
                     <InputNumber className="w-full" min={0} step={0.1} precision={1} placeholder="Enter next service RPM" />
-                  </Form.Item>
-                </Col>
-                <Col span={24}>
-                  <Form.Item
-                    name="notes"
-                    label="Service Notes"
-                  >
-                    <Input.TextArea rows={3} placeholder="Enter service notes (optional)" />
                   </Form.Item>
                 </Col>
               </Row>

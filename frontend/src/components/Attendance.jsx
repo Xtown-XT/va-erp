@@ -52,18 +52,16 @@ const Attendance = () => {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewPagination, setViewPagination] = useState({
     current: 1,
-    pageSize: 10,
+    pageSize: 50,
     total: 0,
     showSizeChanger: true,
-    showQuickJumper: true,
+    pageSizeOptions: ['10', '20', '50'],
   });
   // Inline edit state for View table
   const [expandedRowKeys, setExpandedRowKeys] = useState([]);
   const [inlineEditId, setInlineEditId] = useState(null);
   const [inlineEdit, setInlineEdit] = useState(null);
   const [inlineSaving, setInlineSaving] = useState(false);
-
-  const [presenceFilter, setPresenceFilter] = useState(null)
 
   // Fetch attendance records for selected date (for adding attendance)
   const fetchRecords = async (date = selectedDate) => {
@@ -995,28 +993,11 @@ const saveAllAttendance = async () => {
 
               <div>
 
-                <div className="flex flex-col mt-2">
-                  <Text strong>Select Presence:</Text>
-                  <Select
-                    placeholder="Filter by Presence"
-                    allowClear
-                    value={presenceFilter}
-                    onChange={(value) => setPresenceFilter(value)}
-                    style={{ maxWidth: 300 }}
-                  >
-                    <Select.Option value="present">Present</Select.Option>
-                    <Select.Option value="absent">Absent</Select.Option>
-
-                  </Select>
-                </div>
-
-
                 <Button
                   onClick={() => {
                     setSearchTerm('');
-                    setPresenceFilter(null);
                   }}
-                  disabled={!searchTerm && !presenceFilter}
+                  disabled={!searchTerm}
 
                   style={{ marginTop: 10 }}
                 >
@@ -1112,21 +1093,16 @@ const saveAllAttendance = async () => {
             const searchMatch = String(e.name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
               String(e.empId)?.toLowerCase().includes(searchTerm.toLowerCase());
 
-            const presenceMatch = presenceFilter ?
-              (attendanceData[e.id]?.presence || 'present') === presenceFilter
-              : true;
-
-            return searchMatch && presenceMatch;
+            return searchMatch;
 
           }
           )}
           rowKey="id"
           loading={loading}
           pagination={{
-            pageSize: 10,
+            pageSize: 50,
             showSizeChanger: true,
-            showQuickJumper: true,
-            pageSizeOptions: ['20', '50', '100', '150'],
+            pageSizeOptions: ['10', '20', '50'],
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`
           }}
           scroll={{ x: 1000 }}
@@ -1216,20 +1192,6 @@ const saveAllAttendance = async () => {
 
             </Col>
             <Col xs={24} sm={8}>
-              <div className="flex flex-col mt-2">
-                <Text strong>Select Presence:</Text>
-                <Select
-                  placeholder="Filter by Presence"
-                  allowClear
-                  value={presenceFilter}
-                  onChange={(value) => setPresenceFilter(value)}
-                  style={{ maxWidth: 300 }}
-                >
-                  <Select.Option value="present">Present</Select.Option>
-                  <Select.Option value="absent">Absent</Select.Option>
-
-                </Select>
-              </div>
             </Col>
             <Col xs={24} sm={8}>
               <Text strong>Actions:</Text>
@@ -1282,9 +1244,7 @@ const saveAllAttendance = async () => {
                 employee?.empId?.toLowerCase().includes(searchTerm.toLowerCase()))
               : true;
 
-            const presenceMatch = presenceFilter ? (v.presence === presenceFilter) : true;
-
-            return searchMatch && presenceMatch;
+            return searchMatch;
           })}
 
 

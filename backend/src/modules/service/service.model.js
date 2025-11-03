@@ -22,6 +22,10 @@ const Service = sequelize.define(
       type: DataTypes.ENUM("vehicle", "compressor", "item"),
       allowNull: false,
     },
+    serviceName: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     serviceDate: {
       type: DataTypes.DATEONLY,
       defaultValue: DataTypes.NOW,

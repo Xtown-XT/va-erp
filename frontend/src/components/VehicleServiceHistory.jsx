@@ -73,20 +73,22 @@ const VehicleServiceHistory = () => {
           <table>
             <thead>
               <tr>
-                <th>Service RPM</th>
                 <th>Service Date</th>
+                <th>Service Name</th>
+                <th>Service RPM</th>
                 <th>Serviced Item</th>
               </tr>
             </thead>
             <tbody>
               ${services.map(service => `
                 <tr>
-                  <td>${service.serviceRPM}</td>
                   <td>${service.serviceDate ? dayjs(service.serviceDate).format("YYYY-MM-DD") : "-"}</td>
+                  <td>${service.serviceName || "N/A"}</td>
+                  <td>${service.serviceRPM ? Number(service.serviceRPM).toFixed(1) : "-"}</td>
                   <td>${service.serviceType === "vehicle" && service.vehicle ? 
                     `${service.vehicle.vehicleNumber} (${service.vehicle.vehicleType})` : 
                     service.serviceType === "compressor" && service.compressor ? 
-                    `${service.compressor.compressorName} (${service.compressor.compressorType})` : 
+                    `${service.compressor.compressorName}` : 
                     "-"}</td>
                 </tr>
               `).join("")}
@@ -101,16 +103,22 @@ const VehicleServiceHistory = () => {
 
   const columns = [
     {
-      title: "Service RPM",
-      dataIndex: "serviceRPM",
-      key: "serviceRPM",
-      render: (rpm) => <Text strong>{rpm ? Number(rpm).toFixed(1) : '-'}</Text>,
-    },
-    {
       title: "Service Date",
       dataIndex: "serviceDate",
       key: "serviceDate",
       render: (date) => date ? dayjs(date).format("YYYY-MM-DD") : "-",
+    },
+    {
+      title: "Service Name",
+      dataIndex: "serviceName",
+      key: "serviceName",
+      render: (name) => <Text>{name || "N/A"}</Text>,
+    },
+    {
+      title: "Service RPM",
+      dataIndex: "serviceRPM",
+      key: "serviceRPM",
+      render: (rpm) => <Text strong>{rpm ? Number(rpm).toFixed(1) : '-'}</Text>,
     },
     {
       title: "Serviced Item",
@@ -119,7 +127,7 @@ const VehicleServiceHistory = () => {
         if (record.serviceType === "vehicle" && record.vehicle) {
           return `${record.vehicle.vehicleNumber} (${record.vehicle.vehicleType})`;
         } else if (record.serviceType === "compressor" && record.compressor) {
-          return `${record.compressor.compressorName} (${record.compressor.compressorType})`;
+          return `${record.compressor.compressorName}`;
         }
         return "-";
       },
@@ -202,7 +210,11 @@ const VehicleServiceHistory = () => {
           dataSource={services}
           rowKey="id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          pagination={{ 
+            pageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50']
+          }}
           locale={{ emptyText: "No service records found" }}
         />
       </Card>

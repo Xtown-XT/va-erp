@@ -91,7 +91,7 @@ class ServiceAlertsController {
           status: "active",
           deletedAt: null
         },
-        attributes: ["id", "compressorName", "compressorType", "compressorRPM", "nextServiceRPM"]
+        attributes: ["id", "compressorName", "compressorRPM", "nextServiceRPM"]
       });
 
       for (const compressor of compressors) {
@@ -135,7 +135,7 @@ class ServiceAlertsController {
           alerts.push({
             type: "compressor",
             id: compressor.id,
-            name: `${compressor.compressorName} (${compressor.compressorType})`,
+            name: `${compressor.compressorName}`,
             currentRPM,
             nextServiceRPM,
             overdue: Math.max(0, overdue),
@@ -149,7 +149,7 @@ class ServiceAlertsController {
           alerts.push({
             type: "compressor",
             id: compressor.id,
-            name: `${compressor.compressorName} (${compressor.compressorType})`,
+            name: `${compressor.compressorName}`,
             currentRPM,
             nextServiceRPM: 0,
             overdue: 0,
@@ -341,7 +341,7 @@ class ServiceAlertsController {
           status: "active",
           deletedAt: null
         },
-        attributes: ["id", "compressorName", "compressorType", "compressorRPM", "nextServiceRPM"]
+        attributes: ["id", "compressorName", "compressorRPM", "nextServiceRPM"]
       });
 
       for (const compressor of compressors) {
@@ -366,7 +366,7 @@ class ServiceAlertsController {
             alerts.push({
               type: "compressor",
               id: compressor.id,
-              name: `${compressor.compressorName} (${compressor.compressorType})`,
+              name: `${compressor.compressorName}`,
               currentRPM,
               nextServiceRPM,
               overdue: Math.max(0, overdue),
