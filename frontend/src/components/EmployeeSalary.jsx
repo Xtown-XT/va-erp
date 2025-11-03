@@ -18,9 +18,11 @@ import {
   SearchOutlined,
   FilePdfOutlined,
   CalendarOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit } from "../service/auth";
+import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
@@ -184,7 +186,7 @@ const EmployeeSalary = () => {
       title: "Salary",
       dataIndex: "salary",
       key: "salary",
-      render: (salary) => `₹${salary}`,
+      render: (salary) => `₹${truncateToFixed(salary || 0, 2)}`,
     },
     {
       title: "Site",
@@ -208,16 +210,30 @@ const EmployeeSalary = () => {
           <Title level={2} className="mb-2">Employee Salary Report</Title>
           <Text type="secondary">View and analyze employee salary details by date range</Text>
         </div>
-        {salaryRecords.length > 0 && (
+        <Space>
           <Button
-            icon={<FilePdfOutlined />}
-            onClick={exportToPDF}
-            type="primary"
-            danger
+            onClick={() => {
+              fetchEmployees();
+              if (selectedEmployee && dateRange.length === 2) {
+                fetchSalaryRecords(selectedEmployee.id, dateRange[0], dateRange[1]);
+              }
+            }}
+            loading={loading}
+            icon={<ReloadOutlined />}
           >
-            Export PDF
+            Refresh
           </Button>
-        )}
+          {salaryRecords.length > 0 && (
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={exportToPDF}
+              type="primary"
+              danger
+            >
+              Export PDF
+            </Button>
+          )}
+        </Space>
       </div>
 
       {/* Search Form */}

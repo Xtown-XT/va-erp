@@ -23,9 +23,11 @@ import {
   EditOutlined,
   DeleteOutlined,
   FilePdfOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
+import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
@@ -293,15 +295,41 @@ const PurchaseOrderComplete = () => {
     message.success("Item removed from PO");
   };
 
-  // Calculate totals
-  const calculateTotals = () => {
-    const subTotal = poItems.reduce((sum, item) => sum + item.total, 0);
-    const gstPercent = createForm.getFieldValue('gstPercent') || 18;
-    const gstIncludeValue = createForm.getFieldValue('gstInclude');
-    const taxTotal = gstIncludeValue ? subTotal * (gstPercent / 100) : 0;
-    const grandTotal = subTotal + taxTotal;
+  // Unified GST calculation function - matches backend logic
+  const calculateGSTTotals = (items, gstInclude, gstPercent) => {
+    let subTotal = 0;
+    let taxTotal = 0;
+    let grandTotal = 0;
+
+    items.forEach(item => {
+      const totalAmount = (item.quantity || 0) * (item.rate || 0);
+      let itemGST = 0;
+      let itemBase = 0;
+
+      if (gstInclude && gstPercent > 0) {
+        // GST-inclusive: rate already includes GST
+        // Formula matches backend: gstAmount = (totalAmount * gstPercent) / (100 + gstPercent)
+        itemGST = (totalAmount * gstPercent) / (100 + gstPercent);
+        itemBase = totalAmount - itemGST;
+      } else {
+        // No GST: rate is base amount
+        itemBase = totalAmount;
+        itemGST = 0;
+      }
+
+      subTotal += itemBase;
+      taxTotal += itemGST;
+      grandTotal += totalAmount; // totalAmount already includes GST if gstInclude
+    });
 
     return { subTotal, taxTotal, grandTotal };
+  };
+
+  // Calculate totals for edit/create form
+  const calculateTotals = () => {
+    const gstPercent = createForm.getFieldValue('gstPercent') || 18;
+    const gstIncludeValue = createForm.getFieldValue('gstInclude');
+    return calculateGSTTotals(poItems, gstIncludeValue, gstPercent);
   };
 
   // Handle edit item
@@ -347,30 +375,41 @@ const PurchaseOrderComplete = () => {
     const supplier = po.supplier;
     const address = po.address;
 
-    // Calculate totals
-    let subTotal = 0;
-    let totalGST = 0;
-    let grandTotal = 0;
+    // Calculate totals using unified function
+    const { subTotal: calcSubTotal, taxTotal: calcTaxTotal, grandTotal: calcGrandTotal } = 
+      calculateGSTTotals(po.poItems || [], po.gstInclude || false, po.gstPercent || 18);
 
+    // Calculate per-item values for display
     const itemsWithCalculations = (po.poItems || []).map((poItem, index) => {
       const unitPrice = poItem.rate;
-      const amount = poItem.quantity * unitPrice;
-      const gstAmount = po.gstInclude && po.gstPercent ? (amount * po.gstPercent) / 100 : 0;
-      const totalAmount = amount + gstAmount;
+      const totalAmount = poItem.quantity * unitPrice;
+      let itemGST = 0;
+      let itemBase = 0;
 
-      subTotal += amount;
-      totalGST += gstAmount;
-      grandTotal += totalAmount;
+      if (po.gstInclude && po.gstPercent > 0) {
+        // GST-inclusive calculation (matches backend)
+        itemGST = (totalAmount * po.gstPercent) / (100 + po.gstPercent);
+        itemBase = totalAmount - itemGST;
+      } else {
+        // No GST
+        itemBase = totalAmount;
+        itemGST = 0;
+      }
 
       return {
         ...poItem,
         unitPrice,
-        amount,
-        gstAmount,
-        totalAmount,
+        amount: itemBase, // Base amount (without GST)
+        gstAmount: itemGST,
+        totalAmount: totalAmount, // Total amount (GST included if gstInclude is true)
         serialNumber: index + 1
       };
     });
+
+    // Use calculated totals
+    const subTotal = calcSubTotal;
+    const totalGST = calcTaxTotal;
+    const grandTotal = calcGrandTotal;
 
     printWindow.document.write(`
       <html>
@@ -563,10 +602,10 @@ const PurchaseOrderComplete = () => {
                     <td class="text-center">${item.serialNumber}</td>
                     <td>${item.item?.itemName || 'N/A'}</td>
                     <td class="text-center">${item.quantity}</td>
-                    <td class="text-right">₹${item.unitPrice.toFixed(2)}</td>
-                    <td class="text-right">₹${item.amount.toFixed(2)}</td>
-                    ${po.gstInclude ? `<td class="text-right">₹${item.gstAmount.toFixed(2)}</td>` : ''}
-                    <td class="text-right">₹${item.totalAmount.toFixed(2)}</td>
+                    <td class="text-right">₹${truncateToFixed(item.unitPrice, 2)}</td>
+                    <td class="text-right">₹${truncateToFixed(item.amount, 2)}</td>
+                    ${po.gstInclude ? `<td class="text-right">₹${truncateToFixed(item.gstAmount, 2)}</td>` : ''}
+                    <td class="text-right">₹${truncateToFixed(item.totalAmount, 2)}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -576,7 +615,7 @@ const PurchaseOrderComplete = () => {
             <div class="total-section">
               <table>
                 <tr>
-                  <td><strong>TOTAL: ₹${grandTotal.toFixed(2)}</strong></td>
+                  <td><strong>TOTAL: ₹${truncateToFixed(grandTotal, 2)}</strong></td>
                 </tr>
               </table>
             </div>
@@ -668,7 +707,7 @@ const PurchaseOrderComplete = () => {
       title: "Total Amount",
       dataIndex: "grandTotal",
       key: "grandTotal",
-      render: (amount) => `₹${amount?.toFixed(2) || '0.00'}`,
+      render: (amount) => `₹${truncateToFixed(amount, 2)}`,
       sorter: (a, b) => (a.grandTotal || 0) - (b.grandTotal || 0),
     },
     {
@@ -782,10 +821,18 @@ const PurchaseOrderComplete = () => {
           <Title level={2} className="mb-2">Purchase Order Management</Title>
           <Text type="secondary">Complete PO system with PDF export and email integration</Text>
         </div>
-        {canCreate() && (
+        <Space>
           <Button
-            icon={<PlusOutlined />}
-            onClick={async () => {
+            onClick={() => fetchData(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          {canCreate() && (
+            <Button
+              icon={<PlusOutlined />}
+              onClick={async () => {
               if (!showCreateForm) {
                 // Opening form - generate PO number
                 const poNumber = await generatePONumberForDisplay();
@@ -803,11 +850,12 @@ const PurchaseOrderComplete = () => {
               }
             }}
             type="primary"
-            size="large"
+            size="small"
           >
             {showCreateForm ? "Cancel" : "Create New PO"}
           </Button>
-        )}
+          )}
+        </Space>
       </div>
 
       {/* Filters */}
@@ -907,7 +955,7 @@ const PurchaseOrderComplete = () => {
                   label="Supplier"
                   rules={[{ required: true, message: "Please select supplier" }]}
                 >
-                  <Select placeholder="Select supplier">
+                  <Select placeholder="Select supplier" showSearch optionFilterProp="children">
                     {suppliers.map((supplier) => (
                       <Select.Option key={supplier.id} value={supplier.id}>
                         {supplier.supplierName}
@@ -972,7 +1020,7 @@ const PurchaseOrderComplete = () => {
                   label="GST Included in Item Prices"
                   initialValue={false}
                 >
-                  <Select onChange={handleGstIncludeChange} value={gstInclude}>
+                  <Select onChange={handleGstIncludeChange} value={gstInclude} showSearch optionFilterProp="children">
                     <Select.Option value={false}>No GST</Select.Option>
                     <Select.Option value={true}>GST Included in Prices</Select.Option>
                   </Select>
@@ -1036,8 +1084,8 @@ const PurchaseOrderComplete = () => {
                   { title: "Item", dataIndex: ["item", "itemName"], key: "itemName" },
                   { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber" },
                   { title: "Quantity", dataIndex: "quantity", key: "quantity" },
-                  { title: "Rate", dataIndex: "rate", key: "rate", render: (rate) => `₹${rate}` },
-                  { title: "Total", dataIndex: "total", key: "total", render: (total) => `₹${total}` },
+                  { title: "Rate", dataIndex: "rate", key: "rate", render: (rate) => `₹${truncateToFixed(rate || 0, 2)}` },
+                  { title: "Total", dataIndex: "total", key: "total", render: (total) => `₹${truncateToFixed(total || 0, 2)}` },
                   {
                     title: "Actions",
                     key: "actions",
@@ -1066,13 +1114,13 @@ const PurchaseOrderComplete = () => {
               <div className="mt-4 p-4 bg-gray-50 rounded">
                 <Row gutter={16}>
                   <Col span={8}>
-                    <Text strong>Sub Total: ₹{calculateTotals().subTotal.toFixed(2)}</Text>
+                    <Text strong>Sub Total: ₹{truncateToFixed(calculateTotals().subTotal, 2)}</Text>
                   </Col>
                   <Col span={8}>
-                    <Text strong>GST: ₹{calculateTotals().taxTotal.toFixed(2)}</Text>
+                    <Text strong>GST: ₹{truncateToFixed(calculateTotals().taxTotal, 2)}</Text>
                   </Col>
                   <Col span={8}>
-                    <Text strong className="text-lg">Grand Total: ₹{calculateTotals().grandTotal.toFixed(2)}</Text>
+                    <Text strong className="text-lg">Grand Total: ₹{truncateToFixed(calculateTotals().grandTotal, 2)}</Text>
                   </Col>
                 </Row>
               </div>
@@ -1084,6 +1132,7 @@ const PurchaseOrderComplete = () => {
                   type="primary"
                   htmlType="submit"
                   disabled={poItems.length === 0}
+                 
                 >
                   {editingId ? "Update Purchase Order" : "Create Purchase Order"}
                 </Button>
@@ -1163,8 +1212,8 @@ const PurchaseOrderComplete = () => {
                 { title: "Item", dataIndex: ["item", "itemName"], key: "itemName" },
                 { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber" },
                 { title: "Quantity", dataIndex: "quantity", key: "quantity" },
-                { title: "Rate", dataIndex: "rate", key: "rate", render: (rate) => `₹${rate}` },
-                { title: "Total", dataIndex: "total", key: "total", render: (total) => `₹${total}` },
+                { title: "Rate", dataIndex: "rate", key: "rate", render: (rate) => `₹${truncateToFixed(rate || 0, 2)}` },
+                { title: "Total", dataIndex: "total", key: "total", render: (total) => `₹${truncateToFixed(total || 0, 2)}` },
               ]}
               pagination={false}
               size="small"
@@ -1212,9 +1261,35 @@ const PurchaseOrderComplete = () => {
               <Col span={24}>
                 <Title level={4}>Totals</Title>
                 <div>
-                  <p><strong>Sub Total:</strong> ₹{selectedPO.subTotal?.toFixed(2) || '0.00'}</p>
-                  <p><strong>GST ({selectedPO.gstPercent || 18}%):</strong> ₹{selectedPO.taxTotal?.toFixed(2) || '0.00'}</p>
-                  <p><strong>Grand Total:</strong> ₹{selectedPO.grandTotal?.toFixed(2) || '0.00'}</p>
+                  {(() => {
+                    // Use backend values if available, otherwise calculate
+                    let displaySubTotal, displayTaxTotal, displayGrandTotal;
+                    
+                    if (selectedPO.subTotal !== undefined && selectedPO.taxTotal !== undefined && selectedPO.grandTotal !== undefined) {
+                      // Use backend calculated values
+                      displaySubTotal = selectedPO.subTotal;
+                      displayTaxTotal = selectedPO.taxTotal;
+                      displayGrandTotal = selectedPO.grandTotal;
+                    } else {
+                      // Fallback: Calculate using unified function
+                      const calculated = calculateGSTTotals(
+                        selectedPO.poItems || [],
+                        selectedPO.gstInclude || false,
+                        selectedPO.gstPercent || 18
+                      );
+                      displaySubTotal = calculated.subTotal;
+                      displayTaxTotal = calculated.taxTotal;
+                      displayGrandTotal = calculated.grandTotal;
+                    }
+                    
+                    return (
+                      <>
+                        <p><strong>Sub Total:</strong> ₹{truncateToFixed(displaySubTotal, 2)}</p>
+                        <p><strong>GST ({selectedPO.gstPercent || 18}%):</strong> ₹{truncateToFixed(displayTaxTotal, 2)}</p>
+                        <p><strong>Grand Total:</strong> ₹{truncateToFixed(displayGrandTotal, 2)}</p>
+                      </>
+                    );
+                  })()}
                 </div>
               </Col>
             </Row>
@@ -1243,6 +1318,7 @@ const PurchaseOrderComplete = () => {
             <Select
               placeholder="Select item"
               showSearch
+              optionFilterProp="children"
               onChange={(itemId) => {
                 const selectedItem = items.find(item => item.id === itemId);
                 if (selectedItem) {

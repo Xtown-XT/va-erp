@@ -15,6 +15,7 @@ import {
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -261,6 +262,13 @@ const SupplierManagement = () => {
         <h1 className="text-2xl font-bold">Supplier Management</h1>
         <Space>
           <Button
+            onClick={() => fetchSuppliers(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
@@ -386,7 +394,7 @@ const SupplierManagement = () => {
                 label="Status"
                 initialValue="active"
               >
-                <Select>
+                <Select showSearch optionFilterProp="children">
                   <Select.Option value="active">Active</Select.Option>
                   <Select.Option value="inactive">Inactive</Select.Option>
                 </Select>
@@ -426,6 +434,8 @@ const SupplierManagement = () => {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
           style={{ width: 180 }}
+          showSearch
+          optionFilterProp="children"
         >
           <Select.Option value="active">Active</Select.Option>
           <Select.Option value="inactive">Inactive</Select.Option>

@@ -18,6 +18,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   ToolOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete } from "../service/auth";
@@ -57,6 +58,7 @@ const CompressorManagement = () => {
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching compressors", err);
@@ -69,6 +71,11 @@ const CompressorManagement = () => {
   useEffect(() => {
     fetchCompressors(pagination.current, pagination.pageSize);
   }, []);
+  
+  // Handle pagination change
+  const handleTableChange = (paginationConfig) => {
+    fetchCompressors(paginationConfig.current, paginationConfig.pageSize, searchTerm);
+  };
   
   // Trigger search when searchTerm changes
   useEffect(() => {
@@ -264,6 +271,13 @@ const CompressorManagement = () => {
         <h1 className="text-2xl font-bold">Compressor Management</h1>
         <Space>
           <Button
+            onClick={() => fetchCompressors(pagination.current, pagination.pageSize, searchTerm)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
@@ -305,7 +319,7 @@ const CompressorManagement = () => {
                 rules={[{ required: true }]}
                 initialValue="active"
               >
-                <Select>
+                <Select showSearch optionFilterProp="children">
                   <Select.Option value="active">Active</Select.Option>
                   <Select.Option value="inactive">Inactive</Select.Option>
                 </Select>
@@ -364,6 +378,8 @@ const CompressorManagement = () => {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
           style={{ width: 180 }}
+          showSearch
+          optionFilterProp="children"
         >
           <Select.Option value="active">Active</Select.Option>
           <Select.Option value="inactive">Inactive</Select.Option>
@@ -401,7 +417,7 @@ const CompressorManagement = () => {
           ...pagination,
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} compressors`,
         }}
-        onChange={(paginationConfig) => fetchCompressors(paginationConfig.current, paginationConfig.pageSize, searchTerm)}
+        onChange={handleTableChange}
       />
     </div>
   );

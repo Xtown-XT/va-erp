@@ -19,9 +19,11 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
+import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const EmployeeList = () => {
@@ -225,7 +227,7 @@ const EmployeeList = () => {
       key: "advancedAmount",
       render: (amount) => (
         <Typography.Text strong>
-          ₹{amount ? Number(amount).toLocaleString() : '0'}
+          ₹{truncateToFixed(amount || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
         </Typography.Text>
       ),
     },
@@ -276,6 +278,13 @@ const EmployeeList = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Employee List</h1>
         <Space>
+          <Button
+            onClick={() => fetchEmployees(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
           <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}

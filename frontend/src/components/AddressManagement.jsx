@@ -23,6 +23,7 @@ import {
   DeleteOutlined,
   StarOutlined,
   StarFilled,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -56,6 +57,7 @@ const AddressManagement = () => {
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching addresses", err);
@@ -76,8 +78,8 @@ const AddressManagement = () => {
       const payload = {
         addressBill: values.addressBill.trim(),
         addressShip: values.addressShip.trim(),
-        phone: values.phone.trim(),
-        email: values.email.trim(),
+        phone: values.phone?.trim() || null,
+        email: values.email?.trim() || null,
       };
 
       if (editingId) {
@@ -214,19 +216,28 @@ const AddressManagement = () => {
           <Title level={2} className="mb-2">Address Management</Title>
           <Text type="secondary">Manage multiple billing and shipping addresses for Purchase Orders</Text>
         </div>
-        {canCreate() && (
+        <Space>
           <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setShowForm(true);
-              setEditingId(null);
-              form.resetFields();
-            }}
+            onClick={() => fetchAddresses(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
           >
-            Add Address
+            Refresh
           </Button>
-        )}
+          {canCreate() && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setShowForm(true);
+                setEditingId(null);
+                form.resetFields();
+              }}
+            >
+              Add Address
+            </Button>
+          )}
+        </Space>
       </div>
 
       {/* Address Form */}
@@ -276,10 +287,18 @@ const AddressManagement = () => {
                 <Form.Item
                   name="phone"
                   label="Phone Number"
-
                   rules={[
-                    { required: true, message: "Phone number is required" },
-                    { pattern: /^\d{10, 11}$/, message: "Phone number must be exactly 10 digits" }
+                    {
+                      validator: (_, value) => {
+                        if (!value || value.trim() === '') {
+                          return Promise.resolve();
+                        }
+                        if (/^\d{10,11}$/.test(value.trim())) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error("Phone number must be 10-11 digits"));
+                      }
+                    }
                   ]}
                 >
                   <Input
@@ -304,9 +323,21 @@ const AddressManagement = () => {
                   name="email"
                   label="Email Address"
                   rules={[
-                    { required: true, message: "Email address is required" },
-                    { type: "email", message: "Please enter a valid email address" },
-                    { max: 255, message: "Email must be less than 255 characters" }
+                    {
+                      validator: (_, value) => {
+                        if (!value || value.trim() === '') {
+                          return Promise.resolve();
+                        }
+                        if (value.trim().length > 255) {
+                          return Promise.reject(new Error("Email must be less than 255 characters"));
+                        }
+                        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                        if (emailRegex.test(value.trim())) {
+                          return Promise.resolve();
+                        }
+                        return Promise.reject(new Error("Please enter a valid email address"));
+                      }
+                    }
                   ]}
                 >
                   <Input

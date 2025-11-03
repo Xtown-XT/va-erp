@@ -25,9 +25,11 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClearOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete } from "../service/auth";
+import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
@@ -44,6 +46,7 @@ const Attendance = () => {
   const [modifiedEmployees, setModifiedEmployees] = useState(new Set());
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [markAttendanceSiteFilter, setMarkAttendanceSiteFilter] = useState('');
 
   // View attendance states
   const [viewDate, setViewDate] = useState(dayjs());
@@ -468,7 +471,17 @@ const saveAllAttendance = async () => {
 
   // Get all employees for adding attendance (no filters)
   const getFilteredEmployees = () => {
-    return employees;
+    let filtered = employees;
+    
+    // Filter by site if site filter is selected
+    if (markAttendanceSiteFilter) {
+      filtered = filtered.filter(emp => {
+        const attendanceSiteId = attendanceData[emp.id]?.siteId;
+        return attendanceSiteId === markAttendanceSiteFilter;
+      });
+    }
+    
+    return filtered;
   };
 
   // Handle view table change
@@ -550,7 +563,7 @@ const saveAllAttendance = async () => {
                       <td>${employee?.empId || "-"}</td>
                       <td class="status-${record.presence}">${record.presence || "-"}</td>
                       <td class="status-${record.workStatus?.replace('-', '')}">${record.workStatus || "-"}</td>
-                      <td>₹${record.salary?.toLocaleString() || 0}</td>
+                      <td>₹${truncateToFixed(record.salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
                       <td>${site?.siteName || "-"}</td>
                       <td>${vehicle ? `${vehicle.vehicleNumber} (${vehicle.vehicleType})` : "-"}</td>
                       <td>${dayjs(record.date).format('DD/MM/YYYY')}</td>
@@ -624,7 +637,7 @@ const saveAllAttendance = async () => {
       title: "Salary",
       key: "salary",
       render: (_, record) => (
-        <Text strong>₹{record.salary?.toLocaleString() || 0}</Text>
+        <Text strong>₹{truncateToFixed(record.salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</Text>
       ),
     },
     {
@@ -638,7 +651,7 @@ const saveAllAttendance = async () => {
             strong
             style={{ color: advance > 0 ? '#ff4d4f' : '#52c41a' }}
           >
-            ₹{advance.toLocaleString()}
+            ₹{truncateToFixed(advance || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
           </Text>
         );
       },
@@ -860,6 +873,8 @@ const saveAllAttendance = async () => {
             style={{ width: 120 }}
             size="small"
             disabled={(attendanceData[employee.id]?.presence || 'present') === 'absent'}
+            showSearch
+            optionFilterProp="children"
           >
             <Select.Option value="working">Working</Select.Option>
             <Select.Option value="non-working">Non-working</Select.Option>
@@ -900,6 +915,8 @@ const saveAllAttendance = async () => {
             size="small"
             placeholder="Select site"
             allowClear
+            showSearch
+            optionFilterProp="children"
           >
             {sites.map(site => (
               <Select.Option key={site.id} value={site.id}>
@@ -923,6 +940,8 @@ const saveAllAttendance = async () => {
             size="small"
             placeholder="Select vehicle"
             allowClear
+            showSearch
+            optionFilterProp="children"
           >
             {vehicles.map(vehicle => (
               <Select.Option key={vehicle.id} value={vehicle.id}>
@@ -949,7 +968,7 @@ const saveAllAttendance = async () => {
               fontSize: '12px'
             }}
           >
-            ₹{advance.toLocaleString()}
+            ₹{truncateToFixed(advance || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
           </Text>
         );
       },
@@ -961,7 +980,21 @@ const saveAllAttendance = async () => {
       {/* SECTION 1: ADD ATTENDANCE */}
       <div className="bg-white rounded-lg p-6">
         <div className="mb-6">
-          <Title level={2} className="mb-2">Mark Daily Attendance</Title>
+          <div className="flex justify-between items-center">
+            <Title level={2} className="mb-2">Mark Daily Attendance</Title>
+            <Button
+              onClick={() => {
+                fetchRecords(selectedDate);
+                fetchEmployees();
+                fetchSites();
+                fetchVehicles();
+              }}
+              loading={loading}
+              icon={<ReloadOutlined />}
+            >
+              Refresh
+            </Button>
+          </div>
           <Text type="secondary">Mark attendance for all employees for the selected date</Text>
         </div>
 
@@ -981,6 +1014,24 @@ const saveAllAttendance = async () => {
                 style={{ marginBottom: 10 }}
               />
               <div className="flex flex-col mt-2">
+                <Text strong>Filter by Site:</Text>
+                <Select
+                  className="w-full mt-1"
+                  placeholder="All Sites"
+                  value={markAttendanceSiteFilter}
+                  onChange={(siteId) => setMarkAttendanceSiteFilter(siteId || '')}
+                  allowClear
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {sites.map(site => (
+                    <Select.Option key={site.id} value={site.id}>
+                      {site.siteName}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex flex-col mt-2">
                 <Text strong >Search Employee:</Text>
                 <Input.Search
                   placeholder="Search By Employee Name or ID"
@@ -990,15 +1041,13 @@ const saveAllAttendance = async () => {
                 />
               </div>
 
-
               <div>
-
                 <Button
                   onClick={() => {
                     setSearchTerm('');
+                    setMarkAttendanceSiteFilter('');
                   }}
-                  disabled={!searchTerm}
-
+                  disabled={!searchTerm && !markAttendanceSiteFilter}
                   style={{ marginTop: 10 }}
                 >
                   Clear Filters
@@ -1137,6 +1186,15 @@ const saveAllAttendance = async () => {
             <Text type="secondary">View attendance records for any date with site filtering</Text>
           </div>
           <Button
+            onClick={() => fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+        </div>
+        <div className="mb-4">
+          <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
@@ -1172,6 +1230,8 @@ const saveAllAttendance = async () => {
                   fetchViewRecords(viewDate, siteId, viewPagination.current, viewPagination.pageSize);
                 }}
                 allowClear
+                showSearch
+                optionFilterProp="children"
               >
                 {sites.map(site => (
                   <Select.Option key={site.id} value={site.id}>

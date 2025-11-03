@@ -26,6 +26,7 @@ import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -723,6 +724,13 @@ const DailyEntry = () => {
           <Text type="secondary">Track daily operations, RPM, and service status</Text>
         </div>
         <Space>
+          <Button
+            onClick={() => fetchEntries(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
           {canCreate() && (
             <Button
               type="primary"
@@ -832,7 +840,7 @@ const DailyEntry = () => {
                       label="Site"
                       rules={[{ required: true, message: "Please select site" }]}
                     >
-                      <Select placeholder="Select site">
+                      <Select placeholder="Select site" showSearch optionFilterProp="children">
                         {sites.map((site) => (
                           <Select.Option key={site.id} value={site.id}>
                             {site.siteName}

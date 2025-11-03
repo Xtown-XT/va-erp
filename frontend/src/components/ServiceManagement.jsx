@@ -35,6 +35,7 @@ import {
   ReloadOutlined
 } from "@ant-design/icons";
 import api from "../service/api";
+import { truncateToFixed } from "../utils/textUtils";
 import { canEdit } from "../service/auth";
 import dayjs from "dayjs";
 import { FaTruck, FaCompressArrowsAlt } from "react-icons/fa";
@@ -244,14 +245,14 @@ const ServiceManagement = () => {
       dataIndex: "currentRPM",
       key: "currentRPM",
       width: 120,
-      render: (rpm) => <Text strong>{Number(rpm).toFixed(1)}</Text>,
+      render: (rpm) => <Text strong>{truncateToFixed(rpm, 2)}</Text>,
     },
     {
       title: "Next Service",
       dataIndex: "nextServiceRPM",
       key: "nextServiceRPM",
       width: 120,
-      render: (rpm) => <Text strong>{Number(rpm).toFixed(1)}</Text>,
+      render: (rpm) => <Text strong>{truncateToFixed(rpm, 2)}</Text>,
     },
     {
       title: "Remaining",
@@ -261,7 +262,7 @@ const ServiceManagement = () => {
       render: (remaining, record) => (
         <div>
           <Text type={remaining <= 0 ? "danger" : remaining <= 50 ? "warning" : "success"}>
-            {remaining <= 0 ? "OVERDUE" : remaining > 0 ? `${Number(remaining).toFixed(1)} RPM` : "Not Set"}
+            {remaining <= 0 ? "OVERDUE" : remaining > 0 ? `${truncateToFixed(remaining, 2)} RPM` : "Not Set"}
           </Text>
           <br />
           {record.nextServiceRPM > 0 && (
@@ -348,14 +349,14 @@ const ServiceManagement = () => {
       dataIndex: "currentRPM",
       key: "currentRPM",
       width: 120,
-      render: (rpm) => <Text strong>{Number(rpm).toFixed(1)}</Text>,
+      render: (rpm) => <Text strong>{truncateToFixed(rpm, 2)}</Text>,
     },
     {
       title: "Next Service",
       dataIndex: "nextServiceRPM",
       key: "nextServiceRPM",
       width: 120,
-      render: (rpm) => <Text strong>{rpm > 0 ? rpm.toLocaleString() : "Not Set"}</Text>,
+      render: (rpm) => <Text strong>{rpm > 0 ? truncateToFixed(rpm, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : "Not Set"}</Text>,
     },
     {
       title: "Remaining",
@@ -365,7 +366,7 @@ const ServiceManagement = () => {
       render: (remaining, record) => (
         <div>
           <Text type={remaining <= 0 ? "danger" : remaining <= 100 ? "warning" : "success"}>
-            {remaining <= 0 ? "OVERDUE" : remaining > 0 ? `${Number(remaining).toFixed(1)} RPM` : "Not Set"}
+            {remaining <= 0 ? "OVERDUE" : remaining > 0 ? `${truncateToFixed(remaining, 2)} RPM` : "Not Set"}
           </Text>
           <br />
           {record.nextServiceRPM > 0 && (
@@ -494,14 +495,14 @@ const ServiceManagement = () => {
       dataIndex: "serviceRPM",
       key: "serviceRPM",
       width: 120,
-      render: (rpm) => <Text strong>{Number(rpm).toFixed(1)}</Text>,
+      render: (rpm) => <Text strong>{truncateToFixed(rpm, 2)}</Text>,
     },
     {
       title: "Current RPM",
       dataIndex: "currentRPM",
       key: "currentRPM",
       width: 120,
-      render: (rpm) => <Text>{Number(rpm).toFixed(1)}</Text>,
+      render: (rpm) => <Text>{truncateToFixed(rpm, 2)}</Text>,
     },
     {
       title: "Performed By",
@@ -648,8 +649,8 @@ const ServiceManagement = () => {
                   ` : ''}
                 </td>
                 <td>${service.serviceName || 'N/A'}</td>
-                <td><strong>${Number(service.serviceRPM).toFixed(1)}</strong></td>
-                <td>${Number(service.currentRPM).toFixed(1)}</td>
+                <td><strong>${truncateToFixed(service.serviceRPM, 2)}</strong></td>
+                <td>${truncateToFixed(service.currentRPM, 2)}</td>
                 <td>${service.createdBy || 'System'}</td>
               </tr>
             `).join('')}
@@ -863,13 +864,13 @@ const ServiceManagement = () => {
                       title: "Current RPM",
                       dataIndex: "currentRPM",
                       key: "currentRPM",
-                      render: (rpm) => <Text strong>{Number(rpm).toFixed(1)}</Text>,
+                      render: (rpm) => <Text strong>{truncateToFixed(rpm, 2)}</Text>,
                     },
                     {
                       title: "Next Service",
                       dataIndex: "nextServiceRPM",
                       key: "nextServiceRPM",
-                      render: (rpm) => <Text strong>{Number(rpm).toFixed(1)}</Text>,
+                      render: (rpm) => <Text strong>{truncateToFixed(rpm, 2)}</Text>,
                     },
                     {
                       title: "Remaining",
@@ -878,7 +879,7 @@ const ServiceManagement = () => {
                       render: (remaining, record) => (
                         <div>
                           <Text type={remaining <= 0 ? "danger" : remaining <= 50 ? "warning" : "success"}>
-                            {remaining <= 0 ? "OVERDUE" : `${remaining.toLocaleString()} RPM`}
+                            {remaining <= 0 ? "OVERDUE" : `${truncateToFixed(remaining, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} RPM`}
                           </Text>
                           <br />
                           <Progress 
@@ -1015,9 +1016,9 @@ const ServiceManagement = () => {
             <div className="mb-4 p-4 bg-gray-50 rounded">
               <Text strong className="block mb-2">Service Details:</Text>
               <Text className="block">Item: {selectedItem.item}</Text>
-              <Text className="block">Current RPM: {Number(selectedItem.currentRPM).toFixed(1)}</Text>
-              <Text className="block">Service Threshold: {Number(selectedItem.nextServiceRPM).toFixed(1)}</Text>
-              <Text className="block">Remaining: {Number(selectedItem.remainingRPM).toFixed(1)} RPM</Text>
+              <Text className="block">Current RPM: {truncateToFixed(selectedItem.currentRPM, 2)}</Text>
+              <Text className="block">Service Threshold: {truncateToFixed(selectedItem.nextServiceRPM, 2)}</Text>
+              <Text className="block">Remaining: {truncateToFixed(selectedItem.remainingRPM, 2)} RPM</Text>
             </div>
 
             <Form layout="vertical" form={form} onFinish={handleMarkServiceDone}>
@@ -1109,7 +1110,7 @@ const ServiceManagement = () => {
             <div className="mb-4 p-4 bg-gray-50 rounded">
               <Text strong className="block mb-2">Current Information:</Text>
               <Text className="block">Type: {editingSchedule.type === 'vehicle' ? 'Vehicle' : 'Compressor'}</Text>
-              <Text className="block">Current RPM: {Number(editingSchedule.currentRPM).toFixed(1)}</Text>
+              <Text className="block">Current RPM: {truncateToFixed(editingSchedule.currentRPM, 2)}</Text>
               <Text className="block">Next Service RPM: {editingSchedule.nextServiceRPM || 'Not set'}</Text>
             </div>
 

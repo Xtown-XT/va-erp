@@ -17,6 +17,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   KeyOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canManageUsers } from "../service/auth";
@@ -30,6 +31,13 @@ const UserManagement = () => {
   const [editingId, setEditingId] = useState(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [passwordForm] = Form.useForm();
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0,
+    showSizeChanger: true,
+    pageSizeOptions: ['10', '20', '50'],
+  });
 
   // Check if user has permission to access this page
   if (!canManageUsers()) {
@@ -45,17 +53,30 @@ const UserManagement = () => {
   }
 
   // Fetch users
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const res = await api.get("/api/users?limit=20");
+      const res = await api.get(`/api/users?page=${page}&limit=${limit}`);
       setUsers(res.data.data || []);
+
+      // Update pagination state
+      setPagination(prev => ({
+        ...prev,
+        current: res.data.page || page,
+        total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
+      }));
     } catch (err) {
       console.error("Error fetching users", err);
       setUsers([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle pagination change
+  const handleTableChange = (pagination) => {
+    fetchUsers(pagination.current, pagination.pageSize);
   };
 
   useEffect(() => {
@@ -88,7 +109,7 @@ const UserManagement = () => {
       setShowForm(false);
       setEditingId(null);
       form.resetFields();
-      fetchUsers();
+      fetchUsers(pagination.current, pagination.pageSize);
     } catch (err) {
       console.error("Error saving user", err);
     }
@@ -117,7 +138,7 @@ const UserManagement = () => {
       setEditingId(null);
       passwordForm.resetFields();
       // Refresh users to reflect updated metadata (updatedBy/updatedAt)
-      fetchUsers();
+      fetchUsers(pagination.current, pagination.pageSize);
     } catch (err) {
       console.error("Error updating password", err);
       message.error("Error updating password");
@@ -214,6 +235,13 @@ const UserManagement = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">User Management</h1>
         <Space>
+          <Button
+            onClick={fetchUsers}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
           {canEdit() && (
             <Button
               icon={<PlusOutlined />}
@@ -252,7 +280,7 @@ const UserManagement = () => {
                 rules={[{ required: true }]}
                 initialValue="viewer"
               >
-                <Select>
+                <Select showSearch optionFilterProp="children">
                   <Select.Option value="admin">Admin</Select.Option>
                   <Select.Option value="editor">Editor</Select.Option>
                   <Select.Option value="viewer">Viewer</Select.Option>
@@ -297,11 +325,11 @@ const UserManagement = () => {
         )}
         rowKey="id"
         loading={loading}
-        pagination={{ 
-          pageSize: 10,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50']
+        pagination={{
+          ...pagination,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} users`
         }}
+        onChange={handleTableChange}
       />
 
       {/* Password Change Modal */}

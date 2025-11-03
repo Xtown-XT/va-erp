@@ -18,6 +18,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   ToolOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -343,6 +344,13 @@ const Vehicle = () => {
         <h1 className="text-2xl font-bold">Machine Management</h1>
         <Space>
           <Button
+            onClick={() => fetchVehicles(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
@@ -376,7 +384,7 @@ const Vehicle = () => {
                 label="Machine Type"
                 rules={[{ required: true }]}
               >
-                <Select placeholder="Select vehicle type">
+                <Select placeholder="Select vehicle type" showSearch optionFilterProp="children">
                   <Select.Option value="Truck">Truck</Select.Option>
                   <Select.Option value="Crawler">Crawler</Select.Option>
                   <Select.Option value="Camper">Camper</Select.Option>
@@ -396,7 +404,7 @@ const Vehicle = () => {
                 label="Brand"
                 rules={[{ required: true }]}
               >
-                <Select placeholder="Select brand">
+                <Select placeholder="Select brand" showSearch optionFilterProp="children">
                   {brands.map((brand) => (
                     <Select.Option key={brand.id} value={brand.id}>
                       {brand.brandName}
@@ -421,7 +429,7 @@ const Vehicle = () => {
                 name="compressorId"
                 label="Compressor"
               >
-                <Select placeholder="Select compressor" allowClear>
+                <Select placeholder="Select compressor" allowClear showSearch optionFilterProp="children">
                   {compressors.map((compressor) => (
                     <Select.Option key={compressor.id} value={compressor.id}>
                       {compressor.compressorName}
@@ -435,7 +443,7 @@ const Vehicle = () => {
                 rules={[{ required: true }]}
                 initialValue="active"
               >
-                <Select>
+                <Select showSearch optionFilterProp="children">
                   <Select.Option value="active">Active</Select.Option>
                   <Select.Option value="inactive">Inactive</Select.Option>
                 </Select>
@@ -464,6 +472,8 @@ const Vehicle = () => {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
           style={{ width: 180 }}
+          showSearch
+          optionFilterProp="children"
         >
           <Select.Option value="active">Active</Select.Option>
           <Select.Option value="inactive">Inactive</Select.Option>

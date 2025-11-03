@@ -19,9 +19,11 @@ import {
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
 
@@ -52,6 +54,7 @@ const ItemManagement = () => {
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching items", err);
@@ -208,7 +211,7 @@ const ItemManagement = () => {
       title: "Purchase Rate",
       dataIndex: "purchaseRate",
       key: "purchaseRate",
-      render: (value) => `₹${value ? Number(value).toFixed(2) : '0.00'}`,
+      render: (value) => `₹${truncateToFixed(value, 2)}`,
     },
     {
       title: "GST %",
@@ -292,6 +295,13 @@ const ItemManagement = () => {
         </div>
         <Space>
           <Button
+            onClick={() => fetchItems(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
@@ -347,7 +357,7 @@ const ItemManagement = () => {
                 label="Units"
                 rules={[{ required: true, message: "Please select units" }]}
               >
-                <Select placeholder="Select units">
+                <Select placeholder="Select units" showSearch optionFilterProp="children">
                   <Select.Option value="kg">kg</Select.Option>
                   <Select.Option value="ltr">ltr</Select.Option>
                   <Select.Option value="mtr">mtr</Select.Option>

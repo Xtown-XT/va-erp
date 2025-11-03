@@ -286,6 +286,7 @@ import {
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -319,6 +320,7 @@ const SiteManagement = () => {
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching sites", err);
@@ -468,6 +470,13 @@ const SiteManagement = () => {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Site Management</h1>
         <Space>
+          <Button
+            onClick={() => fetchSites(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
           <Button 
             icon={<FilePdfOutlined />}  
             onClick={exportToPDF} 
@@ -525,6 +534,8 @@ const SiteManagement = () => {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
           style={{ width: 180 }}
+          showSearch
+          optionFilterProp="children"
         >
           <Select.Option value="active">Active</Select.Option>
           <Select.Option value="inactive">Inactive</Select.Option>

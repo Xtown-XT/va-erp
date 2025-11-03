@@ -15,6 +15,7 @@ import {
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -48,6 +49,7 @@ const BrandManagement = () => {
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching brands", err);
@@ -219,6 +221,13 @@ const BrandManagement = () => {
         <h1 className="text-2xl font-bold">Brand Management</h1>
         <Space>
           <Button
+            onClick={() => fetchBrands(pagination.current, pagination.pageSize)}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
@@ -260,7 +269,7 @@ const BrandManagement = () => {
                 rules={[{ required: true }]}
                 initialValue="active"
               >
-                <Select>
+                <Select showSearch optionFilterProp="children">
                   <Select.Option value="active">Active</Select.Option>
                   <Select.Option value="inactive">Inactive</Select.Option>
                 </Select>
@@ -290,6 +299,8 @@ const BrandManagement = () => {
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
           style={{ width: 180 }}
+          showSearch
+          optionFilterProp="children"
         >
           <Select.Option value="active">Active</Select.Option>
           <Select.Option value="inactive">Inactive</Select.Option>

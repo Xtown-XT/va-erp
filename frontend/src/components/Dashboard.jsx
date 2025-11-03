@@ -31,6 +31,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../service/api";
 import { getUserRole } from "../service/auth";
 import dayjs from "dayjs";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -326,7 +327,7 @@ const Dashboard = () => {
               value={financialData.totalSalaryPaid}
               prefix={<DollarOutlined />}
               valueStyle={{ color: '#52c41a', fontSize: '16px' }}
-              formatter={(value) => `₹${value.toLocaleString()}`}
+              formatter={(value) => `₹${truncateToFixed(value || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`}
             />
             <Text type="secondary" className="text-xs">
               {dayjs(dateRange[0]).format('DD/MM/YYYY')} - {dayjs(dateRange[1]).format('DD/MM/YYYY')}
@@ -340,7 +341,7 @@ const Dashboard = () => {
               value={financialData.totalPOAmount}
               prefix={<FileTextOutlined />}
               valueStyle={{ color: '#1890ff', fontSize: '16px' }}
-              formatter={(value) => `₹${value.toLocaleString()}`}
+              formatter={(value) => `₹${truncateToFixed(value || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`}
             />
             <Text type="secondary" className="text-xs">
               {dayjs(dateRange[0]).format('DD/MM/YYYY')} - {dayjs(dateRange[1]).format('DD/MM/YYYY')}
@@ -354,7 +355,7 @@ const Dashboard = () => {
               value={financialData.totalDieselUsed}
               prefix={<FireOutlined />}
               valueStyle={{ color: '#faad14', fontSize: '16px' }}
-              formatter={(value) => `${value.toLocaleString()}L`}
+              formatter={(value) => `${truncateToFixed(value || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}L`}
             />
             <Text type="secondary" className="text-xs">
               {dayjs(dateRange[0]).format('DD/MM/YYYY')} - {dayjs(dateRange[1]).format('DD/MM/YYYY')}
@@ -460,7 +461,7 @@ const Dashboard = () => {
               dataIndex: "salary",
               key: "salary",
               responsive: ['md'],
-              render: (salary) => salary ? `₹${salary.toLocaleString()}` : '-',
+              render: (salary) => salary ? `₹${truncateToFixed(salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` : '-',
             },
           ]}
         />

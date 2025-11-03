@@ -5,11 +5,14 @@ import {
   Card,
   Typography,
   message,
+  Space,
 } from "antd";
 import {
   FilePdfOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
 
@@ -213,7 +216,7 @@ const ItemStockReport = () => {
       title: "Unit Price",
       dataIndex: "unitPrice",
       key: "unitPrice",
-      render: (price) => `₹${price}`,
+      render: (price) => `₹${truncateToFixed(price || 0, 2)}`,
     },
     {
       title: "GST %",
@@ -270,7 +273,7 @@ const ItemStockReport = () => {
       title: "Total Value",
       dataIndex: "totalValue",
       key: "totalValue",
-      render: (value) => `₹${value}`,
+      render: (value) => `₹${truncateToFixed(value || 0, 2)}`,
     },
   ];
 
@@ -282,14 +285,23 @@ const ItemStockReport = () => {
           <Title level={2} className="mb-2">Item Stock Report</Title>
           <Text type="secondary">Current stock levels for all items</Text>
         </div>
-        <Button
-          icon={<FilePdfOutlined />}
-          onClick={exportToPDF}
-          type="primary"
-          danger
-        >
-          Export PDF
-        </Button>
+        <Space>
+          <Button
+            onClick={fetchItems}
+            loading={loading}
+            icon={<ReloadOutlined />}
+          >
+            Refresh
+          </Button>
+          <Button
+            icon={<FilePdfOutlined />}
+            onClick={exportToPDF}
+            type="primary"
+            danger
+          >
+            Export PDF
+          </Button>
+        </Space>
       </div>
 
       {/* Report Table */}

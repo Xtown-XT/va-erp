@@ -269,6 +269,7 @@ import {
 import { MdOutlineInventory2, MdInventory } from "react-icons/md";
 import { ReloadOutlined, ToolOutlined, DatabaseOutlined, InboxOutlined, DropboxOutlined } from "@ant-design/icons";
 import api from "../service/api";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
 
@@ -302,6 +303,7 @@ const InventoryManagement = () => {
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
+        pageSize: res.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching inventory data", err);
@@ -378,7 +380,7 @@ const InventoryManagement = () => {
       title: "Unit Price",
       dataIndex: "purchaseRate",
       key: "purchaseRate",
-      render: (value) => `₹${value || 0}`,
+      render: (value) => `₹${truncateToFixed(value || 0, 2)}`,
     },
     {
       title: "GST %",

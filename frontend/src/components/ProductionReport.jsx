@@ -18,6 +18,7 @@ import {
   ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
+import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
@@ -271,67 +272,67 @@ const ProductionReport = () => {
       title: "Meter",
       dataIndex: "meter",
       key: "meter",
-      render: (value) => value || 0,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
     {
       title: "Crawler HSD",
       dataIndex: "crawlerHSDDisplay",
       key: "crawlerHSD",
-      render: (value, record) => record.isCrawler ? (value || 0) : '',
+      render: (value, record) => record.isCrawler ? Number(value || 0).toFixed(2) : '',
     },
     {
       title: "Compressor HSD",
       dataIndex: "compressorHSD",
       key: "compressorHSD",
-      render: (value) => value || 0,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
     {
       title: "Camper HSD",
       dataIndex: "camperHSDDisplay",
       key: "camperHSD",
-      render: (value, record) => record.isCamper ? (value || 0) : '',
+      render: (value, record) => record.isCamper ? Number(value || 0).toFixed(2) : '',
     },
     {
       title: "Total HSD",
       dataIndex: "totalHSD",
       key: "totalHSD",
-      render: (value) => value || 0,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
     {
       title: "Crawler RPM",
       dataIndex: "crawlerRPMDisplay",
       key: "crawlerRPM",
-      render: (value, record) => record.isCrawler ? (value || 0) : '',
+      render: (value, record) => record.isCrawler ? Number(value || 0).toFixed(2) : '',
     },
     {
       title: "Compressor RPM",
       dataIndex: "compressorRPM",
       key: "compressorRPM",
-      render: (value) => value || 0,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
     {
       title: "HSD/MTR",
       dataIndex: "hsdMtr",
       key: "hsdMtr",
-      render: (value) => value,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
     {
       title: "MTR/RPM",
       dataIndex: "mtrRPM",
       key: "mtrRPM",
-      render: (value) => value,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
     {
       title: "Crawler HSD/Crawler RPM",
       dataIndex: "crawlerHsdPerRpm",
       key: "crawlerHsdPerRpm",
-      render: (value) => value > 0 ? value : '-',
+      render: (value) => value > 0 ? truncateToFixed(value, 2) : '-',
     },
     {
       title: "Comp HSD/Comp RPM",
       dataIndex: "compHsdPerRpm",
       key: "compHsdPerRpm",
-      render: (value) => value > 0 ? value : '-',
+      render: (value) => value > 0 ? truncateToFixed(value, 2) : '-',
     },
     {
       title: "Number of Holes",
@@ -343,7 +344,7 @@ const ProductionReport = () => {
       title: "Depth Avg",
       dataIndex: "depthAvg",
       key: "depthAvg",
-      render: (value) => value,
+      render: (value) => truncateToFixed(value || 0, 2),
     },
   ];
 
@@ -409,38 +410,38 @@ const ProductionReport = () => {
         .map(entry => `
                 <tr>
                   <td>${dayjs(entry.date).format("DD/MM/YYYY")}</td>
-                  <td>${entry.meter || 0}</td>
-                  <td>${entry.crawlerHSD || 0}</td>
-                  <td>${entry.compressorHSD || 0}</td>
-                  <td>${entry.camperHSD || 0}</td>
-                  <td>${entry.totalHSD || 0}</td>
-                  <td>${entry.crawlerRPM || 0}</td>
-                  <td>${entry.compressorRPM || 0}</td>
-                  <td>${entry.hsdMtr}</td>
-                  <td>${entry.mtrRPM}</td>
-                  <td>${entry.crawlerHsdPerRpm > 0 ? entry.crawlerHsdPerRpm : '-'}</td>
-                  <td>${entry.compHsdPerRpm > 0 ? entry.compHsdPerRpm : '-'}</td>
+                  <td>${truncateToFixed(entry.meter || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.crawlerHSD || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.compressorHSD || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.camperHSD || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.totalHSD || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.crawlerRPM || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.compressorRPM || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.hsdMtr || 0, 2)}</td>
+                  <td>${truncateToFixed(entry.mtrRPM || 0, 2)}</td>
+                  <td>${entry.crawlerHsdPerRpm > 0 ? truncateToFixed(entry.crawlerHsdPerRpm, 2) : '-'}</td>
+                  <td>${entry.compHsdPerRpm > 0 ? truncateToFixed(entry.compHsdPerRpm, 2) : '-'}</td>
                   <td>${entry.noOfHoles || 0}</td>
-                  <td>${entry.depthAvg}</td>
+                  <td>${truncateToFixed(entry.depthAvg || 0, 2)}</td>
                 </tr>
               `).join('')}
             </tbody>
             <tfoot>
               <tr class="total-row">
                 <td>Total</td>
-                <td>${totals.totalMeter || 0}</td>
-                <td>${totals.totalCrawlerHSD || 0}</td>
-                <td>${totals.totalCompressorHSD || 0}</td>
-                <td>${totals.totalCamperHSD || 0}</td>
-                <td>${totals.totalTotalHSD || 0}</td>
-                <td>${totals.totalCrawlerRPM || 0}</td>
-                <td>${totals.totalCompressorRPM || 0}</td>
-                <td>${totals.totalHsdMtr}</td>
-                <td>${totals.totalMtrRPM}</td>
-                <td>${totals.totalCrawlerHsdPerRpm > 0 ? totals.totalCrawlerHsdPerRpm : '-'}</td>
-                <td>${totals.totalCompHsdPerRpm > 0 ? totals.totalCompHsdPerRpm : '-'}</td>
+                <td>${truncateToFixed(totals.totalMeter || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalCrawlerHSD || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalCompressorHSD || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalCamperHSD || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalTotalHSD || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalCrawlerRPM || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalCompressorRPM || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalHsdMtr || 0, 2)}</td>
+                <td>${truncateToFixed(totals.totalMtrRPM || 0, 2)}</td>
+                <td>${totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-'}</td>
+                <td>${totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-'}</td>
                 <td>${totals.totalHoles || 0}</td>
-                <td>${totals.totalDepthAvg}</td>
+                <td>${truncateToFixed(totals.totalDepthAvg || 0, 2)}</td>
               </tr>
             </tfoot>
           </table>
@@ -607,47 +608,47 @@ const ProductionReport = () => {
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={1}>
-                  <Text strong>{totals.totalMeter || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalMeter || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={2}>
-                  <Text strong>{totals.totalCrawlerHSD || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalCrawlerHSD || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={3}>
-                  <Text strong>{totals.totalCompressorHSD || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalCompressorHSD || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={4}>
-                  <Text strong>{totals.totalCamperHSD || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalCamperHSD || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={5}>
-                  <Text strong>{totals.totalTotalHSD || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalTotalHSD || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={6}>
-                  <Text strong>{totals.totalCrawlerRPM || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalCrawlerRPM || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={7}>
-                  <Text strong>{totals.totalCompressorRPM || 0}</Text>
+                  <Text strong>{truncateToFixed(totals.totalCompressorRPM || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={8}>
-                  <Text strong>{totals.totalHsdMtr}</Text>
+                  <Text strong>{truncateToFixed(totals.totalHsdMtr || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={9}>
-                  <Text strong>{totals.totalMtrRPM}</Text>
+                  <Text strong>{truncateToFixed(totals.totalMtrRPM || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={10}>
-                  <Text strong>{totals.totalCrawlerHsdPerRpm > 0 ? totals.totalCrawlerHsdPerRpm : '-'}</Text>
+                  <Text strong>{totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-'}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={11}>
-                  <Text strong>{totals.totalCompHsdPerRpm > 0 ? totals.totalCompHsdPerRpm : '-'}</Text>
+                  <Text strong>{totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-'}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={12}>
@@ -655,7 +656,7 @@ const ProductionReport = () => {
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={13}>
-                  <Text strong>{totals.totalDepthAvg}</Text>
+                  <Text strong>{truncateToFixed(totals.totalDepthAvg || 0, 2)}</Text>
                 </Table.Summary.Cell>
               </Table.Summary.Row>
             </Table.Summary>

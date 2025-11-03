@@ -21,9 +21,11 @@ import {
   DeleteOutlined,
   PlusOutlined,
   ToolOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate, getUserRole } from "../service/auth";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title } = Typography;
 
@@ -69,6 +71,7 @@ const ItemInstanceManagement = () => {
         ...prev,
         current: instancesRes.data.page || page,
         total: instancesRes.data.total || 0,
+        pageSize: instancesRes.data.limit || limit,
       }));
     } catch (err) {
       console.error("Error fetching data", err);
@@ -176,13 +179,13 @@ const ItemInstanceManagement = () => {
       title: "Current RPM",
       dataIndex: "currentRPM",
       key: "currentRPM",
-      render: (rpm) => rpm ? Number(rpm).toFixed(1) : "0",
+      render: (rpm) => rpm ? truncateToFixed(rpm, 2) : "0.00",
     },
     {
       title: "Next Service RPM",
       dataIndex: "nextServiceRPM",
       key: "nextServiceRPM",
-      render: (value) => value ? Number(value).toFixed(1) : "-",
+      render: (value) => value ? truncateToFixed(value, 2) : "-",
     },
     {
       title: "Status",
@@ -240,21 +243,30 @@ const ItemInstanceManagement = () => {
           <ToolOutlined className="mr-2" />
           Machine Items Management
         </Title>
-        {canCreate() && (
+        <Space>
           <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-            disabled={loading}
+            onClick={() => fetchData(pagination.current, pagination.pageSize, searchTerm, statusFilter)}
+            loading={loading}
+            icon={<ReloadOutlined />}
           >
-            Add Machine Item
+            Refresh
           </Button>
-        )}
-        {!canCreate() && (
-          <div style={{ color: 'red' }}>
-            No edit permission (Role: {getUserRole()})
-          </div>
-        )}
+          {canCreate() && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+              disabled={loading}
+            >
+              Add Machine Item
+            </Button>
+          )}
+          {!canCreate() && (
+            <div style={{ color: 'red' }}>
+              No edit permission (Role: {getUserRole()})
+            </div>
+          )}
+        </Space>
       </div>
 
       {/* Filters */}
@@ -330,7 +342,7 @@ const ItemInstanceManagement = () => {
                 label="Item"
                 rules={[{ required: true, message: "Please select an item" }]}
               >
-                <Select placeholder="Select item">
+                <Select placeholder="Select item" showSearch optionFilterProp="children">
                   {items.map((item) => (
                     <Select.Option key={item.id} value={item.id}>
                       {item.itemName} ({item.partNumber})

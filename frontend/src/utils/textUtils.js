@@ -45,3 +45,18 @@ export const handleAutoCapitalize = (e, onChange, type = 'words') => {
   
   onChange(newEvent);
 };
+
+/**
+ * Truncates a number to specified decimal places without rounding
+ * @param {number} num - The number to truncate
+ * @param {number} decimals - Number of decimal places (default: 2)
+ * @returns {string} - The truncated number formatted to specified decimals
+ */
+export const truncateToFixed = (num, decimals = 2) => {
+  if (num === null || num === undefined || isNaN(num)) {
+    return '0.00';
+  }
+  const multiplier = Math.pow(10, decimals);
+  const truncated = Math.trunc(num * multiplier) / multiplier;
+  return truncated.toFixed(decimals);
+};

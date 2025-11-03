@@ -18,6 +18,7 @@ import {
   FilePdfOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
+import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
@@ -83,7 +84,7 @@ const CompressorServiceHistory = () => {
                 <tr>
                   <td>${service.serviceDate ? dayjs(service.serviceDate).format("YYYY-MM-DD") : "-"}</td>
                   <td>${service.serviceName || "N/A"}</td>
-                  <td>${service.serviceRPM ? Number(service.serviceRPM).toFixed(1) : "-"}</td>
+                  <td>${service.serviceRPM ? truncateToFixed(service.serviceRPM, 2) : "-"}</td>
                   <td>${service.serviceType === "vehicle" && service.vehicle ? 
                     `${service.vehicle.vehicleNumber} (${service.vehicle.vehicleType})` : 
                     service.serviceType === "compressor" && service.compressor ? 
@@ -117,7 +118,7 @@ const CompressorServiceHistory = () => {
       title: "Service RPM",
       dataIndex: "serviceRPM",
       key: "serviceRPM",
-      render: (rpm) => <Text strong>{rpm ? Number(rpm).toFixed(1) : '-'}</Text>,
+      render: (rpm) => <Text strong>{rpm ? truncateToFixed(rpm, 2) : '-'}</Text>,
     },
     {
       title: "Serviced Item",

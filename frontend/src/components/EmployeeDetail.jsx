@@ -24,6 +24,7 @@ import {
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import api from "../service/api";
+import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
 const { TabPane } = Tabs;
@@ -133,7 +134,7 @@ const EmployeeDetail = () => {
       title: "Salary",
       dataIndex: "salary",
       key: "salary",
-      render: (salary) => `₹${(salary || 0).toLocaleString()}`,
+      render: (salary) => `₹${truncateToFixed(salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`,
     },
     {
       title: "Site",
@@ -185,8 +186,8 @@ const EmployeeDetail = () => {
             <div class="stat-item"><strong>Phone:</strong> ${employee?.phone || 'N/A'}</div>
             <div class="stat-item"><strong>Joining Date:</strong> ${employee?.joiningDate ? dayjs(employee.joiningDate).format('DD/MM/YYYY') : 'N/A'}</div>
             <div class="stat-item"><strong>Status:</strong> ${employee?.status || 'N/A'}</div>
-            <div class="stat-item"><strong>Advanced Amount:</strong> ₹${(employee?.advancedAmount || 0).toLocaleString()}</div>
-            <div class="stat-item"><strong>Remaining Amount:</strong> ₹${(employee?.remainingAmount || 0).toLocaleString()}</div>
+            <div class="stat-item"><strong>Advanced Amount:</strong> ₹${truncateToFixed(employee?.advancedAmount || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
+            <div class="stat-item"><strong>Remaining Amount:</strong> ₹${truncateToFixed(employee?.remainingAmount || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
           </div>
           
           <div class="stats">
@@ -196,8 +197,8 @@ const EmployeeDetail = () => {
             <div class="stat-item"><strong>Absent Days:</strong> ${stats.absentDays || 0}</div>
             <div class="stat-item"><strong>Working Days:</strong> ${stats.workingDays || 0}</div>
             <div class="stat-item"><strong>Attendance Rate:</strong> ${(stats.attendanceRate || 0).toFixed(1)}%</div>
-            <div class="stat-item"><strong>Total Salary:</strong> ₹${(stats.totalSalary || 0).toLocaleString()}</div>
-            <div class="stat-item"><strong>Average Salary:</strong> ₹${(stats.averageSalary || 0).toFixed(2)}</div>
+            <div class="stat-item"><strong>Total Salary:</strong> ₹${truncateToFixed(stats.totalSalary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</div>
+            <div class="stat-item"><strong>Average Salary:</strong> ₹${truncateToFixed(stats.averageSalary || 0, 2)}</div>
           </div>
           
           <table>
@@ -217,7 +218,7 @@ const EmployeeDetail = () => {
                   <td>${dayjs(record.date).format('DD/MM/YYYY')}</td>
                   <td>${record.presence === 'present' ? 'Present' : 'Absent'}</td>
                   <td>${record.workStatus === 'working' ? 'Working' : 'Non-working'}</td>
-                  <td>₹${(record.salary || 0).toLocaleString()}</td>
+                  <td>₹${truncateToFixed(record.salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
                   <td>${record.site?.siteName || '-'}</td>
                   <td>${record.vehicle ? `${record.vehicle.vehicleNumber} (${record.vehicle.vehicleType})` : '-'}</td>
                 </tr>
@@ -315,7 +316,7 @@ const EmployeeDetail = () => {
               <Text strong>Advanced Amount:</Text>
               <br />
               <Text style={{ color: '#1890ff', fontSize: '16px', fontWeight: 'bold' }}>
-                ₹{(employee.advancedAmount || 0).toLocaleString()}
+                ₹{truncateToFixed(employee.advancedAmount || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               </Text>
             </div>
           </Col>
@@ -330,7 +331,7 @@ const EmployeeDetail = () => {
                   fontWeight: 'bold'
                 }}
               >
-                ₹{(employee.remainingAmount || 0).toLocaleString()}
+                ₹{truncateToFixed(employee.remainingAmount || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               </Text>
             </div>
           </Col>
