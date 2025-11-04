@@ -377,6 +377,7 @@ const ProductionReport = () => {
       title: "Meter",
       dataIndex: "meter",
       key: "meter",
+      width: 120,
       render: (value) => truncateToFixed(value || 0, 2),
     },
     {
