@@ -10,6 +10,13 @@ import {
 
 const router = Router();
 
+// Upsert route - must come before POST / to avoid route conflicts
+router.put(
+  "/upsert",
+  authorize("create"),
+  validate(createEmployeeAttendanceSchema),
+  employeeAttendanceController.upsertAttendance
+);
 router.post(
   "/",
   authorize("create"),

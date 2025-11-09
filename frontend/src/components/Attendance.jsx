@@ -342,7 +342,7 @@ const updateAttendanceData = (employeeId, field, value) => {
   setModifiedEmployees(prev => new Set([...prev, employeeId])); // <- important
 };
 
-// Save function with debug
+// Save function using upsert endpoint
 const saveAllAttendance = async () => {
   if (modifiedEmployees.size === 0) {
     message.info("No changes to save.");
@@ -372,12 +372,9 @@ const saveAllAttendance = async () => {
         vehicleId: data.vehicleId || null,
       };
 
-      if (data.recordId) payload.updatedBy = currentUser;
-      else payload.createdBy = currentUser;
-
       try {
-        if (data.recordId) await api.put(`/api/employeeAttendance/${data.recordId}`, payload);
-        else await api.post("/api/employeeAttendance", payload);
+        // Use upsert endpoint - creates if not exists, updates if exists
+        await api.put("/api/employeeAttendance/upsert", payload);
       } catch (err) {
         console.error(`Failed to save employee ${employeeId}:`, err.response?.data || err.message);
       }

@@ -11,6 +11,7 @@ import {
 const router = express.Router();
 
 // Custom routes (must be before /:id routes)
+router.get("/search", authorize("read"), ItemInstanceController.searchInstances);
 router.get("/available", authorize("read"), ItemInstanceController.getAvailable);
 router.get("/fitted/:vehicleId", authorize("read"), ItemInstanceController.getFittedByVehicle);
 router.get("/alerts/service", authorize("read"), ItemInstanceController.getServiceAlerts);

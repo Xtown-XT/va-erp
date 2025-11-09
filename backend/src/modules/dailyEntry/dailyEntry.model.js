@@ -72,6 +72,15 @@ const DailyEntry = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    // Shift number (1 or 2)
+    shift: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+      validate: {
+        isIn: [[1, 2]],
+      },
+    },
 
     // Primary employee (optional - controller sets from employees array)
     employeeId: {

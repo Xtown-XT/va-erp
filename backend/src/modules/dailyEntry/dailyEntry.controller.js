@@ -5,6 +5,7 @@ import Service from "../service/service.model.js";
 import EmployeeList from "../employee/employeeList.model.js";
 import Item from "../item/item.model.js";
 import ItemInstance from "../itemInstance/itemInstance.model.js";
+import EmployeeAttendance from "../employee/employeeAttendance.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
 import DailyEntryEmployee from "./dailyEntryEmployee.model.js";
@@ -38,6 +39,47 @@ class DailyEntryCustomController extends BaseController {
       return res.json({ success: true, refNo });
     } catch (error) {
       next(error);
+    }
+  };
+
+  // Helper: Upsert attendance for employees in daily entry
+  upsertEmployeeAttendance = async (employees, siteId, vehicleId, date, username, transaction) => {
+    try {
+      for (const emp of employees) {
+        const employeeId = emp.employeeId;
+        
+        // Check if attendance exists for this employee on this date
+        const existingAttendance = await EmployeeAttendance.findOne({
+          where: { employeeId, date },
+          transaction
+        });
+
+        if (existingAttendance) {
+          // Update existing attendance - mark as present and update site/vehicle
+          await existingAttendance.update({
+            presence: 'present',
+            workStatus: 'working',
+            siteId,
+            vehicleId,
+            updatedBy: username
+          }, { transaction });
+        } else {
+          // Create new attendance record
+          await EmployeeAttendance.create({
+            employeeId,
+            date,
+            presence: 'present',
+            workStatus: 'working',
+            salary: 0,
+            siteId,
+            vehicleId,
+            createdBy: username
+          }, { transaction });
+        }
+      }
+    } catch (error) {
+      console.error('Error upserting employee attendance:', error);
+      throw error;
     }
   };
 
@@ -257,7 +299,10 @@ class DailyEntryCustomController extends BaseController {
       fittedItemInstanceIds = [],
       removedItemInstanceIds = [],
       notes,
-      compressorHSD
+      compressorHSD,
+      shift = 1,
+      date,
+      siteId
     } = req.body;
 
     // Auto-generate reference number if not provided
@@ -309,6 +354,7 @@ class DailyEntryCustomController extends BaseController {
     const entryPayload = { 
       ...req.body, 
       refNo,
+      shift: shift || 1,
       employeeId: primaryEmployeeId, // Keep for backward compatibility
       notes: notes || null,
       compressorId: compressorId || null,
@@ -404,6 +450,18 @@ class DailyEntryCustomController extends BaseController {
       }
     }
 
+    // Auto-create/update attendance for all employees
+    if (processedEmployees.length > 0) {
+      await this.upsertEmployeeAttendance(
+        processedEmployees,
+        siteId,
+        vehicleId,
+        date || entry.date,
+        req.user.username,
+        transaction
+      );
+    }
+
     await transaction.commit();
     return res.status(201).json({ success: true, message: "DailyEntry created successfully", data: entry });
   } catch (error) {
@@ -433,7 +491,10 @@ update = async (req, res, next) => {
       fittedItemInstanceIds = [],
       removedItemInstanceIds = [],
       notes,
-      compressorHSD
+      compressorHSD,
+      shift,
+      date,
+      siteId
     } = req.body;
 
     // Find the existing entry
@@ -487,6 +548,7 @@ update = async (req, res, next) => {
     // Update the main entry
     const updatePayload = { 
       ...req.body,
+      shift: shift !== undefined ? shift : existingEntry.shift,
       employeeId: primaryEmployeeId || existingEntry.employeeId, // Keep for backward compatibility
       notes: notes !== undefined ? (notes || null) : existingEntry.notes,
       compressorId: compressorId !== undefined ? (compressorId || null) : existingEntry.compressorId,
@@ -575,6 +637,20 @@ update = async (req, res, next) => {
             createdBy: req.user.username
           }, { transaction });
         }
+      }
+    }
+
+    // Auto-update attendance for all employees if employees were updated
+    if (req.body.hasOwnProperty('employees') || req.body.hasOwnProperty('employeeId')) {
+      if (processedEmployees.length > 0) {
+        await this.upsertEmployeeAttendance(
+          processedEmployees,
+          siteId || existingEntry.siteId,
+          vehicleId || existingEntry.vehicleId,
+          date || existingEntry.date,
+          req.user.username,
+          transaction
+        );
       }
     }
 

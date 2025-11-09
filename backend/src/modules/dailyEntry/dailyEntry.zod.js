@@ -37,6 +37,7 @@ export const createDailyEntrySchema = z.object({
   removedItemInstanceIds: z.array(z.string().uuid("Invalid item instance ID format")).optional(),
   additionalEmployeeIds: z.array(z.string().uuid("Invalid employee ID format")).optional(),
   notes: z.string().optional(),
+  shift: z.number().int().min(1).max(2, "Shift must be 1 or 2"),
 });
 
 export const updateDailyEntrySchema = createDailyEntrySchema.partial();

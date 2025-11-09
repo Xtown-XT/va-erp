@@ -361,6 +361,80 @@ class ItemInstanceController extends BaseController {
     }
   };
 
+  // Search item instances (optimized for dropdown with detailed info)
+  searchInstances = async (req, res, next) => {
+    try {
+      const { query, status, limit = 50 } = req.query;
+      
+      const where = {};
+      const itemWhere = {};
+
+      // Filter by status if provided
+      if (status) {
+        where.status = status;
+      }
+
+      // Search across multiple fields
+      if (query) {
+        const searchConditions = [];
+        
+        // Search in instance fields
+        searchConditions.push(
+          { instanceNumber: { [Op.iLike]: `%${query}%` } }
+        );
+        
+        // Search in item fields
+        itemWhere[Op.or] = [
+          { itemName: { [Op.iLike]: `%${query}%` } },
+          { partNumber: { [Op.iLike]: `%${query}%` } },
+        ];
+      }
+
+      const instances = await ItemInstance.findAll({
+        where: query ? { [Op.or]: [{ instanceNumber: { [Op.iLike]: `%${query}%` } }] } : where,
+        include: [
+          {
+            model: Item,
+            as: "item",
+            attributes: ["id", "itemName", "partNumber", "groupName", "units", "canBeFitted"],
+            where: query ? itemWhere : undefined,
+            required: false,
+          },
+          {
+            model: Vehicle,
+            as: "fittedToVehicle",
+            attributes: ["id", "vehicleNumber", "vehicleType"],
+          },
+        ],
+        limit: parseInt(limit),
+        order: [
+          ['status', 'ASC'], // in_stock first
+          ['createdAt', 'DESC']
+        ],
+      });
+
+      // Enhance response with calculated fields
+      const enhancedInstances = instances.map(instance => {
+        const data = instance.toJSON();
+        return {
+          ...data,
+          lastUsedCount: data.currentRPM || 0, // Last used count (current RPM)
+          currentCount: data.currentRPM || 0, // Current count (current RPM)
+          balance: data.status === 'in_stock' ? 1 : 0, // Balance (1 if available, 0 if not)
+          displayLabel: `${data.item?.itemName || 'Unknown'} (${data.item?.partNumber || 'N/A'}) - Instance: ${data.instanceNumber}`,
+        };
+      });
+
+      return res.json({
+        success: true,
+        data: enhancedInstances,
+        total: enhancedInstances.length,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   // Get fitted instances for a specific vehicle
   getFittedByVehicle = async (req, res, next) => {
     try {
