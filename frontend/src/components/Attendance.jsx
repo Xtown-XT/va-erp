@@ -342,52 +342,56 @@ const updateAttendanceData = (employeeId, field, value) => {
   setModifiedEmployees(prev => new Set([...prev, employeeId])); // <- important
 };
 
-// Save function using upsert endpoint
+// Save function using batch upsert endpoint - saves ALL employees in one API call
 const saveAllAttendance = async () => {
-  if (modifiedEmployees.size === 0) {
-    message.info("No changes to save.");
-    return;
-  }
-
   setSaving(true);
   const hideLoading = message.loading('Saving attendance records...', 0);
   const currentUser = localStorage.getItem("username") || "Unknown";
   const dateStr = selectedDate.format("YYYY-MM-DD");
 
   try {
-    const entriesToSave = Array.from(modifiedEmployees)
-      .map(empId => [empId, attendanceData[empId]])
-      .filter(([_, data]) => data); // <- ensure data exists
-
-    console.log('Saving entries:', entriesToSave); // <-- debug
-
-    for (let [employeeId, data] of entriesToSave) {
-      const payload = {
-        employeeId,
-        presence: data.presence || 'present',
-        workStatus: data.workStatus || 'working',
-        salary: Number(data.salary) || 0,
+    // Prepare batch records - ALL employees with their data or defaults
+    const records = employees.map(emp => {
+      const existingData = attendanceData[emp.id] || {};
+      return {
+        employeeId: emp.id,
+        presence: existingData.presence || 'present',
+        workStatus: existingData.workStatus || 'working',
+        salary: Number(existingData.salary) || 0,
         date: dateStr,
-        siteId: data.siteId || null,
-        vehicleId: data.vehicleId || null,
+        siteId: existingData.siteId || null,
+        vehicleId: existingData.vehicleId || null,
       };
+    });
 
-      try {
-        // Use upsert endpoint - creates if not exists, updates if exists
-        await api.put("/api/employeeAttendance/upsert", payload);
-      } catch (err) {
-        console.error(`Failed to save employee ${employeeId}:`, err.response?.data || err.message);
-      }
-    }
+    console.log('Saving batch:', records.length, 'records'); // <-- debug
+
+    // Use batch upsert endpoint - single API call for all records
+    const response = await api.put("/api/employeeAttendance/upsert-batch", { records });
 
     hideLoading();
-    message.success(`Saved ${entriesToSave.length} attendance records successfully!`);
+    
+    if (response.data.success) {
+      const { created, updated, total, errors } = response.data.data;
+      let messageText = `Saved ${total} attendance records: ${created} created, ${updated} updated`;
+      
+      if (errors && errors.length > 0) {
+        messageText += ` (${errors.length} errors)`;
+        message.warning(messageText);
+        console.error('Batch save errors:', errors);
+      } else {
+        message.success(messageText);
+      }
+    } else {
+      message.error(response.data.message || "Error saving attendance");
+    }
+
     setModifiedEmployees(new Set());
     await fetchRecords(selectedDate);
   } catch (err) {
     hideLoading();
-    console.error(err);
-    message.error("Error saving attendance");
+    console.error("Error saving attendance:", err);
+    message.error(`Error saving attendance: ${err.response?.data?.message || err.message}`);
   } finally {
     setSaving(false);
   }
