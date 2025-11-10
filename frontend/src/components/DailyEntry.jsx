@@ -105,7 +105,6 @@ const DailyEntry = () => {
   const [showFitItemModal, setShowFitItemModal] = useState(false);
   const [currentShiftForModal, setCurrentShiftForModal] = useState(null);
   const [selectedItemInstances, setSelectedItemInstances] = useState([]);
-  const isSubmittingRef = useRef(false);
   
   const hasFetchedRef = useRef(false);
 
@@ -332,13 +331,7 @@ const DailyEntry = () => {
 
   // Handle form submit
   const handleSubmit = async () => {
-    // Prevent duplicate submissions
-    if (isSubmittingRef.current) {
-      return;
-    }
-    
     try {
-      isSubmittingRef.current = true;
       const dateStr = selectedDate.format("YYYY-MM-DD");
       
       // Validate Shift 1 (at least one operator required)
@@ -442,8 +435,6 @@ const DailyEntry = () => {
       
     } catch (err) {
       message.error(`Failed to save daily entries: ${err.response?.data?.message || err.message}`);
-    } finally {
-      isSubmittingRef.current = false;
     }
   };
 

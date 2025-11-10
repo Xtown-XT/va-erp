@@ -11,11 +11,13 @@ const dateYYYYMMDD = z
 
 export const createEmployeeAttendanceSchema = z.object({
   employeeId: z.string().uuid("Invalid employee ID"),
-  presence: z.enum(["present", "absent"]),
-  workStatus: z.enum(["working", "non-working"]).optional(),
+  presence: z.enum(["present", "absent"]).optional().default("present"),
+  workStatus: z.enum(["working", "non-working"]).optional().default("working"),
   salary: z
     .number({ invalid_type_error: "Salary must be a number" })
-    .min(0, "Salary must be non-negative"),
+    .min(0, "Salary must be non-negative")
+    .optional()
+    .default(0),
   date: dateYYYYMMDD,
   siteId: z.string().uuid("Invalid site ID format").nullable().optional(),
   vehicleId: z.string().uuid("Invalid vehicle ID format").nullable().optional(),
@@ -24,3 +26,8 @@ export const createEmployeeAttendanceSchema = z.object({
 export const updateEmployeeAttendanceSchema = createEmployeeAttendanceSchema.partial();
 
 export const deleteEmployeeAttendanceSchema = z.object({});
+
+// Batch upsert schema - accepts array of attendance records
+export const batchUpsertEmployeeAttendanceSchema = z.object({
+  records: z.array(createEmployeeAttendanceSchema).min(1, "At least one attendance record is required"),
+});

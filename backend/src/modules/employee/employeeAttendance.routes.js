@@ -6,10 +6,18 @@ import {
   createEmployeeAttendanceSchema,
   updateEmployeeAttendanceSchema,
   deleteEmployeeAttendanceSchema,
+  batchUpsertEmployeeAttendanceSchema,
 } from "./employeeAttendance.zod.js";
 
 const router = Router();
 
+// Batch upsert route - must come before single upsert to avoid route conflicts
+router.put(
+  "/upsert-batch",
+  authorize("create"),
+  validate(batchUpsertEmployeeAttendanceSchema),
+  employeeAttendanceController.upsertBatchAttendance
+);
 // Upsert route - must come before POST / to avoid route conflicts
 router.put(
   "/upsert",

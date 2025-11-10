@@ -217,11 +217,11 @@ export class EmployeeAttendanceController extends BaseController {
       let isNew = false;
 
       if (existingAttendance) {
-        // Update existing attendance
+        // Update existing attendance - use provided values or defaults, fallback to existing
         const updatePayload = {
-          presence: presence || existingAttendance.presence,
-          workStatus: workStatus || existingAttendance.workStatus,
-          salary: salary !== undefined ? salary : existingAttendance.salary,
+          presence: presence !== undefined ? presence : (existingAttendance.presence || 'present'),
+          workStatus: workStatus !== undefined ? workStatus : (existingAttendance.workStatus || 'working'),
+          salary: salary !== undefined ? salary : (existingAttendance.salary || 0),
           siteId: siteId !== undefined ? siteId : existingAttendance.siteId,
           vehicleId: vehicleId !== undefined ? vehicleId : existingAttendance.vehicleId,
           updatedBy: username,
@@ -246,14 +246,14 @@ export class EmployeeAttendanceController extends BaseController {
         await existingAttendance.update(updatePayload, { transaction });
         attendance = existingAttendance;
       } else {
-        // Create new attendance
+        // Create new attendance - use provided values or defaults
         isNew = true;
         const createPayload = {
           employeeId,
           date,
-          presence: presence || 'present',
-          workStatus: workStatus || 'working',
-          salary: salary || 0,
+          presence: presence !== undefined ? presence : 'present',
+          workStatus: workStatus !== undefined ? workStatus : 'working',
+          salary: salary !== undefined ? salary : 0,
           siteId: siteId || null,
           vehicleId: vehicleId || null,
           createdBy: username,
@@ -284,6 +284,131 @@ export class EmployeeAttendanceController extends BaseController {
         message: isNew ? "Attendance created successfully" : "Attendance updated successfully",
         data: attendance,
         isNew
+      });
+    } catch (error) {
+      await transaction.rollback();
+      next(error);
+    }
+  };
+
+  // Batch upsert attendance - processes multiple records in one transaction
+  upsertBatchAttendance = async (req, res, next) => {
+    const transaction = await EmployeeAttendance.sequelize.transaction();
+    try {
+      const { records } = req.body; // Array of attendance records
+      const username = (req.user && (req.user.username || req.user.name)) || "system";
+
+      if (!Array.isArray(records) || records.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Records array is required and must not be empty" 
+        });
+      }
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      const results = [];
+      const errors = [];
+
+      // Process all records in batch
+      for (const record of records) {
+        try {
+          const { employeeId, date, presence, workStatus, salary, siteId, vehicleId } = record;
+
+          if (!employeeId || !date) {
+            errors.push({ employeeId, error: "employeeId and date are required" });
+            continue;
+          }
+
+          // Check if attendance already exists for this employee on this date
+          const existingAttendance = await EmployeeAttendance.findOne({
+            where: { employeeId, date },
+            transaction
+          });
+
+          if (existingAttendance) {
+            // Update existing attendance - use provided values or defaults, fallback to existing
+            const updatePayload = {
+              presence: presence !== undefined ? presence : (existingAttendance.presence || 'present'),
+              workStatus: workStatus !== undefined ? workStatus : (existingAttendance.workStatus || 'working'),
+              salary: salary !== undefined ? salary : (existingAttendance.salary || 0),
+              siteId: siteId !== undefined ? siteId : existingAttendance.siteId,
+              vehicleId: vehicleId !== undefined ? vehicleId : existingAttendance.vehicleId,
+              updatedBy: username,
+            };
+
+            // Handle salary deduction if salary changed
+            const salaryDiff = Number(updatePayload.salary || 0) - Number(existingAttendance.salary || 0);
+            if (salaryDiff > 0) {
+              const employee = await EmployeeList.findByPk(employeeId, { transaction });
+              if (employee) {
+                const currentAdvance = Number(employee.advancedAmount) || 0;
+                const newAdvanceAmount = Math.max(0, currentAdvance - salaryDiff);
+                if (currentAdvance > 0) {
+                  await employee.update({
+                    advancedAmount: newAdvanceAmount,
+                    updatedBy: username
+                  }, { transaction });
+                }
+              }
+            }
+
+            await existingAttendance.update(updatePayload, { transaction });
+            results.push({ employeeId, action: 'updated', data: existingAttendance });
+            updatedCount++;
+          } else {
+            // Create new attendance - use provided values or defaults
+            const createPayload = {
+              employeeId,
+              date,
+              presence: presence !== undefined ? presence : 'present',
+              workStatus: workStatus !== undefined ? workStatus : 'working',
+              salary: salary !== undefined ? salary : 0,
+              siteId: siteId || null,
+              vehicleId: vehicleId || null,
+              createdBy: username,
+            };
+
+            const attendance = await EmployeeAttendance.create(createPayload, { transaction });
+
+            // Deduct salary from advance for new records
+            if (createPayload.salary > 0) {
+              const employee = await EmployeeList.findByPk(employeeId, { transaction });
+              if (employee) {
+                const currentAdvance = Number(employee.advancedAmount) || 0;
+                const newAdvanceAmount = Math.max(0, currentAdvance - createPayload.salary);
+                if (currentAdvance > 0) {
+                  await employee.update({
+                    advancedAmount: newAdvanceAmount,
+                    updatedBy: username
+                  }, { transaction });
+                }
+              }
+            }
+
+            results.push({ employeeId, action: 'created', data: attendance });
+            createdCount++;
+          }
+        } catch (recordError) {
+          errors.push({ 
+            employeeId: record.employeeId || 'unknown', 
+            error: recordError.message 
+          });
+        }
+      }
+
+      await transaction.commit();
+
+      return res.status(200).json({
+        success: true,
+        message: `Batch attendance processed: ${createdCount} created, ${updatedCount} updated`,
+        data: {
+          created: createdCount,
+          updated: updatedCount,
+          total: records.length,
+          errors: errors.length > 0 ? errors : undefined,
+          results
+        }
       });
     } catch (error) {
       await transaction.rollback();
