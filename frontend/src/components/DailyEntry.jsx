@@ -39,6 +39,7 @@ const DailyEntry = () => {
   const [form] = Form.useForm();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -331,6 +332,12 @@ const DailyEntry = () => {
 
   // Handle form submit
   const handleSubmit = async () => {
+    // Prevent duplicate submissions
+    if (submitting) {
+      return;
+    }
+    
+    setSubmitting(true);
     try {
       const dateStr = selectedDate.format("YYYY-MM-DD");
       
@@ -339,10 +346,12 @@ const DailyEntry = () => {
         const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
         if (shift1Operators.length === 0) {
           message.error("Shift 1 must have at least one operator");
+          setSubmitting(false);
           return;
         }
         if (!shift1Data.siteId || !shift1Data.vehicleId) {
           message.error("Shift 1 must have site and machine selected");
+          setSubmitting(false);
           return;
         }
       }
@@ -352,17 +361,28 @@ const DailyEntry = () => {
         const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
         if (shift2Operators.length === 0) {
           message.error("Shift 2 must have at least one operator");
+          setSubmitting(false);
           return;
         }
         if (!shift2Data.siteId || !shift2Data.vehicleId) {
           message.error("Shift 2 must have site and machine selected");
+          setSubmitting(false);
           return;
         }
       }
 
+      // Generate ref numbers sequentially upfront to ensure unique sequential numbers
+      let refNo1 = null;
+      let refNo2 = null;
+      if (shift1Enabled) {
+        refNo1 = await generateRefNo();
+      }
+      if (shift2Enabled) {
+        refNo2 = await generateRefNo();
+      }
+
       // Save Shift 1
       if (shift1Enabled) {
-        const refNo1 = await generateRefNo();
         const payload1 = {
           refNo: refNo1,
           date: dateStr,
@@ -395,7 +415,6 @@ const DailyEntry = () => {
 
       // Save Shift 2
       if (shift2Enabled) {
-        const refNo2 = await generateRefNo();
         const payload2 = {
           refNo: refNo2,
           date: dateStr,
@@ -435,6 +454,8 @@ const DailyEntry = () => {
       
     } catch (err) {
       message.error(`Failed to save daily entries: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -976,8 +997,8 @@ const DailyEntry = () => {
           <Divider />
 
           <div className="flex justify-end space-x-2">
-            <Button onClick={handleCancel}>Cancel</Button>
-            <Button type="primary" onClick={handleSubmit}>
+            <Button onClick={handleCancel} disabled={submitting}>Cancel</Button>
+            <Button type="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
               Save Daily Entries
             </Button>
           </div>
