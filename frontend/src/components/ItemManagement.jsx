@@ -13,13 +13,14 @@ import {
   Switch,
   Typography,
   message,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -286,26 +287,16 @@ const ItemManagement = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Title level={2} className="mb-2">Item Management</Title>
-          <Text type="secondary">Manage items and their specifications</Text>
-        </div>
+      <div className="flex justify-end items-center mb-2">
         <Space>
-          <Button
-            onClick={() => fetchItems(pagination.current, pagination.pageSize)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
           <Button
             icon={<FilePdfOutlined />}
             onClick={exportToPDF}
             type="primary"
             danger
+            size="small"
           >
             Export PDF
           </Button>
@@ -318,6 +309,7 @@ const ItemManagement = () => {
               setEditingId(null);
               form.resetFields();
             }}
+            size="small"
           >
             Add Item
           </Button>
@@ -327,7 +319,7 @@ const ItemManagement = () => {
 
       {/* Form */}
       {showForm && (
-        <Card title={editingId ? "Edit Item" : "Add New Item"}>
+        <Card title={editingId ? "Edit Item" : "Add New Item"} className="mb-1" bodyStyle={{ padding: '8px' }}>
           <Form layout="vertical" form={form} onFinish={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
@@ -434,21 +426,29 @@ const ItemManagement = () => {
         </Card>
       )}
 
-      {/* Search */}
-      <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <Input.Search
-          placeholder="Search by item name or part number"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 300 }}
-        />
-        <Button
-          onClick={() => setSearchTerm('')}
-          disabled={!searchTerm}
-        >
-          Clear Filters
-        </Button>
-      </div>
+      {/* Filters */}
+      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
+        <Row gutter={8} align="middle">
+          <Col xs={24} sm={12} md={8}>
+            <Input.Search
+              placeholder="Search by item name or part number"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+            />
+          </Col>
+          <Col xs={24} sm={12} md={3}>
+            <Button
+              onClick={() => setSearchTerm('')}
+              disabled={!searchTerm}
+              size="small"
+              className="w-full"
+            >
+              Clear
+            </Button>
+          </Col>
+        </Row>
+      </Card>
 
       {/* Table */}
       <Table

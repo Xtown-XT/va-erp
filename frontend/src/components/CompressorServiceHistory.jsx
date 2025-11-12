@@ -141,23 +141,15 @@ const CompressorServiceHistory = () => {
   const remainingRPM = nextServiceRPM ? Math.max(0, nextServiceRPM - currentRPM) : 0;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-4">
           <Button
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate(-1)}
             type="text"
           />
-          <div>
-            <Title level={2} className="mb-0">
-              Service History - {compressor?.compressorName}
-            </Title>
-            <Text type="secondary">
-              {compressor?.brand?.brandName}
-            </Text>
-          </div>
         </div>
         <Button
           icon={<FilePdfOutlined />}
@@ -170,7 +162,7 @@ const CompressorServiceHistory = () => {
       </div>
 
       {/* Statistics */}
-      <Row gutter={[16, 16]} className="mb-6">
+      <Row gutter={[8, 8]} className="mb-2">
         <Col xs={24} sm={8}>
           <Card>
             <Statistic

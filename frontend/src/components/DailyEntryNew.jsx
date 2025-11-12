@@ -932,13 +932,6 @@ const DailyEntry = () => {
           <Text type="secondary">Track daily operations for both shifts</Text>
         </div>
         <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => fetchEntries(pagination.current, pagination.pageSize)}
-            loading={loading}
-          >
-            Refresh
-          </Button>
           {canCreate() && (
             <Button
               type="primary"

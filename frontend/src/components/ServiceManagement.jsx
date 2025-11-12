@@ -32,7 +32,6 @@ import {
   HistoryOutlined,
   SettingOutlined,
   InfoCircleOutlined,
-  ReloadOutlined
 } from "@ant-design/icons";
 import api from "../service/api";
 import { truncateToFixed } from "../utils/textUtils";
@@ -674,71 +673,50 @@ const ServiceManagement = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Title level={2} className="mb-2">Service Management</Title>
-          <Text type="secondary">Track and manage vehicle and compressor service schedules</Text>
-        </div>
-        <Button onClick={fetchData} loading={loading} icon={<ReloadOutlined />}>
-          Refresh
-        </Button>
+    <div className="space-y-1">
+      {/* Summary Cards - Compact Single Row */}
+      <div style={{ display: 'flex', gap: '4px', flexWrap: 'nowrap', overflow: 'auto', marginBottom: '4px' }}>
+        <Card bodyStyle={{ padding: '6px 10px', width: 'max-content', minWidth: 'fit-content' }} style={{ flex: '0 0 auto' }}>
+          <Statistic
+            title={<span style={{ fontSize: '11px' }}>Total Machines</span>}
+            value={summary.totalVehicles}
+            prefix={<FaTruck style={{ fontSize: '14px' }} />}
+            valueStyle={{ color: '#1890ff', fontSize: '18px', lineHeight: '1.2' }}
+          />
+        </Card>
+        <Card bodyStyle={{ padding: '6px 10px', width: 'max-content', minWidth: 'fit-content' }} style={{ flex: '0 0 auto' }}>
+          <Statistic
+            title={<span style={{ fontSize: '11px' }}>Total Compressors</span>}
+            value={summary.totalCompressors}
+            prefix={<FaCompressArrowsAlt style={{ fontSize: '14px' }} />}
+            valueStyle={{ color: '#52c41a', fontSize: '18px', lineHeight: '1.2' }}
+          />
+        </Card>
+        <Card bodyStyle={{ padding: '6px 10px', width: 'max-content', minWidth: 'fit-content' }} style={{ flex: '0 0 auto' }}>
+          <Statistic
+            title={<span style={{ fontSize: '11px' }}>Total Items</span>}
+            value={summary.totalItems}
+            prefix={<ToolOutlined style={{ fontSize: '14px' }} />}
+            valueStyle={{ color: '#722ed1', fontSize: '18px', lineHeight: '1.2' }}
+          />
+        </Card>
+        <Card bodyStyle={{ padding: '6px 10px', width: 'max-content', minWidth: 'fit-content' }} style={{ flex: '0 0 auto' }}>
+          <Statistic
+            title={<span style={{ fontSize: '11px' }}>Overdue Services</span>}
+            value={summary.overdueServices}
+            prefix={<ExclamationCircleOutlined style={{ fontSize: '14px' }} />}
+            valueStyle={{ color: '#ff4d4f', fontSize: '18px', lineHeight: '1.2' }}
+          />
+        </Card>
+        <Card bodyStyle={{ padding: '6px 10px', width: 'max-content', minWidth: 'fit-content' }} style={{ flex: '0 0 auto' }}>
+          <Statistic
+            title={<span style={{ fontSize: '11px' }}>Due Soon</span>}
+            value={summary.dueSoonServices}
+            prefix={<ClockCircleOutlined style={{ fontSize: '14px' }} />}
+            valueStyle={{ color: '#faad14', fontSize: '18px', lineHeight: '1.2' }}
+          />
+        </Card>
       </div>
-
-      {/* Summary Cards */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Total Machines"
-              value={summary.totalVehicles}
-              prefix={<FaTruck />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Total Compressors"
-              value={summary.totalCompressors}
-              prefix={<FaCompressArrowsAlt />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Total Items"
-              value={summary.totalItems}
-              prefix={<ToolOutlined />}
-              valueStyle={{ color: '#722ed1' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Overdue Services"
-              value={summary.overdueServices}
-              prefix={<ExclamationCircleOutlined />}
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card>
-            <Statistic
-              title="Due Soon"
-              value={summary.dueSoonServices}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: '#faad14' }}
-            />
-          </Card>
-        </Col>
-      </Row>
 
       {/* Service Alerts */}
       {/* {serviceAlerts.length > 0 && (
@@ -765,15 +743,15 @@ const ServiceManagement = () => {
       )} */}
 
       {/* Main Content Tabs */}
-      <Tabs 
-        activeKey={activeTab} 
+      <Tabs
+        activeKey={activeTab}
         onChange={setActiveTab}
         items={[
           {
             key: "vehicles",
             label: "Machine Services",
             children: (
-              <Card>
+              <Card bodyStyle={{ padding: '8px' }}>
                 <Table
                   columns={vehicleColumns}
                   dataSource={serviceAlerts.filter(alert => alert.type === 'vehicle').map(alert => ({
@@ -809,7 +787,7 @@ const ServiceManagement = () => {
             key: "compressors",
             label: "Compressor Services",
             children: (
-              <Card>
+              <Card bodyStyle={{ padding: '8px' }}>
                 <Table
                   columns={compressorColumns}
                   dataSource={serviceAlerts.filter(alert => alert.type === 'compressor').map(alert => ({
@@ -843,7 +821,7 @@ const ServiceManagement = () => {
             key: "items",
             label: "Item Services",
             children: (
-              <Card>
+              <Card bodyStyle={{ padding: '8px' }}>
                 <Table
                   columns={[
                     {

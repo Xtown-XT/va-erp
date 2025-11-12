@@ -21,7 +21,6 @@ import {
   DeleteOutlined,
   PlusOutlined,
   ToolOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate, getUserRole } from "../service/auth";
@@ -145,7 +144,8 @@ const ItemInstanceManagement = () => {
       fetchData(pagination.current, pagination.pageSize, searchTerm, statusFilter);
     } catch (err) {
       console.error("Error deleting machine item", err);
-      message.error("Error deleting machine item");
+      const errorMessage = err.response?.data?.message || err.message || "Error deleting machine item";
+      message.error(errorMessage);
     }
   };
 
@@ -156,6 +156,19 @@ const ItemInstanceManagement = () => {
     form.resetFields();
   };
 
+  // Handle remove fit
+  const handleRemoveFit = async (id) => {
+    try {
+      await api.post(`/api/itemInstances/${id}/remove`, {
+        removedDate: new Date().toISOString().split('T')[0]
+      });
+      message.success("Item unfitted successfully");
+      fetchData(pagination.current, pagination.pageSize);
+    } catch (err) {
+      console.error("Error unfitting item", err);
+      message.error(err.response?.data?.message || "Error unfitting item");
+    }
+  };
 
   // Table columns
   const columns = [
@@ -191,16 +204,43 @@ const ItemInstanceManagement = () => {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      render: (status) => {
-        const color = status === "fitted" ? "green" : "orange";
-        return <Tag color={color}>{status?.toUpperCase()}</Tag>;
+      render: (status, record) => {
+        // Check if actually fitted by checking fittedToVehicleId
+        const isFitted = status === "fitted" && record.fittedToVehicleId;
+        const color = isFitted ? "green" : status === "in_stock" ? "blue" : "orange";
+        const displayStatus = isFitted ? "FITTED" : status?.toUpperCase() || "IN_STOCK";
+        return <Tag color={color}>{displayStatus}</Tag>;
       },
     },
     {
       title: "Fitted To",
-      dataIndex: ["fittedToVehicle", "vehicleNumber"],
+      dataIndex: ["fittedToMachine", "vehicleNumber"],
       key: "vehicleNumber",
       render: (vehicleNumber) => vehicleNumber || "-",
+    },
+    {
+      title: "Remove Fit",
+      key: "removeFit",
+      render: (_, record) => {
+        const isFitted = record.status === "fitted" && record.fittedToVehicleId;
+        return isFitted ? (
+          <Popconfirm
+            title="Remove this item from the machine?"
+            description="The item will be marked as in stock."
+            onConfirm={() => handleRemoveFit(record.id)}
+          >
+            <Button 
+              size="small" 
+              danger
+              icon={<DeleteOutlined />}
+            >
+              Remove
+            </Button>
+          </Popconfirm>
+        ) : (
+          <span>-</span>
+        );
+      },
     },
     {
       title: "Actions",
@@ -237,60 +277,58 @@ const ItemInstanceManagement = () => {
 
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <Title level={2}>
-          <ToolOutlined className="mr-2" />
-          Machine Items Management
-        </Title>
-        <Space>
-          <Button
-            onClick={() => fetchData(pagination.current, pagination.pageSize, searchTerm, statusFilter)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
-          {canCreate() && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-              disabled={loading}
-            >
-              Add Machine Item
-            </Button>
-          )}
-          {!canCreate() && (
-            <div style={{ color: 'red' }}>
-              No edit permission (Role: {getUserRole()})
-            </div>
-          )}
-        </Space>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <Row gutter={16}>
-          <Col xs={24} sm={8}>
+    <div className="space-y-1">
+      {/* Filters and Actions - Single Row */}
+      <Card className="mb-1" bodyStyle={{ padding: '4px' }}>
+        <Row gutter={4} align="middle">
+          <Col xs={24} sm={8} md={7}>
             <Input
-              placeholder="Search by instance number, item name, or part number"
+              placeholder="Search by instance, name, or part number"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
             />
           </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={12} sm={4} md={3}>
             <Select
-              placeholder="Filter by status"
+              placeholder="Status"
               value={statusFilter}
               onChange={setStatusFilter}
-              style={{ width: "100%" }}
+              className="w-full"
+              size="small"
             >
-              <Select.Option value="all">All Status</Select.Option>
+              <Select.Option value="all">All</Select.Option>
               <Select.Option value="in_stock">In Stock</Select.Option>
               <Select.Option value="fitted">Fitted</Select.Option>
             </Select>
           </Col>
+          <Col xs={12} sm={4} md={2}>
+            <Button
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+              }}
+              disabled={!searchTerm && statusFilter === 'all'}
+              size="small"
+              className="w-full"
+            >
+              Clear
+            </Button>
+          </Col>
+          {canCreate() && (
+            <Col xs={24} sm={8} md={4}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleCreate}
+                disabled={loading}
+                size="small"
+                className="w-full"
+              >
+                Add Machine Item
+              </Button>
+            </Col>
+          )}
         </Row>
       </Card>
 
@@ -389,12 +427,6 @@ const ItemInstanceManagement = () => {
             </Col>
           </Row>
 
-          <Form.Item
-            name="notes"
-            label="Notes"
-          >
-            <Input.TextArea rows={3} placeholder="Additional notes" />
-          </Form.Item>
         </Form>
       </Modal>
 

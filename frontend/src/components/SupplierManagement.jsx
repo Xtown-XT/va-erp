@@ -9,13 +9,14 @@ import {
   Select,
   Card,
   Popconfirm,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -256,45 +257,79 @@ const SupplierManagement = () => {
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Supplier Management</h1>
-        <Space>
-          <Button
-            onClick={() => fetchSuppliers(pagination.current, pagination.pageSize)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={exportToPDF}
-            type="primary"
-            danger
-          >
-            Export PDF
-          </Button>
-          {canCreate() && (
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setShowForm(!showForm);
-                setEditingId(null);
-                form.resetFields();
-              }}
-              type="primary"
+    <div className="bg-white rounded-lg shadow p-2">
+      {/* Filters and Actions - Single Row */}
+      <Card className="mb-1" bodyStyle={{ padding: '4px' }}>
+        <Row gutter={4} align="middle">
+          <Col xs={24} sm={6} md={5}>
+            <Input.Search
+              placeholder="Search by supplier name"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+            />
+          </Col>
+          <Col xs={12} sm={4} md={3}>
+            <Select
+              placeholder="Status"
+              allowClear
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              className="w-full"
+              size="small"
             >
-              {showForm ? "Cancel" : "Add Supplier"}
+              <Select.Option value="active">Active</Select.Option>
+              <Select.Option value="inactive">Inactive</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={12} sm={3} md={2}>
+            <Button
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter(null);
+              }}
+              disabled={!searchTerm && !statusFilter}
+              size="small"
+              className="w-full"
+            >
+              Clear
             </Button>
+          </Col>
+          <Col xs={12} sm={5} md={3}>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={exportToPDF}
+              type="primary"
+              danger
+              size="small"
+              className="w-full"
+            >
+              PDF
+            </Button>
+          </Col>
+          {canCreate() && (
+            <Col xs={12} sm={6} md={3}>
+              <Button
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setShowForm(!showForm);
+                  setEditingId(null);
+                  form.resetFields();
+                }}
+                type="primary"
+                size="small"
+                className="w-full"
+              >
+                {showForm ? "Cancel" : "Add"}
+              </Button>
+            </Col>
           )}
-        </Space>
-      </div>
+        </Row>
+      </Card>
 
       {/* Add/Edit Form */}
       {showForm && (
-        <Card className="mb-6">
+        <Card className="mb-1" bodyStyle={{ padding: '8px' }}>
           <Form layout="vertical" form={form} onFinish={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
@@ -420,38 +455,6 @@ const SupplierManagement = () => {
         </Card>
       )}
 
-      {/* Search */}
-      <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <Input.Search
-          placeholder="Search by supplier name"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 300 }}
-        />
-        <Select
-          placeholder="Filter by Status"
-          allowClear
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          style={{ width: 180 }}
-          showSearch
-          optionFilterProp="children"
-        >
-          <Select.Option value="active">Active</Select.Option>
-          <Select.Option value="inactive">Inactive</Select.Option>
-        </Select>
-
-        <Button
-          onClick={() => {
-            setSearchTerm('');
-            setStatusFilter(null);
-          }
-          }
-          disabled={!searchTerm && !statusFilter}
-        >
-          Clear Filters
-        </Button>
-      </div>
 
       {/* Table */}
       <Table

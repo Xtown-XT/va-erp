@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState, useEffect } from "react";
 import {
   Card,
@@ -12,7 +13,6 @@ import {
   Space,
   Divider,
   message,
-  Checkbox,
 } from "antd";
 import {
   FilePdfOutlined,
@@ -36,9 +36,6 @@ const ProductionReport = () => {
   const [selectedSiteName, setSelectedSiteName] = useState('');
   const [selectedMachine, setSelectedMachine] = useState('');
   const [selectedMachineName, setSelectedMachineName] = useState('');
-  const [selectedShiftOne, setSelectedShiftOne] = useState(false);
-  const [selectedShiftTwo, setSelectedShiftTwo] = useState(false);
-  const [selectedRole, setSelectedRole] = useState('');
 
   // Fetch production data
   const fetchProductionData = async () => {
@@ -125,36 +122,6 @@ const ProductionReport = () => {
         entries = entries.map(entry => ({ ...entry, services: [] }));
       }
 
-      // Apply frontend filtering based on shift and role
-      if (selectedShiftOne || selectedShiftTwo || selectedRole) {
-        entries = entries.filter(entry => {
-          const employees = entry.employees || [];
-          
-          // Check shift filters
-          let matchesShift = true;
-          if (selectedShiftOne || selectedShiftTwo) {
-            if (selectedShiftOne && selectedShiftTwo) {
-              // Both shifts selected: entry must have employees from at least one of the shifts
-              matchesShift = employees.some(emp => emp.shift === 1 || emp.shift === 2);
-            } else if (selectedShiftOne) {
-              // Only Shift One selected
-              matchesShift = employees.some(emp => emp.shift === 1);
-            } else if (selectedShiftTwo) {
-              // Only Shift Two selected
-              matchesShift = employees.some(emp => emp.shift === 2);
-            }
-          }
-          
-          // Check role filter
-          let matchesRole = true;
-          if (selectedRole) {
-            matchesRole = employees.some(emp => emp.role === selectedRole);
-          }
-          
-          // Both filters must match (AND logic)
-          return matchesShift && matchesRole;
-        });
-      }
 
       // Calculate production metrics
       const calculations = calculateProductionMetrics(entries);
@@ -318,6 +285,7 @@ const ProductionReport = () => {
 
       return {
         ...entry,
+        site: entry.site, // Explicitly preserve site object
         isCrawler,
         isCamper,
         crawlerHSD: parseFloat(crawlerHSD.toFixed(2)),
@@ -372,6 +340,30 @@ const ProductionReport = () => {
       dataIndex: "date",
       key: "date",
       render: (date) => dayjs(date).format("DD/MM/YYYY"),
+    },
+    {
+      title: "Shift",
+      dataIndex: "shift",
+      key: "shift",
+      width: 80,
+      render: (shift) => shift || 1,
+    },
+    {
+      title: "Site",
+      dataIndex: ["site", "siteName"],
+      key: "site",
+      width: 150,
+      render: (value, record) => {
+        // Try site object first, then fallback to sites array lookup
+        if (record.site?.siteName) {
+          return record.site.siteName;
+        }
+        if (record.siteId) {
+          const site = sites.find(s => s.id === record.siteId);
+          return site?.siteName || '-';
+        }
+        return '-';
+      },
     },
     {
       title: "Meter",
@@ -468,9 +460,10 @@ const ProductionReport = () => {
       const res = await api.get(url);
       let entries = res.data.data || [];
       
-      // Fetch machines and compressors for PDF (if not already available)
+      // Fetch machines, compressors, and sites for PDF (if not already available)
       let pdfMachines = machines;
       let pdfCompressors = compressors;
+      let pdfSites = sites;
       
       if (machines.length === 0) {
         try {
@@ -487,6 +480,15 @@ const ProductionReport = () => {
           pdfCompressors = compressorsRes.data.data || [];
         } catch (err) {
           console.warn('Could not fetch compressors for PDF:', err);
+        }
+      }
+      
+      if (sites.length === 0) {
+        try {
+          const sitesRes = await api.get('/api/sites?limit=1000');
+          pdfSites = sitesRes.data.data || [];
+        } catch (err) {
+          console.warn('Could not fetch sites for PDF:', err);
         }
       }
 
@@ -542,356 +544,230 @@ const ProductionReport = () => {
           
           return {
             ...entry,
+            site: entry.site, // Preserve site object
             services: matchedServices
           };
         });
       } catch (servicesErr) {
         console.warn("Could not fetch services for PDF:", servicesErr);
-        entries = entries.map(entry => ({ ...entry, services: [] }));
-      }
-
-      // Apply frontend filtering based on shift and role (same as in fetchProductionData)
-      if (selectedShiftOne || selectedShiftTwo || selectedRole) {
-        entries = entries.filter(entry => {
-          const employees = entry.employees || [];
-          
-          // Check shift filters
-          let matchesShift = true;
-          if (selectedShiftOne || selectedShiftTwo) {
-            if (selectedShiftOne && selectedShiftTwo) {
-              // Both shifts selected: entry must have employees from at least one of the shifts
-              matchesShift = employees.some(emp => emp.shift === 1 || emp.shift === 2);
-            } else if (selectedShiftOne) {
-              // Only Shift One selected
-              matchesShift = employees.some(emp => emp.shift === 1);
-            } else if (selectedShiftTwo) {
-              // Only Shift Two selected
-              matchesShift = employees.some(emp => emp.shift === 2);
-            }
-          }
-          
-          // Check role filter
-          let matchesRole = true;
-          if (selectedRole) {
-            matchesRole = employees.some(emp => emp.role === selectedRole);
-          }
-          
-          // Both filters must match (AND logic)
-          return matchesShift && matchesRole;
-        });
+        entries = entries.map(entry => ({ ...entry, site: entry.site, services: [] }));
       }
 
     const { dailyData, totals } = calculateProductionMetrics(entries);
 
-    // Calculate Employee Summary for PDF (only if filters are selected)
-    let employeeSummaryHTML = '';
-    if (selectedShiftOne || selectedShiftTwo || selectedRole) {
-      // Collect all unique employees from all filtered entries
-      const allEmployees = new Map();
+    const printWindow = window.open("", "_blank");
+    const reportTitle = selectedSiteName ? 'Daily Production Report - ' + selectedSiteName : 'Daily Production Report';
+    
+    // Build HTML string to avoid TypeScript template literal parsing issues
+    const periodStart = dateRange[0].format("DD/MM/YYYY");
+    const periodEnd = dateRange[1].format("DD/MM/YYYY");
+    const siteName = selectedSiteName || 'All Sites';
+    const generatedDate = new Date().toLocaleDateString();
+    
+    let htmlContent = '<html><head><title>' + reportTitle + '</title>' +
+      '<style>' +
+      'body { font-family: Arial, sans-serif; margin: 20px; }' +
+      '.header { text-align: center; margin-bottom: 20px; position: relative; }' +
+      '.header h1 { margin: 0; font-size: 24px; }' +
+      '.header p { margin: 5px 0; }' +
+      '.generated-on { position: absolute; top: 0; right: 0; font-size: 12px; }' +
+      'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
+      'th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; }' +
+      'th { background-color: #f2f2f2; }' +
+      '.total-row { background-color: #f9f9f9; font-weight: bold; }' +
+      '</style></head><body>' +
+      '<div class="header">' +
+      '<h1>Daily Production Report</h1>' +
+      '<p>Period: ' + periodStart + ' to ' + periodEnd + '</p>' +
+      '<p>Site: ' + siteName + '</p>' +
+      '<p class="generated-on">Generated on: ' + generatedDate + '</p>' +
+      '</div>' +
+      '<table><thead><tr>' +
+      '<th>Date</th><th>Shift</th><th>Site</th><th>Meter</th>' +
+      '<th>Crawler HSD</th><th>Compressor HSD</th><th>Camper HSD</th><th>Total HSD</th>' +
+      '<th>Crawler RPM</th><th>Compressor RPM</th><th>HSD/MTR</th><th>MTR/RPM</th>' +
+      '<th>Crawler HSD/Crawler RPM</th><th>Comp HSD/Comp RPM</th>' +
+      '<th>Number of Holes</th><th>Depth Avg</th>' +
+      '</tr></thead><tbody>';
+    
+    // Build table rows
+    dailyData.forEach((entry) => {
+      const services = entry.services || [];
+      const servicesText = services.length > 0 
+        ? services.map((service) => {
+            const serviceTypeLabel = service.serviceType === 'vehicle' ? 'Vehicle' : 
+                                   service.serviceType === 'compressor' ? 'Compressor' : 'Item';
+            const serviceName = service.serviceName || 'Unnamed Service';
+            return serviceTypeLabel + ': ' + serviceName;
+          }).join(', ')
+        : 'None';
+      // Get site name - try site object first, then fallback to sites array lookup
+      let siteName = entry.site?.siteName;
+      if (!siteName && entry.siteId) {
+        const site = pdfSites.find(s => s.id === entry.siteId);
+        siteName = site?.siteName;
+      }
+      siteName = siteName || '-';
+      const shiftText = String(entry.shift || 1);
+      const dateStr = dayjs(entry.date).format("DD/MM/YYYY");
+      const meter = truncateToFixed(entry.meter || 0, 2);
+      const crawlerHSD = truncateToFixed(entry.crawlerHSD || 0, 2);
+      const compressorHSD = truncateToFixed(entry.compressorHSD || 0, 2);
+      const camperHSD = truncateToFixed(entry.camperHSD || 0, 2);
+      const totalHSD = truncateToFixed(entry.totalHSD || 0, 2);
+      const crawlerRPM = truncateToFixed(entry.crawlerRPM || 0, 2);
+      const compressorRPM = truncateToFixed(entry.compressorRPM || 0, 2);
+      const hsdMtr = truncateToFixed(entry.hsdMtr || 0, 2);
+      const mtrRPM = truncateToFixed(entry.mtrRPM || 0, 2);
+      const crawlerHsdPerRpm = entry.crawlerHsdPerRpm > 0 ? truncateToFixed(entry.crawlerHsdPerRpm, 2) : '-';
+      const compHsdPerRpm = entry.compHsdPerRpm > 0 ? truncateToFixed(entry.compHsdPerRpm, 2) : '-';
+      const noOfHoles = entry.noOfHoles || 0;
+      const depthAvg = truncateToFixed(entry.depthAvg || 0, 2);
       
-      entries.forEach(entry => {
-        const employees = entry.employees || [];
-        employees.forEach(emp => {
-          const key = `${emp.id || emp.employeeId || ''}_${emp.shift}_${emp.role}`;
-          if (!allEmployees.has(key)) {
-            allEmployees.set(key, {
-              id: emp.id || emp.employeeId,
-              name: emp.name || 'Unknown',
-              empId: emp.empId || '',
-              role: emp.role || 'operator',
-              shift: emp.shift || 1
+      htmlContent += '<tr>' +
+        '<td>' + dateStr + '</td>' +
+        '<td>' + shiftText + '</td>' +
+        '<td>' + siteName + '</td>' +
+        '<td>' + meter + '</td>' +
+        '<td>' + crawlerHSD + '</td>' +
+        '<td>' + compressorHSD + '</td>' +
+        '<td>' + camperHSD + '</td>' +
+        '<td>' + totalHSD + '</td>' +
+        '<td>' + crawlerRPM + '</td>' +
+        '<td>' + compressorRPM + '</td>' +
+        '<td>' + hsdMtr + '</td>' +
+        '<td>' + mtrRPM + '</td>' +
+        '<td>' + crawlerHsdPerRpm + '</td>' +
+        '<td>' + compHsdPerRpm + '</td>' +
+        '<td>' + noOfHoles + '</td>' +
+        '<td>' + depthAvg + '</td>' +
+        '</tr>';
+    });
+    
+    // Build totals row
+    htmlContent += '</tbody><tfoot><tr class="total-row">' +
+      '<td>Total</td><td></td><td></td>' +
+      '<td>' + truncateToFixed(totals.totalMeter || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalCrawlerHSD || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalCompressorHSD || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalCamperHSD || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalTotalHSD || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalCrawlerRPM || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalCompressorRPM || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalHsdMtr || 0, 2) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalMtrRPM || 0, 2) + '</td>' +
+      '<td>' + (totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-') + '</td>' +
+      '<td>' + (totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-') + '</td>' +
+      '<td>' + (totals.totalHoles || 0) + '</td>' +
+      '<td>' + truncateToFixed(totals.totalDepthAvg || 0, 2) + '</td>' +
+      '</tr></tfoot></table>';
+    
+    // Build maintenance section
+    const entriesWithServices = dailyData.filter(entry => entry.services && entry.services.length > 0);
+    if (entriesWithServices.length > 0) {
+      // Group entries by date for better organization
+      const entriesByDate = {};
+      entriesWithServices.forEach(entry => {
+        const dateKey = dayjs(entry.date).format("DD/MM/YYYY");
+        if (!entriesByDate[dateKey]) {
+          entriesByDate[dateKey] = [];
+        }
+        entriesByDate[dateKey].push(entry);
+      });
+      
+      htmlContent += '<div style="margin-top: 40px;">' +
+        '<h2 style="text-align: center; margin-bottom: 20px;">Maintenance</h2>';
+      
+      Object.keys(entriesByDate).forEach(dateKey => {
+        const dateEntries = entriesByDate[dateKey];
+        dateEntries.forEach((entry) => {
+          const machine = entry.vehicle || (pdfMachines && pdfMachines.find(m => m.id === entry.vehicleId));
+          const compressor = pdfCompressors && pdfCompressors.find(c => c.id === entry.compressorId);
+          const machineType = machine?.vehicleType || 'Machine';
+          const machineNumber = machine?.vehicleNumber || '';
+          const machineName = machine ? (machineType + ' ' + machineNumber).trim() : '-';
+          const compressorName = compressor?.compressorName || '-';
+          
+          // Separate vehicle and compressor services
+          const vehicleServices = entry.services.filter(s => s.serviceType === 'vehicle');
+          const compressorServices = entry.services.filter(s => s.serviceType === 'compressor');
+          const itemServices = entry.services.filter(s => s.serviceType === 'item');
+          
+          let maintenanceHTML = '';
+          
+          // Vehicle services (HITACHI ENG SERVICE)
+          if (vehicleServices.length > 0) {
+            vehicleServices.forEach(service => {
+              const serviceName = service.serviceName || 'Service';
+              const serviceRPM = truncateToFixed(service.serviceRPM || 0, 2);
+              const nextServiceRPM = service.nextServiceRPM ? truncateToFixed(service.nextServiceRPM, 2) : null;
+              const serviceInterval = nextServiceRPM && serviceRPM ? truncateToFixed(nextServiceRPM - parseFloat(serviceRPM), 2) : null;
+              
+              let serviceText = '<strong>' + machineName + ' ENG SERVICE:</strong> ' + serviceName + ' RPM- ' + serviceRPM;
+              if (serviceInterval && nextServiceRPM) {
+                serviceText += '+' + serviceInterval + ' = ' + nextServiceRPM;
+              } else if (nextServiceRPM) {
+                serviceText += ' (Next: ' + nextServiceRPM + ')';
+              }
+              maintenanceHTML += '<div style="margin: 8px 0; padding-left: 20px;">' + serviceText + '</div>';
             });
+          }
+          
+          // Compressor services (COMPRESSER ENG SERVICE)
+          if (compressorServices.length > 0) {
+            compressorServices.forEach(service => {
+              const serviceName = service.serviceName || 'Service';
+              const serviceRPM = truncateToFixed(service.serviceRPM || 0, 2);
+              const nextServiceRPM = service.nextServiceRPM ? truncateToFixed(service.nextServiceRPM, 2) : null;
+              const serviceInterval = nextServiceRPM && serviceRPM ? truncateToFixed(nextServiceRPM - parseFloat(serviceRPM), 2) : null;
+              
+              let serviceText = '<strong>COMPRESSER ENG SERVICE:</strong> ' + serviceName + ' RPM- ' + serviceRPM;
+              if (serviceInterval && nextServiceRPM) {
+                serviceText += '+' + serviceInterval + ' = ' + nextServiceRPM;
+              } else if (nextServiceRPM) {
+                serviceText += ' (Next: ' + nextServiceRPM + ')';
+              }
+              maintenanceHTML += '<div style="margin: 8px 0; padding-left: 20px;">' + serviceText + '</div>';
+            });
+          }
+          
+          // Item services
+          if (itemServices.length > 0) {
+            itemServices.forEach(service => {
+              const serviceName = service.serviceName || 'Service';
+              const serviceRPM = truncateToFixed(service.serviceRPM || 0, 2);
+              const nextServiceRPM = service.nextServiceRPM ? truncateToFixed(service.nextServiceRPM, 2) : null;
+              const serviceInterval = nextServiceRPM && serviceRPM ? truncateToFixed(nextServiceRPM - parseFloat(serviceRPM), 2) : null;
+              
+              let serviceText = '<strong>ITEM SERVICE:</strong> ' + serviceName + ' RPM- ' + serviceRPM;
+              if (serviceInterval && nextServiceRPM) {
+                serviceText += '+' + serviceInterval + ' = ' + nextServiceRPM;
+              } else if (nextServiceRPM) {
+                serviceText += ' (Next: ' + nextServiceRPM + ')';
+              }
+              maintenanceHTML += '<div style="margin: 8px 0; padding-left: 20px;">' + serviceText + '</div>';
+            });
+          }
+          
+          if (maintenanceHTML) {
+            htmlContent += '<div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; background-color: #f9f9f9;">' +
+              '<div style="margin-bottom: 10px;">' +
+              '<strong>Date:</strong> ' + dateKey + ' | ' +
+              '<strong>Machine:</strong> ' + machineName + ' | ' +
+              '<strong>Compressor:</strong> ' + (compressorName || '-') +
+              '</div>' +
+              maintenanceHTML +
+              '</div>';
           }
         });
       });
       
-      const employeesArray = Array.from(allEmployees.values());
-      
-      // Filter employees based on selected filters
-      let shiftOneEmployees = [];
-      let shiftTwoEmployees = [];
-      let operatorEmployees = [];
-      let helperEmployees = [];
-      
-      // Only show employees from checked shifts
-      if (selectedShiftOne || selectedShiftTwo) {
-        // If ONLY Shift One is checked
-        if (selectedShiftOne && !selectedShiftTwo) {
-          shiftOneEmployees = employeesArray.filter(emp => emp.shift === 1);
-          shiftTwoEmployees = []; // Empty - not selected
-          operatorEmployees = employeesArray.filter(emp => emp.role === 'operator' && emp.shift === 1);
-          helperEmployees = employeesArray.filter(emp => emp.role === 'helper' && emp.shift === 1);
-        }
-        // If ONLY Shift Two is checked
-        else if (selectedShiftTwo && !selectedShiftOne) {
-          shiftOneEmployees = []; // Empty - not selected
-          shiftTwoEmployees = employeesArray.filter(emp => emp.shift === 2);
-          operatorEmployees = employeesArray.filter(emp => emp.role === 'operator' && emp.shift === 2);
-          helperEmployees = employeesArray.filter(emp => emp.role === 'helper' && emp.shift === 2);
-        }
-        // If BOTH shifts are checked
-        else if (selectedShiftOne && selectedShiftTwo) {
-          shiftOneEmployees = employeesArray.filter(emp => emp.shift === 1);
-          shiftTwoEmployees = employeesArray.filter(emp => emp.shift === 2);
-          operatorEmployees = employeesArray.filter(emp => emp.role === 'operator');
-          helperEmployees = employeesArray.filter(emp => emp.role === 'helper');
-        }
-        
-        // Apply role filter if selected (further filter the above results)
-        if (selectedRole) {
-          shiftOneEmployees = shiftOneEmployees.filter(emp => emp.role === selectedRole);
-          shiftTwoEmployees = shiftTwoEmployees.filter(emp => emp.role === selectedRole);
-        }
-      } else {
-        // No shift filters - show all employees
-        shiftOneEmployees = employeesArray.filter(emp => emp.shift === 1);
-        shiftTwoEmployees = employeesArray.filter(emp => emp.shift === 2);
-        operatorEmployees = employeesArray.filter(emp => emp.role === 'operator');
-        helperEmployees = employeesArray.filter(emp => emp.role === 'helper');
-        
-        // Apply role filter if selected
-        if (selectedRole) {
-          shiftOneEmployees = shiftOneEmployees.filter(emp => emp.role === selectedRole);
-          shiftTwoEmployees = shiftTwoEmployees.filter(emp => emp.role === selectedRole);
-          operatorEmployees = operatorEmployees.filter(emp => emp.role === selectedRole);
-          helperEmployees = helperEmployees.filter(emp => emp.role === selectedRole);
-        }
-      }
-          
-          // Format employee names with IDs
-          const formatEmployees = (empList) => {
-            return empList.length > 0 
-              ? empList.map(emp => emp.empId ? `${emp.name} (${emp.empId})` : emp.name).join(', ')
-              : 'None';
-          };
-      
-      employeeSummaryHTML = `
-        <div style="margin: 20px 0; padding: 15px; background-color: #f5f5f5; border-radius: 4px;">
-          <h3 style="margin-top: 0;">Employee Summary</h3>
-          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;">
-            <div>
-              <strong>Shift One:</strong><br/>
-              <span>${formatEmployees(shiftOneEmployees)}</span>
-            </div>
-            <div>
-              <strong>Shift Two:</strong><br/>
-              <span>${formatEmployees(shiftTwoEmployees)}</span>
-            </div>
-            <div>
-              <strong>Operator:</strong><br/>
-              <span>${formatEmployees(operatorEmployees)}</span>
-            </div>
-            <div>
-              <strong>Helper:</strong><br/>
-              <span>${formatEmployees(helperEmployees)}</span>
-            </div>
-          </div>
-        </div>
-      `;
+      htmlContent += '</div>';
     }
-
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Daily Production Report${selectedSiteName ? ` - ${selectedSiteName}` : ''}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .header { text-align: center; margin-bottom: 20px; position: relative; }
-            .header h1 { margin: 0; font-size: 24px; }
-            .header p { margin: 5px 0; }
-            .generated-on { position: absolute; top: 0; right: 0; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; }
-            th { background-color: #f2f2f2; }
-            .total-row { background-color: #f9f9f9; font-weight: bold; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Daily Production Report</h1>
-            <p>Period: ${dateRange[0].format("DD/MM/YYYY")} to ${dateRange[1].format("DD/MM/YYYY")}</p>
-            <p>Site: ${selectedSiteName || 'All Sites'}</p>
-            <p class="generated-on">Generated on: ${new Date().toLocaleDateString()}</p>
-          </div>
-          ${employeeSummaryHTML}
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Meter</th>
-                <th>Crawler HSD</th>
-                <th>Compressor HSD</th>
-                <th>Camper HSD</th>
-                <th>Total HSD</th>
-                <th>Crawler RPM</th>
-                <th>Compressor RPM</th>
-                <th>HSD/MTR</th>
-                <th>MTR/RPM</th>
-                <th>Crawler HSD/Crawler RPM</th>
-                <th>Comp HSD/Comp RPM</th>
-                <th>Number of Holes</th>
-                <th>Depth Avg</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${dailyData.map((entry, entryIndex) => {
-                const services = entry.services || [];
-                const servicesText = services.length > 0 
-                  ? services.map((service, idx) => {
-                      const serviceTypeLabel = service.serviceType === 'vehicle' ? 'Vehicle' : 
-                                             service.serviceType === 'compressor' ? 'Compressor' : 'Item';
-                      const serviceName = service.serviceName || 'Unnamed Service';
-                      return `${serviceTypeLabel}: ${serviceName}`;
-                    }).join(', ')
-                  : 'None';
-                
-                return `
-                <tr>
-                  <td>${dayjs(entry.date).format("DD/MM/YYYY")}</td>
-                  <td>${truncateToFixed(entry.meter || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.crawlerHSD || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.compressorHSD || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.camperHSD || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.totalHSD || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.crawlerRPM || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.compressorRPM || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.hsdMtr || 0, 2)}</td>
-                  <td>${truncateToFixed(entry.mtrRPM || 0, 2)}</td>
-                  <td>${entry.crawlerHsdPerRpm > 0 ? truncateToFixed(entry.crawlerHsdPerRpm, 2) : '-'}</td>
-                  <td>${entry.compHsdPerRpm > 0 ? truncateToFixed(entry.compHsdPerRpm, 2) : '-'}</td>
-                  <td>${entry.noOfHoles || 0}</td>
-                  <td>${truncateToFixed(entry.depthAvg || 0, 2)}</td>
-                </tr>
-              `;
-              }).join('')}
-            </tbody>
-            <tfoot>
-              <tr class="total-row">
-                <td>Total</td>
-                <td>${truncateToFixed(totals.totalMeter || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalCrawlerHSD || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalCompressorHSD || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalCamperHSD || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalTotalHSD || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalCrawlerRPM || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalCompressorRPM || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalHsdMtr || 0, 2)}</td>
-                <td>${truncateToFixed(totals.totalMtrRPM || 0, 2)}</td>
-                <td>${totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-'}</td>
-                <td>${totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-'}</td>
-                <td>${totals.totalHoles || 0}</td>
-                <td>${truncateToFixed(totals.totalDepthAvg || 0, 2)}</td>
-              </tr>
-            </tfoot>
-          </table>
-          
-          ${(() => {
-            const entriesWithServices = dailyData.filter(entry => entry.services && entry.services.length > 0);
-            if (entriesWithServices.length === 0) return '';
-            
-            // Group entries by date for better organization
-            const entriesByDate = {};
-            entriesWithServices.forEach(entry => {
-              const dateKey = dayjs(entry.date).format("DD/MM/YYYY");
-              if (!entriesByDate[dateKey]) {
-                entriesByDate[dateKey] = [];
-              }
-              entriesByDate[dateKey].push(entry);
-            });
-            
-            return `
-            <div style="margin-top: 40px;">
-              <h2 style="text-align: center; margin-bottom: 20px;">Maintenance</h2>
-              ${Object.keys(entriesByDate).map(dateKey => {
-                const dateEntries = entriesByDate[dateKey];
-                return dateEntries.map((entry, entryIdx) => {
-                  const machine = entry.vehicle || (pdfMachines && pdfMachines.find(m => m.id === entry.vehicleId));
-                  const compressor = pdfCompressors && pdfCompressors.find(c => c.id === entry.compressorId);
-                  const machineName = machine ? `${machine.vehicleType || 'Machine'} ${machine.vehicleNumber || ''}`.trim() : '-';
-                  const compressorName = compressor?.compressorName || '-';
-                  
-                  // Separate vehicle and compressor services
-                  const vehicleServices = entry.services.filter(s => s.serviceType === 'vehicle');
-                  const compressorServices = entry.services.filter(s => s.serviceType === 'compressor');
-                  const itemServices = entry.services.filter(s => s.serviceType === 'item');
-                  
-                  let maintenanceHTML = '';
-                  
-                  // Vehicle services (HITACHI ENG SERVICE)
-                  if (vehicleServices.length > 0) {
-                    vehicleServices.forEach(service => {
-                      const serviceName = service.serviceName || 'Service';
-                      const serviceRPM = truncateToFixed(service.serviceRPM || 0, 2);
-                      const nextServiceRPM = service.nextServiceRPM ? truncateToFixed(service.nextServiceRPM, 2) : null;
-                      const serviceInterval = nextServiceRPM && serviceRPM ? truncateToFixed(nextServiceRPM - parseFloat(serviceRPM), 2) : null;
-                      
-                      let serviceText = `<strong>${machineName} ENG SERVICE:</strong> ${serviceName} RPM- ${serviceRPM}`;
-                      if (serviceInterval && nextServiceRPM) {
-                        serviceText += `+${serviceInterval} = ${nextServiceRPM}`;
-                      } else if (nextServiceRPM) {
-                        serviceText += ` (Next: ${nextServiceRPM})`;
-                      }
-                      maintenanceHTML += `<div style="margin: 8px 0; padding-left: 20px;">${serviceText}</div>`;
-                    });
-                  }
-                  
-                  // Compressor services (COMPRESSER ENG SERVICE)
-                  if (compressorServices.length > 0) {
-                    compressorServices.forEach(service => {
-                      const serviceName = service.serviceName || 'Service';
-                      const serviceRPM = truncateToFixed(service.serviceRPM || 0, 2);
-                      const nextServiceRPM = service.nextServiceRPM ? truncateToFixed(service.nextServiceRPM, 2) : null;
-                      const serviceInterval = nextServiceRPM && serviceRPM ? truncateToFixed(nextServiceRPM - parseFloat(serviceRPM), 2) : null;
-                      
-                      let serviceText = `<strong>COMPRESSER ENG SERVICE:</strong> ${serviceName} RPM- ${serviceRPM}`;
-                      if (serviceInterval && nextServiceRPM) {
-                        serviceText += `+${serviceInterval} = ${nextServiceRPM}`;
-                      } else if (nextServiceRPM) {
-                        serviceText += ` (Next: ${nextServiceRPM})`;
-                      }
-                      maintenanceHTML += `<div style="margin: 8px 0; padding-left: 20px;">${serviceText}</div>`;
-                    });
-                  }
-                  
-                  // Item services
-                  if (itemServices.length > 0) {
-                    itemServices.forEach(service => {
-                      const serviceName = service.serviceName || 'Service';
-                      const serviceRPM = truncateToFixed(service.serviceRPM || 0, 2);
-                      const nextServiceRPM = service.nextServiceRPM ? truncateToFixed(service.nextServiceRPM, 2) : null;
-                      const serviceInterval = nextServiceRPM && serviceRPM ? truncateToFixed(nextServiceRPM - parseFloat(serviceRPM), 2) : null;
-                      
-                      let serviceText = `<strong>ITEM SERVICE:</strong> ${serviceName} RPM- ${serviceRPM}`;
-                      if (serviceInterval && nextServiceRPM) {
-                        serviceText += `+${serviceInterval} = ${nextServiceRPM}`;
-                      } else if (nextServiceRPM) {
-                        serviceText += ` (Next: ${nextServiceRPM})`;
-                      }
-                      maintenanceHTML += `<div style="margin: 8px 0; padding-left: 20px;">${serviceText}</div>`;
-                    });
-                  }
-                  
-                  if (!maintenanceHTML) return '';
-                  
-                  return `
-                    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; background-color: #f9f9f9;">
-                      <div style="margin-bottom: 10px;">
-                        <strong>Date:</strong> ${dateKey} | 
-                        <strong>Machine:</strong> ${machineName} | 
-                        <strong>Compressor:</strong> ${compressorName || '-'}
-                      </div>
-                      ${maintenanceHTML}
-                    </div>
-                  `;
-                }).join('');
-              }).join('')}
-            </div>
-            `;
-          })()}
-        </body>
-      </html>
-    `);
+    
+    htmlContent += '</body></html>';
+    
+    printWindow.document.write(htmlContent);
       printWindow.document.close();
       printWindow.print();
     } catch (err) {
@@ -939,58 +815,26 @@ const ProductionReport = () => {
   // Fetch production data when filters change
   useEffect(() => {
     fetchProductionData();
-  }, [dateRange, selectedSite, selectedMachine, selectedShiftOne, selectedShiftTwo, selectedRole]);
+  }, [dateRange, selectedSite, selectedMachine]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Title level={2} className="mb-2">
-            Daily Production Report
-            {selectedSiteName && ` - ${selectedSiteName}`}
-          </Title>
-          <Text type="secondary">
-            {dateRange[0].format('DD/MM/YYYY')} to {dateRange[1].format('DD/MM/YYYY')}
-            {selectedSiteName && ` | Site: ${selectedSiteName}`}
-          </Text>
-        </div>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={fetchProductionData}
-            loading={loading}
-          >
-            Refresh
-          </Button>
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={exportToPDF}
-            type="primary"
-            danger
-          >
-            Export PDF
-          </Button>
-        </Space>
-      </div>
-
+    <div className="space-y-2">
       {/* Filters */}
-      <Card>
-        <Row gutter={16} align="middle">
-          <Col xs={24} sm={8}>
-            <Text strong>Date Range:</Text>
+      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
+        <Row gutter={8} align="middle">
+          <Col xs={24} sm={6} md={4}>
             <DatePicker.RangePicker
-              className="w-full mt-1"
+              className="w-full"
               value={dateRange}
               onChange={setDateRange}
               format="DD/MM/YYYY"
+              size="small"
             />
           </Col>
-          <Col xs={24} sm={8}>
-            <Text strong>Filter by Site:</Text>
+          <Col xs={24} sm={6} md={3}>
             <Select
-              className="w-full mt-1"
-              placeholder="All sites"
+              className="w-full"
+              placeholder="Filter by Site"
               value={selectedSite}
               onChange={(value) => {
                 setSelectedSite(value);
@@ -1000,6 +844,7 @@ const ProductionReport = () => {
               allowClear
               showSearch
               optionFilterProp="children"
+              size="small"
             >
               {sites.map(site => (
                 <Select.Option key={site.id} value={site.id}>
@@ -1008,11 +853,10 @@ const ProductionReport = () => {
               ))}
             </Select>
           </Col>
-          <Col xs={24} sm={8}>
-            <Text strong>Filter by Machine:</Text>
+          <Col xs={24} sm={6} md={3}>
             <Select
-              className="w-full mt-1"
-              placeholder="All machines"
+              className="w-full"
+              placeholder="Filter by Vehicle"
               value={selectedMachine}
               onChange={(value) => {
                 setSelectedMachine(value);
@@ -1022,6 +866,7 @@ const ProductionReport = () => {
               allowClear
               showSearch
               optionFilterProp="children"
+              size="small"
             >
               {machines.map(machine => (
                 <Select.Option key={machine.id} value={machine.id}>
@@ -1030,221 +875,21 @@ const ProductionReport = () => {
               ))}
             </Select>
           </Col>
-          <Col xs={24} sm={8}>
-            <Text strong>Filter by Shift:</Text>
-            <div className="mt-1">
-              <Checkbox
-                checked={selectedShiftOne}
-                onChange={(e) => setSelectedShiftOne(e.target.checked)}
-              >
-                Shift One
-              </Checkbox>
-              <Checkbox
-                checked={selectedShiftTwo}
-                onChange={(e) => setSelectedShiftTwo(e.target.checked)}
-                style={{ marginLeft: '16px' }}
-              >
-                Shift Two
-              </Checkbox>
-            </div>
-          </Col>
-          <Col xs={24} sm={8}>
-            <Text strong>Filter by Role:</Text>
-            <Select
-              className="w-full mt-1"
-              placeholder="All roles"
-              value={selectedRole}
-              onChange={(value) => setSelectedRole(value || '')}
-              allowClear
-              showSearch
-              optionFilterProp="children"
-            >
-              <Select.Option value="operator">Operator</Select.Option>
-              <Select.Option value="helper">Helper</Select.Option>
-            </Select>
-          </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={24} sm={6} md={3}>
             <Button
-              onClick={() => {
-                setDateRange([dayjs().subtract(30, 'days'), dayjs()]);
-                setSelectedSite('');
-                setSelectedSiteName('');
-                setSelectedMachine('');
-                setSelectedMachineName('');
-                setSelectedShiftOne(false);
-                setSelectedShiftTwo(false);
-                setSelectedRole('');
-              }}
-              style={{ marginTop: '24px' }}
+              icon={<FilePdfOutlined />}
+              onClick={exportToPDF}
+              type="primary"
+              danger
+              size="small"
             >
-              Clear Filters
+              Export PDF
             </Button>
           </Col>
         </Row>
       </Card>
 
 
-      {/* Employee Summary Section - Only show when filters are applied */}
-      {(selectedShiftOne || selectedShiftTwo || selectedRole) && (
-        <Card>
-          <Title level={4}>Employee Summary</Title>
-          {(() => {
-          // Collect all unique employees from all filtered entries
-          const allEmployees = new Map();
-          
-          productionData.forEach(entry => {
-            const employees = entry.employees || [];
-            employees.forEach(emp => {
-              const key = `${emp.id || emp.employeeId || ''}_${emp.shift}_${emp.role}`;
-              if (!allEmployees.has(key)) {
-                allEmployees.set(key, {
-                  id: emp.id || emp.employeeId,
-                  name: emp.name || 'Unknown',
-                  empId: emp.empId || '',
-                  role: emp.role || 'operator',
-                  shift: emp.shift || 1
-                });
-              }
-            });
-          });
-          
-          const employeesArray = Array.from(allEmployees.values());
-          
-          // Filter employees based on selected filters
-          let shiftOneEmployees = [];
-          let shiftTwoEmployees = [];
-          let operatorEmployees = [];
-          let helperEmployees = [];
-          
-          // Only show employees from checked shifts
-          if (selectedShiftOne || selectedShiftTwo) {
-            // If ONLY Shift One is checked
-            if (selectedShiftOne && !selectedShiftTwo) {
-              shiftOneEmployees = employeesArray.filter(emp => emp.shift === 1);
-              shiftTwoEmployees = []; // Empty - not selected
-              operatorEmployees = employeesArray.filter(emp => emp.role === 'operator' && emp.shift === 1);
-              helperEmployees = employeesArray.filter(emp => emp.role === 'helper' && emp.shift === 1);
-            }
-            // If ONLY Shift Two is checked
-            else if (selectedShiftTwo && !selectedShiftOne) {
-              shiftOneEmployees = []; // Empty - not selected
-              shiftTwoEmployees = employeesArray.filter(emp => emp.shift === 2);
-              operatorEmployees = employeesArray.filter(emp => emp.role === 'operator' && emp.shift === 2);
-              helperEmployees = employeesArray.filter(emp => emp.role === 'helper' && emp.shift === 2);
-            }
-            // If BOTH shifts are checked
-            else if (selectedShiftOne && selectedShiftTwo) {
-              shiftOneEmployees = employeesArray.filter(emp => emp.shift === 1);
-              shiftTwoEmployees = employeesArray.filter(emp => emp.shift === 2);
-              operatorEmployees = employeesArray.filter(emp => emp.role === 'operator');
-              helperEmployees = employeesArray.filter(emp => emp.role === 'helper');
-            }
-            
-            // Apply role filter if selected (further filter the above results)
-            if (selectedRole) {
-              shiftOneEmployees = shiftOneEmployees.filter(emp => emp.role === selectedRole);
-              shiftTwoEmployees = shiftTwoEmployees.filter(emp => emp.role === selectedRole);
-              // operatorEmployees and helperEmployees are already filtered by role above
-            }
-          } else {
-            // No shift filters - show all employees
-            shiftOneEmployees = employeesArray.filter(emp => emp.shift === 1);
-            shiftTwoEmployees = employeesArray.filter(emp => emp.shift === 2);
-            operatorEmployees = employeesArray.filter(emp => emp.role === 'operator');
-            helperEmployees = employeesArray.filter(emp => emp.role === 'helper');
-            
-            // Apply role filter if selected
-            if (selectedRole) {
-              shiftOneEmployees = shiftOneEmployees.filter(emp => emp.role === selectedRole);
-              shiftTwoEmployees = shiftTwoEmployees.filter(emp => emp.role === selectedRole);
-              operatorEmployees = operatorEmployees.filter(emp => emp.role === selectedRole);
-              helperEmployees = helperEmployees.filter(emp => emp.role === selectedRole);
-            }
-          }
-          
-          return (
-            <Row gutter={16}>
-              <Col xs={24} sm={12} md={6}>
-                <div>
-                  <Text strong>Shift One:</Text>
-                  <div style={{ marginTop: '8px', minHeight: '20px' }}>
-                    {shiftOneEmployees.length > 0 ? (
-                      <Text>
-                        {shiftOneEmployees.map((emp, index) => (
-                          <span key={index}>
-                            {emp.name}{emp.empId ? ` (${emp.empId})` : ''}
-                            {index < shiftOneEmployees.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </Text>
-                    ) : (
-                      <Text type="secondary">None</Text>
-                    )}
-                  </div>
-                </div>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <div>
-                  <Text strong>Shift Two:</Text>
-                  <div style={{ marginTop: '8px', minHeight: '20px' }}>
-                    {shiftTwoEmployees.length > 0 ? (
-                      <Text>
-                        {shiftTwoEmployees.map((emp, index) => (
-                          <span key={index}>
-                            {emp.name}{emp.empId ? ` (${emp.empId})` : ''}
-                            {index < shiftTwoEmployees.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </Text>
-                    ) : (
-                      <Text type="secondary">None</Text>
-                    )}
-                  </div>
-                </div>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <div>
-                  <Text strong>Operator:</Text>
-                  <div style={{ marginTop: '8px', minHeight: '20px' }}>
-                    {operatorEmployees.length > 0 ? (
-                      <Text>
-                        {operatorEmployees.map((emp, index) => (
-                          <span key={index}>
-                            {emp.name}{emp.empId ? ` (${emp.empId})` : ''}
-                            {index < operatorEmployees.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </Text>
-                    ) : (
-                      <Text type="secondary">None</Text>
-                    )}
-                  </div>
-                </div>
-              </Col>
-              <Col xs={24} sm={12} md={6}>
-                <div>
-                  <Text strong>Helper:</Text>
-                  <div style={{ marginTop: '8px', minHeight: '20px' }}>
-                    {helperEmployees.length > 0 ? (
-                      <Text>
-                        {helperEmployees.map((emp, index) => (
-                          <span key={index}>
-                            {emp.name}{emp.empId ? ` (${emp.empId})` : ''}
-                            {index < helperEmployees.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </Text>
-                    ) : (
-                      <Text type="secondary">None</Text>
-                    )}
-                  </div>
-                </div>
-              </Col>
-            </Row>
-          );
-          })()}
-        </Card>
-      )}
 
       {/* Production Data Table */}
       <Card>
@@ -1258,7 +903,7 @@ const ProductionReport = () => {
             pageSize: 20,
             showSizeChanger: true,
             pageSizeOptions: ['10', '20', '50'],
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} entries`,
+            showTotal: (total, range) => range[0] + '-' + range[1] + ' of ' + total + ' entries',
           }}
           scroll={{ x: 1200 }}
           size="small"
@@ -1344,6 +989,30 @@ const ProductionReport = () => {
                 render: (date) => dayjs(date).format("DD/MM/YYYY"),
               },
               {
+                title: "Shift",
+                dataIndex: "shift",
+                key: "shift",
+                width: 80,
+                render: (shift) => shift || 1,
+              },
+              {
+                title: "Site",
+                dataIndex: ["site", "siteName"],
+                key: "site",
+                width: 150,
+                render: (value, record) => {
+                  // Try site object first, then fallback to sites array lookup
+                  if (record.site?.siteName) {
+                    return record.site.siteName;
+                  }
+                  if (record.siteId) {
+                    const site = sites.find(s => s.id === record.siteId);
+                    return site?.siteName || '-';
+                  }
+                  return '-';
+                },
+              },
+              {
                 title: "Machine",
                 key: "machine",
                 render: (_, record) => {
@@ -1351,7 +1020,7 @@ const ProductionReport = () => {
                   if (!machine) return '-';
                   const name = machine.vehicleType || 'Machine';
                   const number = machine.vehicleNumber || '';
-                  return number ? `${name} (${number})` : name;
+                  return number ? name + ' (' + number + ')' : name;
                 }
               },
               {
@@ -1398,7 +1067,7 @@ const ProductionReport = () => {
                 key: "vehicleNextService",
                 render: (_, record) => {
                   const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
-                  return machine?.nextServiceRPM ? `${truncateToFixed(machine.nextServiceRPM, 2)} RPM` : '-';
+                  return machine?.nextServiceRPM ? truncateToFixed(machine.nextServiceRPM, 2) + ' RPM' : '-';
                 }
               },
               {
@@ -1407,7 +1076,7 @@ const ProductionReport = () => {
                 render: (_, record) => {
                   if (!record.compressorId) return '-';
                   const compressor = compressors.find(c => c.id === record.compressorId);
-                  return compressor?.nextServiceRPM ? `${truncateToFixed(compressor.nextServiceRPM, 2)} RPM` : '-';
+                  return compressor?.nextServiceRPM ? truncateToFixed(compressor.nextServiceRPM, 2) + ' RPM' : '-';
                 }
               },
             ]}

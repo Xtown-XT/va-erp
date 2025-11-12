@@ -203,32 +203,17 @@ const EmployeeSalary = () => {
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Title level={2} className="mb-2">Employee Salary Report</Title>
-          <Text type="secondary">View and analyze employee salary details by date range</Text>
-        </div>
+      <div className="flex justify-end items-center mb-2">
         <Space>
-          <Button
-            onClick={() => {
-              fetchEmployees();
-              if (selectedEmployee && dateRange.length === 2) {
-                fetchSalaryRecords(selectedEmployee.id, dateRange[0], dateRange[1]);
-              }
-            }}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
           {salaryRecords.length > 0 && (
             <Button
               icon={<FilePdfOutlined />}
               onClick={exportToPDF}
               type="primary"
               danger
+              size="small"
             >
               Export PDF
             </Button>
@@ -237,7 +222,7 @@ const EmployeeSalary = () => {
       </div>
 
       {/* Search Form */}
-      <Card className="mb-6">
+      <Card className="mb-2" bodyStyle={{ padding: '12px' }}>
         <Form layout="vertical" form={form} onFinish={handleSubmit}>
           <Row gutter={16}>
             <Col xs={24} sm={8}>

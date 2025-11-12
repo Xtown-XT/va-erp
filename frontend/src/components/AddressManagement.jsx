@@ -215,21 +215,10 @@ const AddressManagement = () => {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Title level={2} className="mb-2">Address Management</Title>
-          <Text type="secondary">Manage multiple billing and shipping addresses for Purchase Orders</Text>
-        </div>
+      <div className="flex justify-end items-center mb-2">
         <Space>
-          <Button
-            onClick={() => fetchAddresses(pagination.current, pagination.pageSize)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
           {canCreate() && (
             <Button
               type="primary"
@@ -239,6 +228,7 @@ const AddressManagement = () => {
                 setEditingId(null);
                 form.resetFields();
               }}
+              size="small"
             >
               Add Address
             </Button>
@@ -248,7 +238,7 @@ const AddressManagement = () => {
 
       {/* Address Form */}
       {showForm && (
-        <Card title={editingId ? "Edit Address" : "Add New Address"} ref={formRef}>
+        <Card title={editingId ? "Edit Address" : "Add New Address"} ref={formRef} className="mb-2" bodyStyle={{ padding: '12px' }}>
           <Form
             form={form}
             layout="vertical"

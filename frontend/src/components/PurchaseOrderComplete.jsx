@@ -814,25 +814,13 @@ const PurchaseOrderComplete = () => {
   ];
 
   return (
-    <div className="bg-white rounded-lg p-6">
+    <div className="bg-white rounded-lg p-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <Title level={2} className="mb-2">Purchase Order Management</Title>
-          <Text type="secondary">Complete PO system with PDF export and email integration</Text>
-        </div>
-        <Space>
+      <div className="flex justify-end items-center mb-2">
+        {canCreate() && (
           <Button
-            onClick={() => fetchData(pagination.current, pagination.pageSize)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
-          {canCreate() && (
-            <Button
-              icon={<PlusOutlined />}
-              onClick={async () => {
+            icon={<PlusOutlined />}
+            onClick={async () => {
               if (!showCreateForm) {
                 // Opening form - generate PO number
                 const poNumber = await generatePONumberForDisplay();
@@ -854,67 +842,63 @@ const PurchaseOrderComplete = () => {
           >
             {showCreateForm ? "Cancel" : "Create New PO"}
           </Button>
-          )}
-        </Space>
+        )}
       </div>
 
       {/* Filters */}
-      <Card className="mb-6">
-        <Row gutter={16} align="middle">
-          <Col xs={24} sm={6}>
-            <Text strong>Date Range:</Text>
+      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
+        <Row gutter={8} align="middle">
+          <Col xs={24} sm={6} md={4}>
             <DatePicker.RangePicker
-              className="w-full mt-1"
+              className="w-full"
               value={dateFilter}
               onChange={setDateFilter}
               placeholder={['Start Date', 'End Date']}
+              size="small"
             />
           </Col>
-          <Col xs={24} sm={6}>
-            <Text strong>Month:</Text>
+          <Col xs={24} sm={6} md={3}>
             <DatePicker
               picker="month"
-              className="w-full mt-1"
+              className="w-full"
               value={monthFilter ? dayjs(monthFilter) : null}
               onChange={(date) => setMonthFilter(date ? date.format('YYYY-MM') : null)}
               placeholder="Select Month"
+              size="small"
             />
           </Col>
-          <Col xs={24} sm={6}>
-            <Text strong>Search:</Text>
+          <Col xs={24} sm={6} md={4}>
             <Input.Search
-              className="w-full mt-1"
+              className="w-full"
               placeholder="Search by PO number or supplier"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
             />
           </Col>
-          <Col xs={24} sm={6}>
-           <div style={{ display: "flex", flexDirection: "column", }}>
-             <Text strong>Status:</Text>
+          <Col xs={24} sm={6} md={3}>
             <Select
               placeholder="Filter by Status"
               allowClear
               value={statusFilter}
               onChange={(value) => setStatusFilter(value)}
-              style={{ width: 140 }}
+              className="w-full"
+              size="small"
             >
               <Select.Option value="pending">Pending</Select.Option>
               <Select.Option value="received">Received</Select.Option>
             </Select>
-           </div>
-
           </Col>
-
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={6} md={3}>
             <Button
               onClick={() => {
                 setDateFilter(null);
                 setMonthFilter(null);
                 setSearchTerm("");
               }}
-              disabled={!searchTerm && !statusFilter}
-              className="w-full mt-6"
+              disabled={!dateFilter && !monthFilter && !searchTerm && !statusFilter}
+              size="small"
+              className="w-full"
             >
               Clear Filters
             </Button>
@@ -924,7 +908,7 @@ const PurchaseOrderComplete = () => {
 
       {/* Create PO Form */}
       {showCreateForm && (
-        <Card className="mb-6" title="Create New Purchase Order">
+        <Card className="mb-2" title="Create New Purchase Order" bodyStyle={{ padding: '12px' }}>
           <Form layout="vertical" form={createForm} onFinish={handleSubmit}>
             <Row gutter={16}>
               <Col xs={24} sm={8}>

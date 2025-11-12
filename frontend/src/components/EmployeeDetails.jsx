@@ -335,9 +335,9 @@ const EmployeeDetails = () => {
   }
 
   return (
-    <div className="p-6">
+    <div className="p-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-4">
           <Button
             icon={<ArrowLeftOutlined />}
@@ -345,9 +345,6 @@ const EmployeeDetails = () => {
           >
             Back
           </Button>
-          <Title level={2} className="mb-0">
-            Employee Details
-          </Title>
         </div>
         <Button
           type="primary"
@@ -359,7 +356,7 @@ const EmployeeDetails = () => {
       </div>
 
       {/* Employee Info Card */}
-      <Card className="mb-6">
+      <Card className="mb-2" bodyStyle={{ padding: '12px' }}>
         <Row gutter={24}>
           <Col xs={24} lg={12}>
             <div className="flex items-center gap-4 mb-4">
@@ -413,7 +410,7 @@ const EmployeeDetails = () => {
       </Card>
 
       {/* Statistics Cards */}
-      <Row gutter={16} className="mb-6">
+      <Row gutter={8} className="mb-2">
         <Col xs={12} sm={6}>
           <Card>
             <Statistic
@@ -458,7 +455,7 @@ const EmployeeDetails = () => {
         </Col>
       </Row>
 
-      <Row gutter={16} className="mb-6">
+      <Row gutter={8} className="mb-2">
         <Col xs={12} sm={6}>
           <Card>
             <Statistic

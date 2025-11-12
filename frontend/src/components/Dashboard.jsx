@@ -247,7 +247,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       <style jsx="true">{`
         @media (max-width: 640px) {
           .mobile-card .ant-card-body {
@@ -266,11 +266,7 @@ const Dashboard = () => {
         }
       `}</style>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-        <div className="min-w-0">
-          <Title level={2} className="mb-2">Dashboard</Title>
-          <Text type="secondary">Overview of your VA ERP system</Text>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:justify-end sm:items-center gap-2 mb-2">
         <Space wrap>
           <Select
             value={timeFilter}

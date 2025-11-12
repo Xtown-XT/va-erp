@@ -11,6 +11,8 @@ import {
   Card,
   Popconfirm,
   message,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
@@ -18,16 +20,15 @@ import {
   EditOutlined,
   DeleteOutlined,
   ToolOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
 import { useNavigate } from "react-router-dom";
 
-const Vehicle = () => {
+const Machine = () => {
   const navigate = useNavigate();
   const [form] = Form.useForm();
-  const [vehicles, setVehicles] = useState([]);
+  const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -45,11 +46,11 @@ const Vehicle = () => {
   const [statusFilter, setStatusFilter] = useState(null);
 
   // Fetch data
-  const fetchVehicles = async (page = 1, limit = 10) => {
+  const fetchMachines = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/vehicles?page=${page}&limit=${limit}`);
-      setVehicles(res.data.data || []);
+      const res = await api.get(`/api/vehicles?page=${page}&limit=${limit}`); // API route kept for compatibility
+      setMachines(res.data.data || []);
 
       // Update pagination state
       setPagination(prev => ({
@@ -59,8 +60,8 @@ const Vehicle = () => {
         pageSize: res.data.limit || limit,
       }));
     } catch (err) {
-      console.error("Error fetching vehicles", err);
-      setVehicles([]);
+      console.error("Error fetching machines", err);
+      setMachines([]);
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ const Vehicle = () => {
 
   // Handle pagination change
   const handleTableChange = (pagination) => {
-    fetchVehicles(pagination.current, pagination.pageSize);
+    fetchMachines(pagination.current, pagination.pageSize);
   };
 
   const fetchBrands = async () => {
@@ -91,7 +92,7 @@ const Vehicle = () => {
   };
 
   useEffect(() => {
-    fetchVehicles();
+    fetchMachines();
     fetchBrands();
     fetchCompressors();
   }, []);
@@ -127,21 +128,21 @@ const Vehicle = () => {
 
 
       if (editingId) {
-        await api.put(`/api/vehicles/${editingId}`, payload);
-        message.success("Vehicle updated successfully");
+        await api.put(`/api/vehicles/${editingId}`, payload); // API route kept
+        message.success("Machine updated successfully");
       } else {
-        const res = await api.post("/api/vehicles", payload);
-        setVehicles([res.data.data, ...vehicles]);
-        message.success("Vehicle created successfully");
+        const res = await api.post("/api/vehicles", payload); // API route kept
+        setMachines([res.data.data, ...machines]);
+        message.success("Machine created successfully");
       }
 
       setShowForm(false);
       setEditingId(null);
       form.resetFields();
-      fetchVehicles();
+      fetchMachines();
     } catch (err) {
-      console.error("Error saving vehicle", err);
-      const errorMessage = err.response?.data?.message || err.message || "Failed to save vehicle";
+      console.error("Error saving machine", err);
+      const errorMessage = err.response?.data?.message || err.message || "Failed to save machine";
       message.error(`Error: ${errorMessage}`);
     }
   };
@@ -164,8 +165,8 @@ const Vehicle = () => {
   // Handle hard delete
   const handleDelete = async (id) => {
     try {
-      await api.delete(`/api/vehicles/${id}/hard`);
-      setVehicles(vehicles.filter((vehicle) => vehicle.id !== id));
+      await api.delete(`/api/vehicles/${id}/hard`); // API route kept
+      setMachines(machines.filter((machine) => machine.id !== id));
     } catch (err) {
       console.error("Error deleting vehicle", {
         status: err.response?.status,
@@ -177,8 +178,8 @@ const Vehicle = () => {
   // PDF Export
   const exportToPDF = async () => {
 
-    const res = await api.get("/api/vehicles?page=1&limit=1000");
-    const allVehicles = res.data.data || []
+    const res = await api.get("/api/vehicles?page=1&limit=1000"); // API route kept
+    const allMachines = res.data.data || []
 
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
@@ -195,7 +196,7 @@ const Vehicle = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Vehicle List</h1>
+            <h1>Machine List</h1>
             <p>Generated on: ${new Date().toLocaleDateString()}</p>
           </div>
           <table>
@@ -211,31 +212,31 @@ const Vehicle = () => {
               </tr>
             </thead>
             <tbody>
-              ${allVehicles
-            // (vehicles || [])
-        .filter((v) =>
-          v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+              ${allMachines
+            // (machines || [])
+        .filter((m) =>
+          m.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase()) // DB column kept
         )
         .map(
-          (vehicle) => {
+          (machine) => {
             // Get brand name
-            const brandName = vehicle.brand?.brandName ||
-              brands.find(b => b.id === vehicle.brandId)?.brandName || "-";
+            const brandName = machine.brand?.brandName ||
+              brands.find(b => b.id === machine.brandId)?.brandName || "-";
 
 
             // Get compressor name
-            const compressorName = vehicle.compressor?.compressorName ||
-              compressors.find(c => c.id === vehicle.compressorId)?.compressorName || "-";
+            const compressorName = machine.compressor?.compressorName ||
+              compressors.find(c => c.id === machine.compressorId)?.compressorName || "-";
 
             return `
                     <tr>
-                      <td>${vehicle.vehicleType}</td>
-                      <td>${vehicle.vehicleNumber}</td>
+                      <td>${machine.vehicleType}</td>
+                      <td>${machine.vehicleNumber}</td>
                       <td>${brandName}</td>
-                      <td>${vehicle.vehicleRPM || '-'}</td>
-                      <td>${vehicle.nextServiceRPM || '-'}</td>
+                      <td>${machine.vehicleRPM || '-'}</td>
+                      <td>${machine.nextServiceRPM || '-'}</td>
                       <td>${compressorName}</td>
-                      <td>${vehicle.status}</td>
+                      <td>${machine.status}</td>
                     </tr>`;
           }
         )
@@ -318,7 +319,7 @@ const Vehicle = () => {
         <Space>
           <Button
             icon={<ToolOutlined />}
-            onClick={() => navigate(`/reports/vehicle-service/${record.id}`)}
+            onClick={() => navigate(`/reports/machine-service/${record.id}`)} // Changed route
             title="View Service History"
           />
           {canEdit() && (
@@ -338,45 +339,79 @@ const Vehicle = () => {
   ];
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Machine Management</h1>
-        <Space>
-          <Button
-            onClick={() => fetchVehicles(pagination.current, pagination.pageSize)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={exportToPDF}
-            type="primary"
-            danger
-          >
-            Export PDF
-          </Button>
-          {canCreate() && (
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setShowForm(!showForm);
-                setEditingId(null);
-                form.resetFields();
-              }}
-              type="primary"
+    <div className="bg-white rounded-lg shadow p-2">
+      {/* Filters and Actions - Single Row */}
+      <Card className="mb-1" bodyStyle={{ padding: '4px' }}>
+        <Row gutter={4} align="middle">
+          <Col xs={24} sm={6} md={5}>
+            <Input.Search
+              placeholder="Search by vehicle number"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              size="small"
+            />
+          </Col>
+          <Col xs={12} sm={4} md={3}>
+            <Select
+              placeholder="Status"
+              allowClear
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              className="w-full"
+              size="small"
             >
-              {showForm ? "Cancel" : "Add Machine"}
+              <Select.Option value="active">Active</Select.Option>
+              <Select.Option value="inactive">Inactive</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={12} sm={3} md={2}>
+            <Button
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter(null);
+              }}
+              disabled={!searchTerm && !statusFilter}
+              size="small"
+              className="w-full"
+            >
+              Clear
             </Button>
+          </Col>
+          <Col xs={12} sm={5} md={3}>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={exportToPDF}
+              type="primary"
+              danger
+              size="small"
+              className="w-full"
+            >
+              PDF
+            </Button>
+          </Col>
+          {canCreate() && (
+            <Col xs={12} sm={6} md={3}>
+              <Button
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setShowForm(!showForm);
+                  setEditingId(null);
+                  form.resetFields();
+                }}
+                type="primary"
+                size="small"
+                className="w-full"
+              >
+                {showForm ? "Cancel" : "Add"}
+              </Button>
+            </Col>
           )}
-        </Space>
-      </div>
+        </Row>
+      </Card>
 
       {/* Add/Edit Form */}
       {showForm && (
-        <Card className="mb-6">
+        <Card className="mb-1" bodyStyle={{ padding: '8px' }}>
           <Form layout="vertical" form={form} onFinish={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
@@ -384,7 +419,7 @@ const Vehicle = () => {
                 label="Machine Type"
                 rules={[{ required: true }]}
               >
-                <Select placeholder="Select vehicle type" showSearch optionFilterProp="children">
+                <Select placeholder="Select machine type" showSearch optionFilterProp="children">
                   <Select.Option value="Truck">Truck</Select.Option>
                   <Select.Option value="Crawler">Crawler</Select.Option>
                   <Select.Option value="Camper">Camper</Select.Option>
@@ -458,48 +493,16 @@ const Vehicle = () => {
         </Card>
       )}
 
-      {/* Search */}
-      <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <Input.Search
-          placeholder="Search by vehicle number"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ maxWidth: 300 }}
-        />
-        <Select
-          placeholder="Filter by Status"
-          allowClear
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          style={{ width: 180 }}
-          showSearch
-          optionFilterProp="children"
-        >
-          <Select.Option value="active">Active</Select.Option>
-          <Select.Option value="inactive">Inactive</Select.Option>
-        </Select>
-
-        <Button
-          onClick={() => {
-            setSearchTerm('');
-            setStatusFilter(null);
-          }
-          }
-          disabled={!searchTerm && !statusFilter}
-        >
-          Clear Filters
-        </Button>
-      </div>
 
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(vehicles || []).filter((v) => {
+        dataSource={(machines || []).filter((m) => {
 
-          const searchMatch = v.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+          const searchMatch = m.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase()); // DB column kept
 
           const statusMatch = statusFilter
-            ? v.status?.toLowerCase() === statusFilter.toLowerCase()
+            ? m.status?.toLowerCase() === statusFilter.toLowerCase()
             : true;
 
           return searchMatch && statusMatch;
@@ -517,4 +520,4 @@ const Vehicle = () => {
   );
 };
 
-export default Vehicle;
+export default Machine;

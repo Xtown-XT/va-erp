@@ -45,8 +45,7 @@ const Attendance = () => {
   const [attendanceData, setAttendanceData] = useState({});
   const [modifiedEmployees, setModifiedEmployees] = useState(new Set());
   const [saving, setSaving] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [markAttendanceSiteFilter, setMarkAttendanceSiteFilter] = useState('');
+  const [attendanceFilter, setAttendanceFilter] = useState('all'); // 'all', 'present', 'absent'
   const [markAttendancePagination, setMarkAttendancePagination] = useState({
     current: 1,
     pageSize: 50,
@@ -480,12 +479,11 @@ const saveAllAttendance = async () => {
   const getFilteredEmployees = () => {
     let filtered = employees;
     
-    // Filter by site if site filter is selected
-    if (markAttendanceSiteFilter) {
-      filtered = filtered.filter(emp => {
-        const attendanceSiteId = attendanceData[emp.id]?.siteId;
-        return attendanceSiteId === markAttendanceSiteFilter;
-      });
+    // Filter by attendance status
+    if (attendanceFilter === 'present') {
+      filtered = filtered.filter(emp => attendanceData[emp.id]?.presence === 'present');
+    } else if (attendanceFilter === 'absent') {
+      filtered = filtered.filter(emp => attendanceData[emp.id]?.presence === 'absent');
     }
     
     return filtered;
@@ -992,157 +990,55 @@ const saveAllAttendance = async () => {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* SECTION 1: ADD ATTENDANCE */}
-      <div className="bg-white rounded-lg p-6">
-        <div className="mb-6">
+      <div className="bg-white rounded-lg p-4">
+        <div className="mb-4">
           <div className="flex justify-between items-center">
-            <Title level={2} className="mb-2">Mark Daily Attendance</Title>
-            <Button
-              onClick={() => {
-                fetchRecords(selectedDate);
-                fetchEmployees();
-                fetchSites();
-                fetchVehicles();
-              }}
-              loading={loading}
-              icon={<ReloadOutlined />}
-            >
-              Refresh
-            </Button>
+            <Title level={2} className="mb-0" style={{ fontSize: '20px' }}>Mark Daily Attendance</Title>
           </div>
-          <Text type="secondary">Mark attendance for all employees for the selected date</Text>
         </div>
 
-        {/* Date Selection and Statistics */}
-        <Card className="mb-6">
+        {/* Filter and Statistics */}
+        <Card className="mb-4" bodyStyle={{ padding: '12px' }}>
           <Row gutter={16} align="middle">
-            <Col xs={24} sm={8}>
-              <Text strong>Select Date:</Text>
-              <DatePicker
-                className="w-full mt-1"
-                value={selectedDate}
-                onChange={(date) => {
-                  setSelectedDate(date);
-                  fetchRecords(date);
-                }}
-                format="DD/MM/YYYY"
-                style={{ marginBottom: 10 }}
-              />
-              <div className="flex flex-col mt-2">
-                <Text strong>Filter by Site:</Text>
-                <Select
-                  className="w-full mt-1"
-                  placeholder="All Sites"
-                  value={markAttendanceSiteFilter}
-                  onChange={(siteId) => setMarkAttendanceSiteFilter(siteId || '')}
-                  allowClear
-                  showSearch
-                  optionFilterProp="children"
-                >
-                  {sites.map(site => (
-                    <Select.Option key={site.id} value={site.id}>
-                      {site.siteName}
-                    </Select.Option>
-                  ))}
-                </Select>
-              </div>
-              <div className="flex flex-col mt-2">
-                <Text strong >Search Employee:</Text>
-                <Input.Search
-                  placeholder="Search By Employee Name or ID"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ maxWidth: 300 }}
-                />
-              </div>
-
-              <div>
-                <Button
-                  onClick={() => {
-                    setSearchTerm('');
-                    setMarkAttendanceSiteFilter('');
-                  }}
-                  disabled={!searchTerm && !markAttendanceSiteFilter}
-                  style={{ marginTop: 10 }}
-                >
-                  Clear Filters
-                </Button>
-              </div>
-
+            <Col xs={24} sm={6}>
+              <Text strong style={{ marginRight: 8 }}>Filter by Attendance:</Text>
+              <Select
+                value={attendanceFilter}
+                onChange={setAttendanceFilter}
+                style={{ width: 150 }}
+                size="small"
+              >
+                <Select.Option value="all">All</Select.Option>
+                <Select.Option value="present">Present</Select.Option>
+                <Select.Option value="absent">Absent</Select.Option>
+              </Select>
             </Col>
-
-            <Col xs={24} sm={16}>
+            <Col xs={24} sm={18}>
               <Row gutter={16}>
-                <Col span={6}>
+                <Col span={8}>
                   <Statistic
                     title="Total Employees"
                     value={totalEmployees}
                     prefix={<CheckCircleOutlined />}
+                    valueStyle={{ fontSize: '18px' }}
                   />
                 </Col>
-                <Col span={6}>
+                <Col span={8}>
                   <Statistic
                     title="Present"
                     value={presentCount}
-                    valueStyle={{ color: '#3f8600' }}
+                    valueStyle={{ color: '#3f8600', fontSize: '18px' }}
                     prefix={<CheckCircleOutlined />}
                   />
                 </Col>
-                <Col span={6}>
+                <Col span={8}>
                   <Statistic
                     title="Working"
                     value={workingCount}
-                    valueStyle={{ color: '#1890ff' }}
+                    valueStyle={{ color: '#1890ff', fontSize: '18px' }}
                   />
-                </Col>
-                <Col span={6}>
-                  <Statistic
-                    title="Attendance %"
-                    value={Math.round(attendancePercentage)}
-                    suffix="%"
-                    valueStyle={{
-                      color: attendancePercentage >= 80 ? '#3f8600' :
-                        attendancePercentage >= 60 ? '#faad14' : '#cf1322'
-                    }}
-                  />
-                </Col>
-              </Row>
-              <Row gutter={16} style={{ marginTop: '16px' }}>
-                <Col span={6}>
-                  <Statistic
-                    title="Saved Today"
-                    value={savedAttendanceCount}
-                    valueStyle={{ color: '#52c41a' }}
-                    prefix={<CheckCircleOutlined />}
-                  />
-                </Col>
-                <Col span={6}>
-                  <Statistic
-                    title="Pending"
-                    value={pendingAttendanceCount}
-                    valueStyle={{ color: '#faad14' }}
-                    prefix={<CloseCircleOutlined />}
-                  />
-                </Col>
-                <Col span={12}>
-                  <div style={{
-                    padding: '8px 16px',
-                    backgroundColor: savedAttendanceCount > 0 ? '#f6ffed' : '#fff7e6',
-                    border: `1px solid ${savedAttendanceCount > 0 ? '#52c41a' : '#faad14'}`,
-                    borderRadius: '4px',
-                    textAlign: 'center'
-                  }}>
-                    <Text style={{
-                      color: savedAttendanceCount > 0 ? '#52c41a' : '#faad14',
-                      fontWeight: 'bold'
-                    }}>
-                      {savedAttendanceCount > 0
-                        ? `✓ ${savedAttendanceCount} Employees have attendance saved for today`
-                        : 'No attendance saved for today yet'
-                      }
-                    </Text>
-                  </div>
                 </Col>
               </Row>
             </Col>
@@ -1153,15 +1049,7 @@ const saveAllAttendance = async () => {
         {/* Attendance Table for Adding */}
         <Table
           columns={columns}
-          dataSource={(allEmployees || []).filter((e) => {
-
-            const searchMatch = String(e.name)?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              String(e.empId)?.toLowerCase().includes(searchTerm.toLowerCase());
-
-            return searchMatch;
-
-          }
-          )}
+          dataSource={allEmployees || []}
           rowKey="id"
           loading={loading}
           pagination={{
@@ -1194,19 +1082,11 @@ const saveAllAttendance = async () => {
       </div>
 
       {/* SECTION 2: VIEW ATTENDANCE RECORDS */}
-      <div className="bg-white rounded-lg p-6 overflow-hidden">
-        <div className="flex justify-between items-center mb-6">
+      <div className="bg-white rounded-lg p-4 overflow-hidden">
+        <div className="flex justify-between items-center mb-4">
           <div>
-            <Title level={2} className="mb-2">View Attendance Records</Title>
-            <Text type="secondary">View attendance records for any date with site filtering</Text>
+            <Title level={2} className="mb-0" style={{ fontSize: '20px' }}>View Attendance Records</Title>
           </div>
-          <Button
-            onClick={() => fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize)}
-            loading={loading}
-            icon={<ReloadOutlined />}
-          >
-            Refresh
-          </Button>
         </div>
         <div className="mb-4">
           <Button
@@ -1220,7 +1100,7 @@ const saveAllAttendance = async () => {
         </div>
 
         {/* View Filters */}
-        <Card className="mb-6">
+        <Card className="mb-4" bodyStyle={{ padding: '12px' }}>
           <Row gutter={16} align="middle">
             <Col xs={24} sm={8}>
               <Text strong>Select Date to View:</Text>
@@ -1256,30 +1136,16 @@ const saveAllAttendance = async () => {
               </Select>
             </Col>
             <Col xs={24} sm={8}>
-
-              <Text strong >Search Employee:</Text>
-              <Input.Search
-                placeholder="Search By Employee Name or ID"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ maxWidth: 300 }}
-              />
-
-            </Col>
-            <Col xs={24} sm={8}>
-            </Col>
-            <Col xs={24} sm={8}>
               <Text strong>Actions:</Text>
               <div className="mt-1">
                 <Button
                   onClick={() => {
                     setViewSite('');
-                    setSearchTerm('');
-
                     fetchViewRecords(viewDate, '', viewPagination.current, viewPagination.pageSize);
                   }}
                   className="w-full"
                   icon={<ClearOutlined />}
+                  disabled={!viewSite}
                 >
                   Clear Filters
                 </Button>
@@ -1311,16 +1177,7 @@ const saveAllAttendance = async () => {
 
           // }
 
-          dataSource={(viewRecords || []).filter((v) => {
-            const employee = employees.find(emp => emp.id === v.employeeId);
-
-            const searchMatch = searchTerm
-              ? (employee?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                employee?.empId?.toLowerCase().includes(searchTerm.toLowerCase()))
-              : true;
-
-            return searchMatch;
-          })}
+          dataSource={viewRecords || []}
 
 
           rowKey="id"

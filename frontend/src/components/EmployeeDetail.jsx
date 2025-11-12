@@ -249,7 +249,7 @@ const EmployeeDetail = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-4">
@@ -259,12 +259,6 @@ const EmployeeDetail = () => {
           >
             Back to Employees
           </Button>
-          <div>
-            <Title level={2} className="mb-0">
-              {employee.name} ({employee.empId})
-            </Title>
-            <Text type="secondary">{employee.designation || 'Employee'}</Text>
-          </div>
         </div>
         <Button
           icon={<FilePdfOutlined />}

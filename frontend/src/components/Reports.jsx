@@ -49,16 +49,7 @@ const Reports = () => {
   ];
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen ">
-      {/* Header */}
-      <div className="mb-6">
-        <Title level={2} className="mb-2">
-          Reports & Analytics
-        </Title>
-        <Text type="secondary">
-          Generate comprehensive reports for better business insights and decision making.
-        </Text>
-      </div>
+    <div className="p-4 bg-gray-50 min-h-screen">
 
       {/* Reports Grid */}
       <Row gutter={[24, 24]}>

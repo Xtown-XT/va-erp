@@ -23,29 +23,29 @@ import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
 
-const VehicleServiceHistory = () => {
-  const { vehicleId } = useParams();
+const MachineServiceHistory = () => {
+  const { vehicleId } = useParams(); // Route param kept for compatibility
   const navigate = useNavigate();
   const [services, setServices] = useState([]);
-  const [vehicle, setVehicle] = useState(null);
+  const [machine, setMachine] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchVehicleServiceHistory();
+    fetchMachineServiceHistory();
   }, [vehicleId]);
 
-  const fetchVehicleServiceHistory = async () => {
+  const fetchMachineServiceHistory = async () => {
     setLoading(true);
     try {
-      // Fetch vehicle details
-      const vehicleRes = await api.get(`/api/vehicles/${vehicleId}`);
-      setVehicle(vehicleRes.data.data);
+      // Fetch machine details
+      const machineRes = await api.get(`/api/vehicles/${vehicleId}`); // API route kept
+      setMachine(machineRes.data.data);
 
       // Fetch service history
-      const servicesRes = await api.get(`/api/services?vehicleId=${vehicleId}&serviceType=vehicle`);
+      const servicesRes = await api.get(`/api/services?machineId=${vehicleId}&serviceType=machine`); // Changed to machineId and machine
       setServices(servicesRes.data.data || []);
     } catch (err) {
-      console.error("Error fetching vehicle service history", err);
+      console.error("Error fetching machine service history", err);
     } finally {
       setLoading(false);
     }
@@ -56,7 +56,7 @@ const VehicleServiceHistory = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Vehicle Service History - ${vehicle?.vehicleNumber}</title>
+          <title>Machine Service History - ${machine?.vehicleNumber}</title>
           <style>
             body { font-family: Arial, sans-serif; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -67,8 +67,8 @@ const VehicleServiceHistory = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Service History - ${vehicle?.vehicleNumber}</h1>
-            <p>Vehicle Type: ${vehicle?.vehicleType}</p>
+            <h1>Service History - ${machine?.vehicleNumber}</h1>
+            <p>Machine Type: ${machine?.vehicleType}</p>
             <p>Generated on: ${new Date().toLocaleDateString()}</p>
           </div>
           <table>
@@ -86,8 +86,8 @@ const VehicleServiceHistory = () => {
                   <td>${service.serviceDate ? dayjs(service.serviceDate).format("YYYY-MM-DD") : "-"}</td>
                   <td>${service.serviceName || "N/A"}</td>
                   <td>${service.serviceRPM ? truncateToFixed(service.serviceRPM, 2) : "-"}</td>
-                  <td>${service.serviceType === "vehicle" && service.vehicle ? 
-                    `${service.vehicle.vehicleNumber} (${service.vehicle.vehicleType})` : 
+                  <td>${service.serviceType === "machine" && service.machine ? 
+                    `${service.machine.vehicleNumber} (${service.machine.vehicleType})` : // Changed alias 
                     service.serviceType === "compressor" && service.compressor ? 
                     `${service.compressor.compressorName}` : 
                     "-"}</td>
@@ -125,8 +125,8 @@ const VehicleServiceHistory = () => {
       title: "Serviced Item",
       key: "servicedItem",
       render: (_, record) => {
-        if (record.serviceType === "vehicle" && record.vehicle) {
-          return `${record.vehicle.vehicleNumber} (${record.vehicle.vehicleType})`;
+        if (record.serviceType === "machine" && record.machine) {
+          return `${record.machine.vehicleNumber} (${record.machine.vehicleType})`; // Changed alias
         } else if (record.serviceType === "compressor" && record.compressor) {
           return `${record.compressor.compressorName}`;
         }
@@ -137,28 +137,20 @@ const VehicleServiceHistory = () => {
 
   const totalServices = services.length;
   const lastService = services[0]; // Assuming sorted by date desc
-  const nextServiceRPM = vehicle?.nextServiceRPM || 0;
-  const currentRPM = vehicle?.vehicleRPM || 0;
+  const nextServiceRPM = machine?.nextServiceRPM || 0;
+  const currentRPM = machine?.vehicleRPM || 0; // DB column kept
   const remainingRPM = nextServiceRPM ? Math.max(0, nextServiceRPM - currentRPM) : 0;
 
   return (
-    <div className="bg-white rounded-lg shadow p-6">
+    <div className="bg-white rounded-lg shadow p-4">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-4">
           <Button
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate(-1)}
             type="text"
           />
-          <div>
-            <Title level={2} className="mb-0">
-              Service History - {vehicle?.vehicleNumber}
-            </Title>
-            <Text type="secondary">
-              {vehicle?.vehicleType} • {vehicle?.brand?.brandName}
-            </Text>
-          </div>
         </div>
         <Button
           icon={<FilePdfOutlined />}
@@ -171,7 +163,7 @@ const VehicleServiceHistory = () => {
       </div>
 
       {/* Statistics */}
-      <Row gutter={[16, 16]} className="mb-6">
+      <Row gutter={[8, 8]} className="mb-2">
         <Col xs={24} sm={8}>
           <Card>
             <Statistic
@@ -223,4 +215,4 @@ const VehicleServiceHistory = () => {
   );
 };
 
-export default VehicleServiceHistory;
+export default MachineServiceHistory;

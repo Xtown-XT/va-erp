@@ -58,18 +58,21 @@ const DailyEntry = () => {
   // Shift 1 state
   const [shift1Data, setShift1Data] = useState({
     siteId: null,
-    vehicleId: null,
+    vehicleId: null, // DB column kept
     compressorId: null,
-    vehicleOpeningRPM: 0,
-    vehicleClosingRPM: 0,
-    compressorOpeningRPM: 0,
-    compressorClosingRPM: 0,
-    vehicleHSD: 0,
-    compressorHSD: 0,
-    dieselUsed: 0,
-    noOfHoles: 0,
-    meter: 0,
-    employees: [],
+    vehicleOpeningRPM: null, // Changed to null for placeholder
+    vehicleClosingRPM: null, // Changed to null for placeholder
+    compressorOpeningRPM: null, // Changed to null for placeholder
+    compressorClosingRPM: null, // Changed to null for placeholder
+    vehicleHSD: null, // Changed to null for placeholder
+    compressorHSD: null, // Changed to null for placeholder
+    dieselUsed: null, // Changed to null for placeholder
+    noOfHoles: null, // Changed to null for placeholder
+    meter: null, // Changed to null for placeholder
+    employees: [
+      { id: Date.now(), role: 'operator', employeeId: null },
+      { id: Date.now() + 1, role: 'helper', employeeId: null }
+    ],
     fittedItems: [],
     vehicleServiceDone: false,
     compressorServiceDone: false,
@@ -78,18 +81,21 @@ const DailyEntry = () => {
   // Shift 2 state  
   const [shift2Data, setShift2Data] = useState({
     siteId: null,
-    vehicleId: null,
+    vehicleId: null, // DB column kept
     compressorId: null,
-    vehicleOpeningRPM: 0,
-    vehicleClosingRPM: 0,
-    compressorOpeningRPM: 0,
-    compressorClosingRPM: 0,
-    vehicleHSD: 0,
-    compressorHSD: 0,
-    dieselUsed: 0,
-    noOfHoles: 0,
-    meter: 0,
-    employees: [],
+    vehicleOpeningRPM: null, // Changed to null for placeholder
+    vehicleClosingRPM: null, // Changed to null for placeholder
+    compressorOpeningRPM: null, // Changed to null for placeholder
+    compressorClosingRPM: null, // Changed to null for placeholder
+    vehicleHSD: null, // Changed to null for placeholder
+    compressorHSD: null, // Changed to null for placeholder
+    dieselUsed: null, // Changed to null for placeholder
+    noOfHoles: null, // Changed to null for placeholder
+    meter: null, // Changed to null for placeholder
+    employees: [
+      { id: Date.now() + 2, role: 'operator', employeeId: null },
+      { id: Date.now() + 3, role: 'helper', employeeId: null }
+    ],
     fittedItems: [],
     vehicleServiceDone: false,
     compressorServiceDone: false,
@@ -97,7 +103,7 @@ const DailyEntry = () => {
   
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [shift1Enabled, setShift1Enabled] = useState(true);
-  const [shift2Enabled, setShift2Enabled] = useState(false);
+  const [shift2Enabled, setShift2Enabled] = useState(true); // Always enabled
   const [selectedShift1Machine, setSelectedShift1Machine] = useState(null);
   const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
@@ -167,7 +173,12 @@ const DailyEntry = () => {
   const fetchAvailableItems = async () => {
     try {
       const res = await api.get("/api/itemInstances/search?status=in_stock&limit=1000");
-      setAvailableItems(res.data.data || []);
+      // Filter to only show items that can be fitted - check both item.item?.canBeFitted and handle undefined
+      const items = (res.data.data || []).filter(item => {
+        // Check if item.item exists and canBeFitted is true
+        return item.item && item.item.canBeFitted === true;
+      });
+      setAvailableItems(items);
     } catch (err) {
       message.error("Error fetching available items");
     }
@@ -196,7 +207,7 @@ const DailyEntry = () => {
     }
   };
 
-  // Handle machine selection for shifts
+  // Handle machine selection for shifts - auto-fill opening RPM from machine/compressor
   const handleMachineChange = (machineId, shift) => {
     const machine = machines.find(m => m.id === machineId);
     
@@ -205,7 +216,7 @@ const DailyEntry = () => {
       setShift1Data(prev => ({
         ...prev,
         vehicleId: machineId,
-        vehicleOpeningRPM: machine?.vehicleRPM || 0,
+        vehicleOpeningRPM: machine?.vehicleRPM || null, // Auto-fill from machine current RPM
         compressorId: machine?.compressorId || null,
       }));
       
@@ -214,15 +225,23 @@ const DailyEntry = () => {
         setSelectedShift1Compressor(compressor);
         setShift1Data(prev => ({
           ...prev,
-          compressorOpeningRPM: compressor?.compressorRPM || 0,
+          compressorOpeningRPM: compressor?.compressorRPM || null, // Auto-fill from compressor current RPM
+        }));
+      } else {
+        setSelectedShift1Compressor(null);
+        setShift1Data(prev => ({
+          ...prev,
+          compressorOpeningRPM: null,
         }));
       }
     } else {
       setSelectedShift2Machine(machine);
+      // Only auto-fill if Shift 1 closing RPM hasn't been set yet
+      const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
       setShift2Data(prev => ({
         ...prev,
         vehicleId: machineId,
-        vehicleOpeningRPM: machine?.vehicleRPM || 0,
+        vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM, // Auto-fill from machine or keep Shift 1 closing
         compressorId: machine?.compressorId || null,
       }));
       
@@ -231,11 +250,19 @@ const DailyEntry = () => {
         setSelectedShift2Compressor(compressor);
         setShift2Data(prev => ({
           ...prev,
-          compressorOpeningRPM: compressor?.compressorRPM || 0,
+          compressorOpeningRPM: shouldAutoFill ? (compressor?.compressorRPM || null) : prev.compressorOpeningRPM, // Auto-fill from compressor or keep Shift 1 closing
+        }));
+      } else {
+        setSelectedShift2Compressor(null);
+        setShift2Data(prev => ({
+          ...prev,
+          compressorOpeningRPM: null,
         }));
       }
     }
   };
+  
+  // Auto-fill Shift 2 opening when Shift 1 closing changes (removed - now handled directly in onChange)
 
   // Add employee to shift
   const addEmployeeToShift = (shift) => {
@@ -356,30 +383,26 @@ const DailyEntry = () => {
         }
       }
       
-      // Validate Shift 2 if enabled
-      if (shift2Enabled) {
+      // Validate Shift 2 (always enabled)
         const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
         if (shift2Operators.length === 0) {
           message.error("Shift 2 must have at least one operator");
-          setSubmitting(false);
+        setSubmitting(false);
           return;
         }
         if (!shift2Data.siteId || !shift2Data.vehicleId) {
           message.error("Shift 2 must have site and machine selected");
-          setSubmitting(false);
+        setSubmitting(false);
           return;
         }
-      }
-
+      
       // Generate ref numbers sequentially upfront to ensure unique sequential numbers
       let refNo1 = null;
       let refNo2 = null;
       if (shift1Enabled) {
         refNo1 = await generateRefNo();
       }
-      if (shift2Enabled) {
-        refNo2 = await generateRefNo();
-      }
+      refNo2 = await generateRefNo(); // Always generate for Shift 2
 
       // Save Shift 1
       if (shift1Enabled) {
@@ -390,15 +413,15 @@ const DailyEntry = () => {
           siteId: shift1Data.siteId,
           vehicleId: shift1Data.vehicleId,
           compressorId: shift1Data.compressorId,
-          vehicleOpeningRPM: shift1Data.vehicleOpeningRPM || 0,
-          vehicleClosingRPM: shift1Data.vehicleClosingRPM || 0,
-          compressorOpeningRPM: shift1Data.compressorOpeningRPM || 0,
-          compressorClosingRPM: shift1Data.compressorClosingRPM || 0,
-          dieselUsed: shift1Data.dieselUsed || 0,
-          vehicleHSD: shift1Data.vehicleHSD || 0,
-          compressorHSD: shift1Data.compressorHSD || 0,
-          noOfHoles: shift1Data.noOfHoles || 0,
-          meter: shift1Data.meter || 0,
+          vehicleOpeningRPM: shift1Data.vehicleOpeningRPM ?? 0,
+          vehicleClosingRPM: shift1Data.vehicleClosingRPM ?? 0,
+          compressorOpeningRPM: shift1Data.compressorOpeningRPM ?? 0,
+          compressorClosingRPM: shift1Data.compressorClosingRPM ?? 0,
+          dieselUsed: shift1Data.dieselUsed ?? 0,
+          vehicleHSD: shift1Data.vehicleHSD ?? 0,
+          compressorHSD: shift1Data.compressorHSD ?? 0,
+          noOfHoles: shift1Data.noOfHoles ?? 0,
+          meter: shift1Data.meter ?? 0,
           employees: shift1Data.employees
             .filter(e => e.employeeId)
             .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
@@ -413,8 +436,7 @@ const DailyEntry = () => {
         message.success("Shift 1 entry saved successfully");
       }
 
-      // Save Shift 2
-      if (shift2Enabled) {
+      // Save Shift 2 (always enabled)
         const payload2 = {
           refNo: refNo2,
           date: dateStr,
@@ -422,15 +444,15 @@ const DailyEntry = () => {
           siteId: shift2Data.siteId,
           vehicleId: shift2Data.vehicleId,
           compressorId: shift2Data.compressorId,
-          vehicleOpeningRPM: shift2Data.vehicleOpeningRPM || 0,
-          vehicleClosingRPM: shift2Data.vehicleClosingRPM || 0,
-          compressorOpeningRPM: shift2Data.compressorOpeningRPM || 0,
-          compressorClosingRPM: shift2Data.compressorClosingRPM || 0,
-          dieselUsed: shift2Data.dieselUsed || 0,
-          vehicleHSD: shift2Data.vehicleHSD || 0,
-          compressorHSD: shift2Data.compressorHSD || 0,
-          noOfHoles: shift2Data.noOfHoles || 0,
-          meter: shift2Data.meter || 0,
+        vehicleOpeningRPM: shift2Data.vehicleOpeningRPM ?? 0,
+        vehicleClosingRPM: shift2Data.vehicleClosingRPM ?? 0,
+        compressorOpeningRPM: shift2Data.compressorOpeningRPM ?? 0,
+        compressorClosingRPM: shift2Data.compressorClosingRPM ?? 0,
+        dieselUsed: shift2Data.dieselUsed ?? 0,
+        vehicleHSD: shift2Data.vehicleHSD ?? 0,
+        compressorHSD: shift2Data.compressorHSD ?? 0,
+        noOfHoles: shift2Data.noOfHoles ?? 0,
+        meter: shift2Data.meter ?? 0,
           employees: shift2Data.employees
             .filter(e => e.employeeId)
             .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
@@ -443,7 +465,6 @@ const DailyEntry = () => {
         
         await api.post("/api/dailyEntries", payload2);
         message.success("Shift 2 entry saved successfully");
-      }
 
       // Refresh and close form
       message.success("Daily entries saved successfully");
@@ -534,7 +555,6 @@ const DailyEntry = () => {
     return (
       <Card 
         title={`Shift ${shift}`} 
-        extra={shift === 2 && <Switch checked={shift2Enabled} onChange={setShift2Enabled} />}
         className="mb-4"
       >
         {((shift === 1 && shift1Enabled) || (shift === 2 && shift2Enabled)) && (
@@ -635,6 +655,7 @@ const DailyEntry = () => {
                           min={0}
                           step={0.1}
                           precision={1}
+                          controls={false}
                         />
                       </Col>
                       <Col span={12}>
@@ -642,10 +663,17 @@ const DailyEntry = () => {
                         <InputNumber
                           className="w-full mt-1"
                           value={shiftData.vehicleClosingRPM}
-                          onChange={(value) => updateShiftData('vehicleClosingRPM', value)}
+                          onChange={(value) => {
+                            updateShiftData('vehicleClosingRPM', value);
+                            // Auto-fill Shift 2 opening when Shift 1 closing is typed
+                            if (shift === 1) {
+                              setShift2Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
+                            }
+                          }}
                           min={0}
                           step={0.1}
                           precision={1}
+                          controls={false}
                         />
                       </Col>
                     </Row>
@@ -666,7 +694,7 @@ const DailyEntry = () => {
                           min={0}
                           step={0.1}
                           precision={1}
-                          disabled={!shiftData.compressorId}
+                          controls={false}
                         />
                       </Col>
                       <Col span={12}>
@@ -674,11 +702,17 @@ const DailyEntry = () => {
                         <InputNumber
                           className="w-full mt-1"
                           value={shiftData.compressorClosingRPM}
-                          onChange={(value) => updateShiftData('compressorClosingRPM', value)}
+                          onChange={(value) => {
+                            updateShiftData('compressorClosingRPM', value);
+                            // Auto-fill Shift 2 opening when Shift 1 closing is typed
+                            if (shift === 1) {
+                              setShift2Data(prev => ({ ...prev, compressorOpeningRPM: value }));
+                            }
+                          }}
                           min={0}
                           step={0.1}
                           precision={1}
-                          disabled={!shiftData.compressorId}
+                          controls={false}
                         />
                       </Col>
                     </Row>
@@ -703,6 +737,7 @@ const DailyEntry = () => {
                     min={0}
                     step={0.1}
                     precision={1}
+                    controls={false}
                   />
                 </Col>
                 <Col xs={24} sm={6}>
@@ -714,6 +749,7 @@ const DailyEntry = () => {
                     min={0}
                     step={0.1}
                     precision={1}
+                    controls={false}
                   />
                 </Col>
                 <Col xs={24} sm={6}>
@@ -725,6 +761,7 @@ const DailyEntry = () => {
                     min={0}
                     step={0.1}
                     precision={1}
+                    controls={false}
                   />
                 </Col>
                 <Col xs={24} sm={6}>
@@ -734,6 +771,7 @@ const DailyEntry = () => {
                     value={shiftData.noOfHoles}
                     onChange={(value) => updateShiftData('noOfHoles', value)}
                     min={0}
+                    controls={false}
                   />
                 </Col>
               </Row>
@@ -747,6 +785,7 @@ const DailyEntry = () => {
                     min={0}
                     step={0.1}
                     precision={1}
+                    controls={false}
                   />
                 </Col>
               </Row>
@@ -880,7 +919,6 @@ const DailyEntry = () => {
                       onChange={(checked) => updateShiftData('compressorServiceDone', checked)}
                       checkedChildren="Done"
                       unCheckedChildren="Pending"
-                      disabled={!shiftData.compressorId}
                     />
                   </div>
                 </Col>
@@ -946,20 +984,9 @@ const DailyEntry = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Title level={2} className="mb-2">Daily Entry Management</Title>
-          <Text type="secondary">Track daily operations for both shifts</Text>
-        </div>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => fetchEntries(pagination.current, pagination.pageSize)}
-            loading={loading}
-          >
-            Refresh
-          </Button>
+      {/* Header - Hide button when form is open */}
+      {!showForm && (
+        <div className="flex justify-end items-center mb-4">
           {canCreate() && (
             <Button
               type="primary"
@@ -972,35 +999,583 @@ const DailyEntry = () => {
               Add Daily Entry
             </Button>
           )}
-        </Space>
       </div>
+      )}
 
-      {/* Daily Entry Form */}
+      {/* Daily Entry Form - Compact Single Page Layout */}
       {showForm && (
-        <Card title="Add Daily Entry" className="mb-6">
-          <div className="mb-4">
-            <Text strong>Select Date:</Text>
+        <Card 
+          title="Add Daily Entry" 
+          className="mb-2"
+          bodyStyle={{ padding: '4px' }}
+        >
+          <div style={{ padding: '0', margin: '0' }}>
+            {/* Top Row: Ref No, Date, Site, Machine Type, Machine No, Compressor No */}
+            <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+              <Col span={4}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Ref No:</Text>
+                <Input 
+                  size="small" 
+                  placeholder="Auto-generated" 
+                  disabled 
+                  style={{ fontSize: '11px' }}
+                />
+              </Col>
+              <Col span={4}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Date:</Text>
             <DatePicker
-              className="w-full mt-1"
+                  size="small"
+                  className="w-full"
               value={selectedDate}
               onChange={setSelectedDate}
               format="DD/MM/YYYY"
+                  style={{ fontSize: '11px' }}
+                />
+              </Col>
+              <Col span={4}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Site Name:</Text>
+                <Select
+                  size="small"
+                  className="w-full"
+                  placeholder="Select site"
+                  value={shift1Data.siteId}
+                  onChange={(value) => {
+                    setShift1Data(prev => ({ ...prev, siteId: value }));
+                    setShift2Data(prev => ({ ...prev, siteId: value })); // Always sync to Shift 2
+                  }}
+                  showSearch
+                  optionFilterProp="children"
+                  style={{ fontSize: '11px' }}
+                >
+                  {sites.map(site => (
+                    <Select.Option key={site.id} value={site.id}>
+                      {site.siteName}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Col>
+              <Col span={4}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Machine Type:</Text>
+                <Select
+                  size="small"
+                  className="w-full"
+                  placeholder="Select machine"
+                  value={shift1Data.vehicleId}
+                  onChange={(value) => handleMachineChange(value, 1)}
+                  showSearch
+                  optionFilterProp="children"
+                  style={{ fontSize: '11px' }}
+                >
+                  {machines.map(machine => (
+                    <Select.Option key={machine.id} value={machine.id}>
+                      {machine.vehicleType} ({machine.vehicleNumber})
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Col>
+              <Col span={4}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Machine No:</Text>
+                <Input 
+                  size="small" 
+                  value={selectedShift1Machine?.vehicleNumber || ''} 
+                  disabled 
+                  style={{ fontSize: '11px' }}
+                />
+              </Col>
+              <Col span={4}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Compressor No:</Text>
+                <Input 
+                  size="small" 
+                  value={selectedShift1Compressor?.compressorName || ''} 
+                  disabled 
+                  style={{ fontSize: '11px' }}
+                />
+              </Col>
+            </Row>
+
+            {/* Shift Data Table - Compact Table Format */}
+            <Table
+              size="small"
+              pagination={false}
+              dataSource={[
+                { 
+                  key: 'shift1', 
+                  shift: 'Shift 1', 
+                  data: shift1Data,
+                  enabled: true // Always enabled
+                },
+                { 
+                  key: 'shift2', 
+                  shift: 'Shift 2', 
+                  data: shift2Data,
+                  enabled: true // Always enabled
+                }
+              ]}
+              columns={[
+                {
+                  title: 'Shift',
+                  dataIndex: 'shift',
+                  key: 'shift',
+                  width: 80,
+                  render: (text) => (
+                    <Text style={{ fontSize: '12px' }}>{text}</Text>
+                  )
+                },
+                {
+                  title: 'Machine RPM',
+                  children: [
+                    {
+                      title: 'Opening',
+                      dataIndex: ['data', 'vehicleOpeningRPM'],
+                      key: 'machineOpening',
+                      width: 100,
+                      render: (_, record) => (
+                        <InputNumber
+                          size="small"
+                          placeholder="0.0"
+                          value={record.data.vehicleOpeningRPM}
+                          onChange={(value) => {
+                            if (record.key === 'shift1') {
+                              setShift1Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
+                            } else {
+                              setShift2Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
+                            }
+                          }}
+                          min={0}
+                          step={0.1}
+                          precision={1}
+                          controls={false}
+                          style={{ width: '100%', fontSize: '12px' }}
+                        />
+                      )
+                    },
+                    {
+                      title: 'Closing',
+                      dataIndex: ['data', 'vehicleClosingRPM'],
+                      key: 'machineClosing',
+                      width: 100,
+                      render: (_, record) => (
+                        <InputNumber
+                          size="small"
+                          placeholder="0.0"
+                          value={record.data.vehicleClosingRPM}
+                          onChange={(value) => {
+                            if (record.key === 'shift1') {
+                              setShift1Data(prev => ({ ...prev, vehicleClosingRPM: value }));
+                              // Auto-fill Shift 2 opening when Shift 1 closing is typed
+                              setShift2Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
+                            } else {
+                              setShift2Data(prev => ({ ...prev, vehicleClosingRPM: value }));
+                            }
+                          }}
+                          min={0}
+                          step={0.1}
+                          precision={1}
+                          controls={false}
+                          style={{ width: '100%', fontSize: '12px' }}
+                        />
+                      )
+                    }
+                  ]
+                },
+                {
+                  title: 'Compressor RPM',
+                  children: [
+                    {
+                      title: 'Opening',
+                      key: 'compressorOpening',
+                      width: 100,
+                      render: (_, record) => (
+                        <InputNumber
+                          size="small"
+                          placeholder="0.0"
+                          value={record.data.compressorOpeningRPM}
+                          onChange={(value) => {
+                            if (record.key === 'shift1') {
+                              setShift1Data(prev => ({ ...prev, compressorOpeningRPM: value }));
+                            } else {
+                              setShift2Data(prev => ({ ...prev, compressorOpeningRPM: value }));
+                            }
+                          }}
+                          min={0}
+                          step={0.1}
+                          precision={1}
+                          controls={false}
+                          style={{ width: '100%', fontSize: '12px' }}
+                        />
+                      )
+                    },
+                    {
+                      title: 'Closing',
+                      key: 'compressorClosing',
+                      width: 100,
+                      render: (_, record) => (
+                        <InputNumber
+                          size="small"
+                          placeholder="0.0"
+                          value={record.data.compressorClosingRPM}
+                          onChange={(value) => {
+                            if (record.key === 'shift1') {
+                              setShift1Data(prev => ({ ...prev, compressorClosingRPM: value }));
+                              // Auto-fill Shift 2 opening when Shift 1 closing is typed
+                              setShift2Data(prev => ({ ...prev, compressorOpeningRPM: value }));
+                            } else {
+                              setShift2Data(prev => ({ ...prev, compressorClosingRPM: value }));
+                            }
+                          }}
+                          min={0}
+                          step={0.1}
+                          precision={1}
+                          controls={false}
+                          style={{ width: '100%', fontSize: '12px' }}
+                        />
+                      )
+                    }
+                  ]
+                },
+                {
+                  title: 'Total Machine RPM',
+                  key: 'totalMachineRPM',
+                  width: 120,
+                  render: (_, record) => {
+                    const total = (record.data.vehicleClosingRPM || 0) - (record.data.vehicleOpeningRPM || 0);
+                    return (
+                      <Text style={{ fontSize: '12px' }}>{truncateToFixed(total, 2)}</Text>
+                    );
+                  }
+                },
+                {
+                  title: 'Total Compressor RPM',
+                  key: 'totalCompressorRPM',
+                  width: 120,
+                  render: (_, record) => {
+                    const total = (record.data.compressorClosingRPM || 0) - (record.data.compressorOpeningRPM || 0);
+                    return (
+                      <Text style={{ fontSize: '12px' }}>{truncateToFixed(total, 2)}</Text>
+                    );
+                  }
+                },
+                {
+                  title: 'No of Holes',
+                  key: 'holes',
+                  width: 100,
+                  render: (_, record) => (
+                    <InputNumber
+                      size="small"
+                      placeholder="0"
+                      value={record.data.noOfHoles}
+                      onChange={(value) => {
+                        if (record.key === 'shift1') {
+                          setShift1Data(prev => ({ ...prev, noOfHoles: value }));
+                        } else {
+                          setShift2Data(prev => ({ ...prev, noOfHoles: value }));
+                        }
+                      }}
+                      min={0}
+                      controls={false}
+                      style={{ width: '100%', fontSize: '12px' }}
+                    />
+                  )
+                },
+                {
+                  title: 'Machine HSD',
+                  key: 'machineHSD',
+                  width: 100,
+                  render: (_, record) => (
+                    <InputNumber
+                      size="small"
+                      placeholder="0.0"
+                      value={record.data.vehicleHSD}
+                      onChange={(value) => {
+                        if (record.key === 'shift1') {
+                          setShift1Data(prev => ({ ...prev, vehicleHSD: value }));
+                        } else {
+                          setShift2Data(prev => ({ ...prev, vehicleHSD: value }));
+                        }
+                      }}
+                      min={0}
+                      step={0.1}
+                      precision={1}
+                      controls={false}
+                      style={{ width: '100%', fontSize: '12px' }}
+                    />
+                  )
+                },
+                {
+                  title: 'Compressor HSD',
+                  key: 'compressorHSD',
+                  width: 100,
+                  render: (_, record) => (
+                    <InputNumber
+                      size="small"
+                      placeholder="0.0"
+                      value={record.data.compressorHSD}
+                      onChange={(value) => {
+                        if (record.key === 'shift1') {
+                          setShift1Data(prev => ({ ...prev, compressorHSD: value }));
+                        } else {
+                          setShift2Data(prev => ({ ...prev, compressorHSD: value }));
+                        }
+                      }}
+                      min={0}
+                      step={0.1}
+                      precision={1}
+                      controls={false}
+                      style={{ width: '100%', fontSize: '12px' }}
+                    />
+                  )
+                },
+                {
+                  title: 'Diesel Used',
+                  key: 'dieselUsed',
+                  width: 100,
+                  render: (_, record) => (
+                    <InputNumber
+                      size="small"
+                      placeholder="0.0"
+                      value={record.data.dieselUsed}
+                      onChange={(value) => {
+                        if (record.key === 'shift1') {
+                          setShift1Data(prev => ({ ...prev, dieselUsed: value }));
+                        } else {
+                          setShift2Data(prev => ({ ...prev, dieselUsed: value }));
+                        }
+                      }}
+                      min={0}
+                      step={0.1}
+                      precision={1}
+                      controls={false}
+                      style={{ width: '100%', fontSize: '12px' }}
+                    />
+                  )
+                },
+                {
+                  title: 'Total Production Meter',
+                  key: 'meter',
+                  width: 120,
+                  render: (_, record) => (
+                    <InputNumber
+                      size="small"
+                      placeholder="0.0"
+                      value={record.data.meter}
+                      onChange={(value) => {
+                        if (record.key === 'shift1') {
+                          setShift1Data(prev => ({ ...prev, meter: value }));
+                        } else {
+                          setShift2Data(prev => ({ ...prev, meter: value }));
+                        }
+                      }}
+                      min={0}
+                      step={0.1}
+                      precision={1}
+                      controls={false}
+                      style={{ width: '100%', fontSize: '12px' }}
+                    />
+                  )
+                }
+              ]}
+              style={{ marginBottom: '4px', fontSize: '11px' }}
             />
-          </div>
 
-          {/* Shift 1 Section */}
-          {renderShiftSection(1, shift1Data, selectedShift1Machine, selectedShift1Compressor)}
+            {/* Employee Section - Compact Grid Layout */}
+            <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+              <Col span={12}>
+                <Text strong style={{ fontSize: '11px' }}>Shift 1 Employees:</Text>
+                {shift1Data.employees.map((emp, idx) => (
+                  <Row key={emp.id} gutter={[4, 4]} style={{ marginTop: '2px', marginBottom: '2px' }}>
+                    <Col span={8}>
+                      <Select
+                        size="small"
+                        placeholder="Role"
+                        value={emp.role}
+                        onChange={(value) => updateEmployeeInShift(1, emp.id, 'role', value)}
+                        style={{ width: '100%', fontSize: '11px' }}
+                        dropdownMatchSelectWidth={false}
+                      >
+                        <Select.Option value="operator">Operator</Select.Option>
+                        <Select.Option value="helper">Helper</Select.Option>
+                      </Select>
+                    </Col>
+                    <Col span={14}>
+                      <Select
+                        size="small"
+                        placeholder="Employee"
+                        value={emp.employeeId}
+                        onChange={(value) => updateEmployeeInShift(1, emp.id, 'employeeId', value)}
+                        showSearch
+                        optionFilterProp="children"
+                        style={{ width: '100%', fontSize: '11px' }}
+                        dropdownMatchSelectWidth={false}
+                      >
+                        {employees.map(employee => (
+                          <Select.Option key={employee.id} value={employee.id}>
+                            {employee.name} ({employee.empId})
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Col>
+                    <Col span={2}>
+                      <Button 
+                        size="small" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        onClick={() => removeEmployeeFromShift(1, emp.id)}
+                        style={{ padding: '0', height: '24px', width: '24px' }}
+                      />
+                    </Col>
+                  </Row>
+                ))}
+                <Button 
+                  size="small" 
+                  type="dashed" 
+                  icon={<PlusOutlined />}
+                  onClick={() => addEmployeeToShift(1)}
+                  style={{ fontSize: '11px', marginTop: '2px', height: '24px', padding: '0 8px' }}
+                >
+                  Add
+                </Button>
+              </Col>
+              <Col span={12}>
+                <Text strong style={{ fontSize: '11px' }}>Shift 2 Employees:</Text>
+                {shift2Data.employees.map((emp) => (
+                  <Row key={emp.id} gutter={[4, 4]} style={{ marginTop: '2px', marginBottom: '2px' }}>
+                    <Col span={8}>
+                      <Select
+                        size="small"
+                        placeholder="Role"
+                        value={emp.role}
+                        onChange={(value) => updateEmployeeInShift(2, emp.id, 'role', value)}
+                        style={{ width: '100%', fontSize: '11px' }}
+                        dropdownMatchSelectWidth={false}
+                      >
+                        <Select.Option value="operator">Operator</Select.Option>
+                        <Select.Option value="helper">Helper</Select.Option>
+                      </Select>
+                    </Col>
+                    <Col span={14}>
+                      <Select
+                        size="small"
+                        placeholder="Employee"
+                        value={emp.employeeId}
+                        onChange={(value) => updateEmployeeInShift(2, emp.id, 'employeeId', value)}
+                        showSearch
+                        optionFilterProp="children"
+                        style={{ width: '100%', fontSize: '11px' }}
+                        dropdownMatchSelectWidth={false}
+                      >
+                        {employees.map(employee => (
+                          <Select.Option key={employee.id} value={employee.id}>
+                            {employee.name} ({employee.empId})
+                          </Select.Option>
+                        ))}
+                      </Select>
+                    </Col>
+                    <Col span={2}>
+                      <Button 
+                        size="small" 
+                        danger 
+                        icon={<DeleteOutlined />}
+                        onClick={() => removeEmployeeFromShift(2, emp.id)}
+                        style={{ padding: '0', height: '24px', width: '24px' }}
+                      />
+                    </Col>
+                  </Row>
+                ))}
+                <Button 
+                  size="small" 
+                  type="dashed" 
+                  icon={<PlusOutlined />}
+                  onClick={() => addEmployeeToShift(2)}
+                  style={{ fontSize: '11px', marginTop: '2px', height: '24px', padding: '0 8px' }}
+                >
+                  Add
+                </Button>
+              </Col>
+            </Row>
 
-          {/* Shift 2 Section */}
-          {renderShiftSection(2, shift2Data, selectedShift2Machine, selectedShift2Compressor)}
+            {/* Fitted Items */}
+            <div style={{ marginBottom: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                <Text strong style={{ fontSize: '11px' }}>Fitted Items:</Text>
+                <Button
+                  size="small"
+                  type="dashed"
+                  icon={<PlusOutlined />}
+                  onClick={() => openFitItemModal(1)}
+                  style={{ fontSize: '11px', padding: '0 8px', height: '24px' }}
+                >
+                  Fit Item
+                </Button>
+              </div>
+              <Table
+                size="small"
+                pagination={false}
+                dataSource={shift1Data.fittedItems.map((item, idx) => ({ ...item, key: idx }))}
+                columns={[
+                  { title: 'S.No', key: 'sno', width: 40, render: (_, __, index) => index + 1 },
+                  { 
+                    title: 'Item Name', 
+                    key: 'itemName', 
+                    render: (_, record) => record.item?.itemName || record.instanceNumber 
+                  },
+                  { 
+                    title: 'Instance #', 
+                    key: 'instanceNumber',
+                    width: 120,
+                    dataIndex: 'instanceNumber'
+                  },
+                  { 
+                    title: 'Current RPM', 
+                    key: 'currentRPM', 
+                    width: 120,
+                    render: (_, record) => truncateToFixed(record.currentCount || 0, 2)
+                  },
+                  { 
+                    title: 'Next Service RPM', 
+                    key: 'nextServiceRPM', 
+                    width: 140,
+                    render: (_, record) => {
+                      const serviceInterval = record.item?.serviceIntervalCount || 0;
+                      const lastUsed = record.lastUsedCount || 0;
+                      const nextService = lastUsed + serviceInterval;
+                      return truncateToFixed(nextService, 2);
+                    }
+                  },
+                  {
+                    title: 'Actions',
+                    key: 'actions',
+                    width: 80,
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => removeFittedItem(1, record.id)}
+                        style={{ fontSize: '11px', padding: '0 8px', height: '24px' }}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                style={{ fontSize: '11px' }}
+              />
+            </div>
 
-          <Divider />
-
-          <div className="flex justify-end space-x-2">
-            <Button onClick={handleCancel} disabled={submitting}>Cancel</Button>
-            <Button type="primary" onClick={handleSubmit} loading={submitting} disabled={submitting}>
+            {/* Buttons */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '4px' }}>
+              <Button onClick={handleCancel} size="small" style={{ height: '28px', fontSize: '11px' }}>
+                Cancel
+              </Button>
+              <Button 
+                type="primary" 
+                onClick={handleSubmit} 
+                loading={submitting} 
+                size="small"
+                style={{ height: '28px', fontSize: '11px' }}
+              >
               Save Daily Entries
             </Button>
+            </div>
           </div>
         </Card>
       )}
@@ -1056,23 +1631,25 @@ const DailyEntry = () => {
           <Table
             dataSource={availableItems.filter(item => selectedItemInstances.includes(item.id))}
             columns={[
-              { title: "Instance Number", dataIndex: "instanceNumber", key: "instanceNumber" },
+              { title: "Instance #", dataIndex: "instanceNumber", key: "instanceNumber", width: 120 },
               { title: "Item Name", dataIndex: ["item", "itemName"], key: "itemName" },
-              { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber" },
+              { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber", width: 150 },
               { 
-                title: "Last Used Count", 
-                key: "lastUsedCount",
-                render: (_, record) => truncateToFixed(record.lastUsedCount || 0, 2)
-              },
-              { 
-                title: "Balance", 
-                key: "balance",
-                render: (_, record) => record.balance || 0
-              },
-              { 
-                title: "Current Count", 
-                key: "currentCount",
+                title: "Current RPM", 
+                key: "currentRPM",
+                width: 120,
                 render: (_, record) => truncateToFixed(record.currentCount || 0, 2)
+              },
+              { 
+                title: "Next Service RPM", 
+                key: "nextServiceRPM",
+                width: 150,
+                render: (_, record) => {
+                  const serviceInterval = record.item?.serviceIntervalCount || 0;
+                  const lastUsed = record.lastUsedCount || 0;
+                  const nextService = lastUsed + serviceInterval;
+                  return truncateToFixed(nextService, 2);
+                }
               },
             ]}
             pagination={false}

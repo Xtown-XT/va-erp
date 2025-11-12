@@ -399,33 +399,11 @@ const InventoryManagement = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <Title level={2} className="mb-2">
-            Inventory Management
-          </Title>
-          <Text type="secondary">Track stock levels and transactions</Text>
-        </div>
-        <Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              fetchPaginatedData(pagination.current, pagination.pageSize);
-              fetchSummary();
-            }}
-            loading={loading}
-          >
-            Refresh
-          </Button>
-        </Space>
-      </div>
-
+    <div className="space-y-2">
       {/* ✅ Summary cards now show total data (not page data) */}
-      <Row gutter={[16, 16]}>
+      <Row gutter={[8, 8]}>
         <Col xs={24} md={12} lg={6}>
-          <Card>
+          <Card bodyStyle={{ padding: '12px' }}>
             
             <Statistic
               title="Total Items"
@@ -436,7 +414,7 @@ const InventoryManagement = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} lg={6}>
-          <Card>
+          <Card bodyStyle={{ padding: '12px' }}>
             <Statistic
               title="Total Stock"
               value={summary.totalStock}
@@ -446,7 +424,7 @@ const InventoryManagement = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} lg={6}>
-          <Card>
+          <Card bodyStyle={{ padding: '12px' }}>
             <Statistic
               title="Items In Stock"
               value={summary.itemsInStock}
@@ -456,7 +434,7 @@ const InventoryManagement = () => {
           </Card>
         </Col>
         <Col xs={24} md={12} lg={6}>
-          <Card>
+          <Card bodyStyle={{ padding: '12px' }}>
             <Statistic
               title="Items Out of Stock"
               value={summary.itemsOutOfStock}
@@ -467,21 +445,27 @@ const InventoryManagement = () => {
         </Col>
       </Row>
 
-      {/* Table */}
-      <Card>
-        <div className="mb-4 flex justify-between items-center">
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+      {/* Filters */}
+      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
+        <Row gutter={8} align="middle">
+          <Col xs={24} sm={12} md={8}>
             <Input.Search
               placeholder="Search items..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ maxWidth: 300 }}
+              size="small"
             />
-            <Button onClick={() => setSearchTerm("")} disabled={!searchTerm}>
-              Clear Filters
+          </Col>
+          <Col xs={24} sm={12} md={3}>
+            <Button onClick={() => setSearchTerm("")} disabled={!searchTerm} size="small" className="w-full">
+              Clear
             </Button>
-          </div>
-        </div>
+          </Col>
+        </Row>
+      </Card>
+
+      {/* Table */}
+      <Card bodyStyle={{ padding: '12px' }}>
 
         <Table
           columns={stockColumns}
