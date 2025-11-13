@@ -19,7 +19,7 @@ const Service = sequelize.define(
       allowNull: true, // what the next service RPM was set to after this service
     },
     serviceType: {
-      type: DataTypes.ENUM("vehicle", "compressor", "item"),
+      type: DataTypes.ENUM("machine", "compressor", "item"), // Changed from "vehicle" to "machine"
       allowNull: false,
     },
     serviceName: {
@@ -47,11 +47,11 @@ const Service = sequelize.define(
         key: "id",
       },
     },
-    itemInstanceId: {
+    itemId: {
       type: DataTypes.UUID,
       allowNull: true,
       references: {
-        model: "itemInstance",
+        model: "item",
         key: "id",
       },
     },

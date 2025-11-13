@@ -1,11 +1,11 @@
 import { Router } from "express";
-import { VehicleController } from "./vehicle.controller.js";
+import { machineController } from "./vehicle.controller.js";
 import { validate } from "../../shared/middlewares/validate.js";
 import { authorize } from "../../shared/middlewares/auth.js";
 import {
-  createVehicleSchema,
-  updateVehicleSchema,
-  deleteVehicleSchema,
+  createMachineSchema,
+  updateMachineSchema,
+  deleteMachineSchema,
 } from "./vehicle.zod.js";
 
 const router = Router();
@@ -13,24 +13,24 @@ const router = Router();
 router.post(
   "/",
   authorize("create"),
-  validate(createVehicleSchema),
-  VehicleController.create
+  validate(createMachineSchema),
+  machineController.create
 );
-router.get("/", authorize("read"), VehicleController.getAll);
-router.get("/:id", authorize("read"), VehicleController.getById);
+router.get("/", authorize("read"), machineController.getAll);
+router.get("/:id", authorize("read"), machineController.getById);
 router.put(
   "/:id",
   authorize("update"),
-  validate(updateVehicleSchema),
-  VehicleController.update
+  validate(updateMachineSchema),
+  machineController.update
 );
 router.delete(
   "/:id",
   authorize("delete"),
-  validate(deleteVehicleSchema),
-  VehicleController.softDelete
+  validate(deleteMachineSchema),
+  machineController.softDelete
 );
-router.delete("/:id/hard", authorize("delete"), VehicleController.hardDelete);
-router.post("/:id/restore", authorize("update"), VehicleController.restore);
+router.delete("/:id/hard", authorize("delete"), machineController.hardDelete);
+router.post("/:id/restore", authorize("update"), machineController.restore);
 
 export default router;

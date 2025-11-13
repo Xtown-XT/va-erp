@@ -28,7 +28,6 @@ import ServiceManagement from "./components/ServiceManagement";
 import AddressManagement from "./components/AddressManagement";
 // import InventoryManagement from "./components/InventoryManagement"; // Commented out - page hidden
 import ProductionReport from "./components/ProductionReport";
-import ItemInstanceManagement from "./components/ItemInstanceManagement";
 import EmployeeDetails from "./components/EmployeeDetails";
 import NotFound from "./components/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -60,7 +59,6 @@ function App() {
             <Route path="service-management" element={<ServiceManagement />} />
             <Route path="user-management" element={<UserManagement />} />
             <Route path="address" element={<AddressManagement />} />
-            <Route path="item-instances" element={<ItemInstanceManagement />} />
 
             {/* Employee sub-routes */}
             <Route path="employee/attendance" element={<Attendance />} />

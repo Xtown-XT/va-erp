@@ -25,12 +25,11 @@ import { serviceRoutes } from "./src/modules/service/index.js";
 import serviceAlertsRoutes from "./src/modules/service/serviceAlerts.routes.js";
 import { siteRoutes } from "./src/modules/site/index.js";
 import { supplierRoutes } from "./src/modules/supplier/index.js";
-import { vehicleRoutes } from "./src/modules/vehicle/index.js";
+import { machineRoutes } from "./src/modules/vehicle/index.js"; // Changed from vehicleRoutes
 import { compressorRoutes } from "./src/modules/compressor/index.js";
 import { userRoutes } from "./src/modules/user/index.js";
 import { addressRoutes } from "./src/modules/address/index.js";
 import stockTransactionRoutes from "./src/modules/stockTransaction/stockTransaction.routes.js";
-import itemInstanceRoutes from "./src/modules/itemInstance/itemInstance.routes.js";
 import { defineAssociations } from "./src/shared/models/associations.js";
 import Service from "./src/modules/service/service.model.js";
 import DailyEntryEmployee from "./src/modules/dailyEntry/dailyEntryEmployee.model.js";
@@ -165,8 +164,8 @@ protectedRoutes.use("/suppliers", supplierRoutes);
 //address routes
 protectedRoutes.use("/address", addressRoutes);
 
-// Vehicle routes
-protectedRoutes.use("/vehicles", vehicleRoutes);
+// Machine routes (kept /vehicles path for backward compatibility)
+protectedRoutes.use("/vehicles", machineRoutes); // Changed from vehicleRoutes
 
 // Compressor routes
 protectedRoutes.use("/compressors", compressorRoutes);
@@ -179,7 +178,6 @@ protectedRoutes.use("/stockTransactions", stockTransactionRoutes);
 
 
 // Item Instance routes
-protectedRoutes.use("/itemInstances", itemInstanceRoutes);
 
 // Now apply auth + mount once
 app.use("/api", authenticate, protectedRoutes);

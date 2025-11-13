@@ -1,3 +1,3 @@
-import vehicleRoutes from "./vehicle.routes.js";
+import machineRoutes from "./vehicle.routes.js";
 
-export { vehicleRoutes };
+export { machineRoutes };

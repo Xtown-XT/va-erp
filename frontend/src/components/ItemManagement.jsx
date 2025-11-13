@@ -32,9 +32,11 @@ const ItemManagement = () => {
   const [form] = Form.useForm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [canBeFittedFilter, setCanBeFittedFilter] = useState("all"); // "all", "true", "false"
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -47,8 +49,31 @@ const ItemManagement = () => {
   const fetchItems = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/items?page=${page}&limit=${limit}`);
-      setItems(res.data.data || []);
+      let url = `/api/items?page=${page}&limit=${limit}`;
+      if (searchTerm) {
+        url += `&search=${encodeURIComponent(searchTerm)}`;
+      }
+      if (canBeFittedFilter !== "all") {
+        url += `&canBeFitted=${canBeFittedFilter}`;
+      }
+      
+      const res = await api.get(url);
+      let itemsData = res.data.data || [];
+      
+      // Backend returns grouped items when canBeFitted=true
+      // We need to flatten them to show individual units
+      const flattenedItems = [];
+      itemsData.forEach(item => {
+        if (item.canBeFitted && item.items && Array.isArray(item.items) && item.items.length > 0) {
+          // This is a grouped fittable item - show individual units
+          flattenedItems.push(...item.items);
+        } else {
+          // Regular item or non-fittable (already individual)
+          flattenedItems.push(item);
+        }
+      });
+      
+      setItems(flattenedItems);
 
       // Update pagination state
       setPagination(prev => ({
@@ -59,34 +84,51 @@ const ItemManagement = () => {
       }));
     } catch (err) {
       console.error("Error fetching items", err);
+      message.error("Error fetching items");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchItems();
+    fetchItems(pagination.current, pagination.pageSize);
   }, []);
+
+  // Refetch when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchItems(1, pagination.pageSize);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, canBeFittedFilter]);
 
  
 
   // Handle form submission
   const handleSubmit = async (values) => {
+    // Prevent duplicate submissions
+    if (submitting) {
+      return;
+    }
+    
+    setSubmitting(true);
     try {
       // Ensure numeric fields are numbers
       const payload = {
         ...values,
-        purchaseRate: Number(values.purchaseRate),
+        purchaseRate: Number(values.purchaseRate) || 0,
         gst: values.gst !== undefined ? Number(values.gst) : 0,
+        stock: values.canBeFitted ? null : (values.stock !== undefined ? Number(values.stock) : 1),
+        canBeFitted: values.canBeFitted || false,
+        currentRPM: values.canBeFitted ? (Number(values.currentRPM) || 0) : undefined,
+        nextServiceRPM: values.canBeFitted ? (values.nextServiceRPM !== undefined ? Number(values.nextServiceRPM) : undefined) : undefined,
       };
 
       if (editingId) {
         await api.put(`/api/items/${editingId}`, payload);
-
         message.success("Item updated successfully");
       } else {
         await api.post("/api/items", payload);
-
         message.success("Item created successfully");
       }
 
@@ -96,7 +138,9 @@ const ItemManagement = () => {
       fetchItems(pagination.current, pagination.pageSize);
     } catch (err) {
       console.error("Error saving item", err);
-      message.error("Error saving item");
+      message.error(err.response?.data?.message || "Error saving item");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -108,7 +152,10 @@ const ItemManagement = () => {
       ...record,
       purchaseRate: Number(record.purchaseRate) || 0,
       gst: record.gst !== undefined ? Number(record.gst) : 0,
+      stock: record.canBeFitted ? 1 : (record.stock !== null && record.stock !== undefined ? Number(record.stock) : 1),
       canBeFitted: record.canBeFitted || false,
+      currentRPM: record.currentRPM !== undefined ? Number(record.currentRPM) : 0,
+      nextServiceRPM: record.nextServiceRPM !== undefined ? Number(record.nextServiceRPM) : undefined,
     });
   };
 
@@ -234,14 +281,59 @@ const ItemManagement = () => {
       title: "Stock",
       dataIndex: "stock",
       key: "stock",
-      render: (value) => (
-        <Text strong style={{ 
-          color: value > 0 ? '#52c41a' : '#ff4d4f',
-          fontSize: '16px'
-        }}>
-          {value || 0}
-        </Text>
-      ),
+      render: (value, record) => {
+        // For fittable items, stock is calculated from status count
+        const stockValue = value !== null && value !== undefined ? value : (record.in_stock || 0);
+        return (
+          <Text strong style={{ 
+            color: stockValue > 0 ? '#52c41a' : '#ff4d4f',
+            fontSize: '16px'
+          }}>
+            {stockValue}
+          </Text>
+        );
+      },
+    },
+    {
+      title: "Current RPM",
+      dataIndex: "currentRPM",
+      key: "currentRPM",
+      render: (value, record) => {
+        // Only show for fittable items
+        if (record.canBeFitted) {
+          return truncateToFixed(value || 0, 2);
+        }
+        return '-';
+      },
+    },
+    {
+      title: "Next Service RPM",
+      dataIndex: "nextServiceRPM",
+      key: "nextServiceRPM",
+      render: (value, record) => {
+        // Only show for fittable items
+        if (record.canBeFitted) {
+          return value ? truncateToFixed(value, 2) : '-';
+        }
+        return '-';
+      },
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      render: (value, record) => {
+        // Only show for fittable items
+        if (record.canBeFitted) {
+          const statusColors = {
+            'in_stock': 'green',
+            'fitted': 'blue',
+            'removed': 'default'
+          };
+          return value ? <Tag color={statusColors[value] || 'default'}>{value}</Tag> : '-';
+        }
+        return '-';
+      },
     },
     {
       title: "Created By",
@@ -289,139 +381,276 @@ const ItemManagement = () => {
   return (
     <div className="space-y-2">
       {/* Header */}
-      <div className="flex justify-end items-center mb-2">
-        <Space>
-          <Button
-            icon={<FilePdfOutlined />}
-            onClick={exportToPDF}
-            type="primary"
-            danger
-            size="small"
-          >
-            Export PDF
-          </Button>
-          {canCreate() && (
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => {
-              setShowForm(true);
-              setEditingId(null);
-              form.resetFields();
-            }}
-            size="small"
-          >
-            Add Item
-          </Button>
-          )}
-        </Space>
-      </div>
-
-      {/* Form */}
-      {showForm && (
-        <Card title={editingId ? "Edit Item" : "Add New Item"} className="mb-1" bodyStyle={{ padding: '8px' }}>
-          <Form layout="vertical" form={form} onFinish={handleSubmit}>
-            <div className="grid grid-cols-2 gap-4">
-              <Form.Item
-                name="itemName"
-                label="Item Name"
-                rules={[{ required: true }]}
-              >
-                <Input />
-
-              </Form.Item>
-              <Form.Item 
-                name="partNumber" 
-                label="Part Number"
-                rules={[{ required: true, message: "Part number is required" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item
-                name="groupName"
-                label="Category"
-                rules={[{ required: true, message: "Please enter category" }]}
-              >
-                <Input />
-              </Form.Item>
-              <Form.Item
-                name="units"
-                label="Units"
-                rules={[{ required: true, message: "Please select units" }]}
-              >
-                <Select placeholder="Select units" showSearch optionFilterProp="children">
-                  <Select.Option value="kg">kg</Select.Option>
-                  <Select.Option value="ltr">ltr</Select.Option>
-                  <Select.Option value="mtr">mtr</Select.Option>
-                  <Select.Option value="nos">nos</Select.Option>
-                  <Select.Option value="set">set</Select.Option>
-                  <Select.Option value="unit">unit</Select.Option>
-                  <Select.Option value="kit">kit</Select.Option>
-                </Select>
-              </Form.Item>
-              <Form.Item
-                name="purchaseRate"
-                label="Purchase Rate (₹)"
-                rules={[{ required: true, message: "Please enter purchase rate" }]}
-              >
-                <InputNumber
-                  className="w-full"
-                  min={0}
-                  step={0.01}
-                  precision={2}
-                  placeholder="Enter purchase rate"
-                />
-              </Form.Item>
-              <Form.Item
-                name="gst"
-                label="GST % (Optional)"
-                rules={[{ type: 'number', min: 0, max: 100 }]}
-              >
-                <InputNumber
-                  className="w-full"
-                  min={0}
-                  max={100}
-                  step={0.01}
-                  precision={2}
-                  placeholder="Enter GST percentage (optional)"
-                />
-              </Form.Item>
-              <Form.Item
-                name="stock"
-                label="Initial Stock"
-                rules={[{ type: 'number', min: 0 }]}
-              >
-                <InputNumber
-                  className="w-full"
-                  min={0}
-                  step={0.1}
-                  precision={1}
-                  placeholder="0"
-                />
-              </Form.Item>
-              <Form.Item
-                name="canBeFitted"
-                label="Can Be Fitted to Machine"
-                valuePropName="checked"
-                tooltip="Items marked 'Can Be Fitted' will create individual instances in inventory for RPM tracking"
-              >
-                <Switch />
-              </Form.Item>
-            </div>
-            <Form.Item>
-              <Space>
-                <Button type="primary" htmlType="submit">
-                  {editingId ? "Update Item" : "Add Item"}
-                </Button>
-                <Button onClick={() => {
-                  setShowForm(false);
+      {!showForm && (
+        <div className="flex justify-end items-center mb-2">
+          <Space>
+            <Button
+              icon={<FilePdfOutlined />}
+              onClick={exportToPDF}
+              type="primary"
+              danger
+              size="small"
+            >
+              Export PDF
+            </Button>
+            {canCreate() && (
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setShowForm(true);
                   setEditingId(null);
                   form.resetFields();
-                }}>
+                  form.setFieldsValue({ stock: 1, canBeFitted: false });
+                }}
+                size="small"
+              >
+                Add Item
+              </Button>
+            )}
+          </Space>
+        </div>
+      )}
+
+      {/* Form - Compact Layout */}
+      {showForm && (
+        <Card 
+          title={editingId ? "Edit Item" : "Add New Item"} 
+          className="mb-1" 
+          bodyStyle={{ padding: '4px' }}
+        >
+          <Form layout="vertical" form={form} onFinish={handleSubmit}>
+            <div style={{ padding: '0', margin: '0' }}>
+              {/* Row 1: Item Name, Part Number, Category */}
+              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Item Name *</Text>
+                  <Form.Item
+                    name="itemName"
+                    rules={[{ required: true }]}
+                    style={{ marginBottom: '2px' }}
+                  >
+                    <Input size="small" style={{ fontSize: '11px' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Part Number *</Text>
+                  <Form.Item 
+                    name="partNumber" 
+                    rules={[{ required: true, message: "Part number is required" }]}
+                    style={{ marginBottom: '2px' }}
+                  >
+                    <Input size="small" style={{ fontSize: '11px' }} />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Category *</Text>
+                  <Form.Item
+                    name="groupName"
+                    rules={[{ required: true, message: "Please enter category" }]}
+                    style={{ marginBottom: '2px' }}
+                  >
+                    <Input size="small" style={{ fontSize: '11px' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              {/* Row 2: Units, Purchase Rate, GST */}
+              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Units *</Text>
+                  <Form.Item
+                    name="units"
+                    rules={[{ required: true, message: "Please select units" }]}
+                    style={{ marginBottom: '2px' }}
+                  >
+                    <Select 
+                      size="small" 
+                      placeholder="Select units" 
+                      showSearch 
+                      optionFilterProp="children"
+                      style={{ fontSize: '11px' }}
+                    >
+                      <Select.Option value="kg">kg</Select.Option>
+                      <Select.Option value="ltr">ltr</Select.Option>
+                      <Select.Option value="mtr">mtr</Select.Option>
+                      <Select.Option value="nos">nos</Select.Option>
+                      <Select.Option value="set">set</Select.Option>
+                      <Select.Option value="unit">unit</Select.Option>
+                      <Select.Option value="kit">kit</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Purchase Rate (₹) *</Text>
+                  <Form.Item
+                    name="purchaseRate"
+                    rules={[{ required: true, message: "Please enter purchase rate" }]}
+                    style={{ marginBottom: '2px' }}
+                  >
+                    <InputNumber
+                      size="small"
+                      className="w-full"
+                      min={0}
+                      step={0.01}
+                      precision={2}
+                      placeholder="0.00"
+                      style={{ width: '100%', fontSize: '11px' }}
+                      controls={false}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>GST % (Optional)</Text>
+                  <Form.Item
+                    name="gst"
+                    rules={[{ type: 'number', min: 0, max: 100 }]}
+                    style={{ marginBottom: '2px' }}
+                  >
+                    <InputNumber
+                      size="small"
+                      className="w-full"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      precision={2}
+                      placeholder="0.00"
+                      style={{ width: '100%', fontSize: '11px' }}
+                      controls={false}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              {/* Row 3: Stock, Can Be Fitted */}
+              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Stock</Text>
+                  <Form.Item
+                    name="stock"
+                    rules={[{ type: 'number', min: 0 }]}
+                    style={{ marginBottom: '2px' }}
+                    initialValue={1}
+                  >
+                    <Form.Item shouldUpdate={(prevValues, currentValues) => prevValues.canBeFitted !== currentValues.canBeFitted} noStyle>
+                      {({ getFieldValue }) => {
+                        const canBeFitted = getFieldValue('canBeFitted');
+                        return (
+                          <InputNumber
+                            size="small"
+                            className="w-full"
+                            min={0}
+                            step={0.1}
+                            precision={1}
+                            placeholder="1"
+                            style={{ width: '100%', fontSize: '11px' }}
+                            disabled={canBeFitted}
+                            controls={false}
+                          />
+                        );
+                      }}
+                    </Form.Item>
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Can Be Fitted</Text>
+                  <Form.Item
+                    name="canBeFitted"
+                    valuePropName="checked"
+                    style={{ marginBottom: '2px' }}
+                    initialValue={false}
+                  >
+                    <Switch 
+                      size="small"
+                      onChange={(checked) => {
+                        if (checked) {
+                          form.setFieldsValue({ stock: 1 });
+                        } else {
+                          form.setFieldsValue({ currentRPM: undefined, nextServiceRPM: undefined });
+                        }
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              {/* Row 4: RPM Fields (only when canBeFitted is true) */}
+              <Form.Item shouldUpdate={(prevValues, currentValues) => prevValues.canBeFitted !== currentValues.canBeFitted}>
+                {({ getFieldValue }) => {
+                  const canBeFitted = getFieldValue('canBeFitted');
+                  if (canBeFitted) {
+                    return (
+                      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+                        <Col span={8}>
+                          <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Current RPM</Text>
+                          <Form.Item
+                            name="currentRPM"
+                            rules={[{ type: 'number', min: 0 }]}
+                            style={{ marginBottom: '2px' }}
+                          >
+                            <InputNumber
+                              size="small"
+                              className="w-full"
+                              min={0}
+                              step={0.1}
+                              precision={2}
+                              placeholder="0.00"
+                              style={{ width: '100%', fontSize: '11px' }}
+                              controls={false}
+                            />
+                          </Form.Item>
+                        </Col>
+                        <Col span={8}>
+                          <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Next Service RPM</Text>
+                          <Form.Item
+                            name="nextServiceRPM"
+                            rules={[{ type: 'number', min: 0 }]}
+                            style={{ marginBottom: '2px' }}
+                          >
+                            <InputNumber
+                              size="small"
+                              className="w-full"
+                              min={0}
+                              step={0.1}
+                              precision={2}
+                              placeholder="0.00"
+                              style={{ width: '100%', fontSize: '11px' }}
+                              controls={false}
+                            />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    );
+                  }
+                  return null;
+                }}
+              </Form.Item>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '4px' }}>
+                <Button 
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingId(null);
+                    form.resetFields();
+                  }} 
+                  size="small" 
+                  style={{ height: '28px', fontSize: '11px' }}
+                >
                   Cancel
                 </Button>
-              </Space>
-            </Form.Item>
+                <Button 
+                  type="primary" 
+                  htmlType="submit" 
+                  size="small"
+                  loading={submitting}
+                  disabled={submitting}
+                  style={{ height: '28px', fontSize: '11px' }}
+                >
+                  {editingId ? "Update Item" : "Save Item"}
+                </Button>
+              </div>
+            </div>
           </Form>
         </Card>
       )}
@@ -437,10 +666,25 @@ const ItemManagement = () => {
               size="small"
             />
           </Col>
-          <Col xs={24} sm={12} md={3}>
+          <Col xs={24} sm={8} md={4}>
+            <Select
+              value={canBeFittedFilter}
+              onChange={setCanBeFittedFilter}
+              size="small"
+              className="w-full"
+            >
+              <Select.Option value="all">All Items</Select.Option>
+              <Select.Option value="true">Fittable Items</Select.Option>
+              <Select.Option value="false">Non-Fittable Items</Select.Option>
+            </Select>
+          </Col>
+          <Col xs={24} sm={4} md={2}>
             <Button
-              onClick={() => setSearchTerm('')}
-              disabled={!searchTerm}
+              onClick={() => {
+                setSearchTerm('');
+                setCanBeFittedFilter('all');
+              }}
+              disabled={!searchTerm && canBeFittedFilter === 'all'}
               size="small"
               className="w-full"
             >
@@ -453,10 +697,7 @@ const ItemManagement = () => {
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(items || []).filter((item) =>
-          item.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.partNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-        )}
+        dataSource={items || []}
         rowKey="id"
         loading={loading}
         pagination={{

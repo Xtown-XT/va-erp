@@ -17,6 +17,7 @@ router.post(
   ItemController.create
 );
 router.get("/", authorize("read"), ItemController.getAll);
+router.get("/available-for-fitting", authorize("read"), ItemController.getAvailableForFitting);
 router.get("/:id", authorize("read"), ItemController.getById);
 router.put(
   "/:id",

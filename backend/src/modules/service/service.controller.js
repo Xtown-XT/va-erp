@@ -1,7 +1,6 @@
 import Service from "./service.model.js";
-import Vehicle from "../vehicle/vehicle.model.js";
+import Machine from "../vehicle/vehicle.model.js";
 import Compressor from "../compressor/compressor.model.js";
-import ItemInstance from "../itemInstance/itemInstance.model.js";
 import Item from "../item/item.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
@@ -13,11 +12,13 @@ const ServiceCrud = new BaseCrud(Service);
 class ServiceCustomController extends BaseController {
   getAll = async (req, res, next) => {
     try {
-      const { page = 1, limit = 10, vehicleId, compressorId, itemInstanceId, serviceType } = req.query;
+      const { page = 1, limit = 10, vehicleId, machineId, compressorId, itemId, serviceType } = req.query;
       const where = {};
-      if (vehicleId) where.vehicleId = vehicleId;
+      // Support both vehicleId (legacy) and machineId (new)
+      const effectiveMachineId = machineId || vehicleId;
+      if (effectiveMachineId) where.vehicleId = effectiveMachineId; // DB column kept
       if (compressorId) where.compressorId = compressorId;
-      if (itemInstanceId) where.itemInstanceId = itemInstanceId;
+      if (itemId) where.itemId = itemId;
       if (serviceType) where.serviceType = serviceType;
 
       // Simplified query for debugging
@@ -49,9 +50,9 @@ class ServiceCustomController extends BaseController {
         where,
         include: [
           {
-            model: Vehicle,
-            as: "vehicle",
-            attributes: ["id", "vehicleNumber", "vehicleType", "vehicleRPM"],
+            model: Machine,
+            as: "machine", // Changed alias
+            attributes: ["id", "vehicleNumber", "vehicleType", "vehicleRPM"], // DB columns kept
             required: false
           },
           {
@@ -61,19 +62,14 @@ class ServiceCustomController extends BaseController {
             required: false
           },
           {
-            model: ItemInstance,
-            as: "itemInstance",
-            attributes: ["id", "instanceNumber", "currentRPM", "nextServiceRPM"],
+            model: Item,
+            as: "item",
+            attributes: ["id", "itemName", "partNumber", "modelName", "currentRPM", "nextServiceRPM", "status"],
             include: [
               {
-                model: Item,
-                as: "item",
-                attributes: ["id", "itemName", "partNumber"]
-              },
-              {
-                model: Vehicle,
-                as: "fittedToVehicle",
-                attributes: ["id", "vehicleNumber", "vehicleType"],
+                model: Machine,
+                as: "fittedToMachine", // Changed alias
+                attributes: ["id", "vehicleNumber", "vehicleType"], // DB columns kept
                 required: false
               }
             ],
@@ -91,20 +87,20 @@ class ServiceCustomController extends BaseController {
         let serviceName = "";
         let currentRPM = 0;
 
-        if (service.serviceType === "vehicle" && service.vehicle) {
-          serviceName = `${service.vehicle.vehicleNumber} (${service.vehicle.vehicleType})`;
-          currentRPM = service.vehicle.vehicleRPM || 0;
+        if (service.serviceType === "machine" && service.machine) {
+          serviceName = `${service.machine.vehicleNumber} (${service.machine.vehicleType})`;
+          currentRPM = service.machine.vehicleRPM || 0;
         } else if (service.serviceType === "compressor" && service.compressor) {
           serviceName = `${service.compressor.compressorName}`;
           currentRPM = service.compressor.compressorRPM || 0;
-        } else if (service.serviceType === "item" && service.itemInstance) {
-          serviceName = `${service.itemInstance.item.itemName} (${service.itemInstance.instanceNumber})`;
-          currentRPM = service.itemInstance.currentRPM || 0;
+        } else if (service.serviceType === "item" && service.item) {
+          serviceName = `${service.item.itemName} (${service.item.modelName || service.item.partNumber})`;
+          currentRPM = service.item.currentRPM || 0;
           itemDetails = {
-            itemName: service.itemInstance.item.itemName,
-            partNumber: service.itemInstance.item.partNumber,
-            instanceNumber: service.itemInstance.instanceNumber,
-            fittedToVehicle: service.itemInstance.fittedToVehicle?.vehicleNumber || "Not fitted"
+            itemName: service.item.itemName,
+            partNumber: service.item.partNumber,
+            modelName: service.item.modelName,
+            fittedToVehicle: service.item.fittedToMachine?.vehicleNumber || "Not fitted"
           };
         }
 
@@ -139,14 +135,19 @@ class ServiceCustomController extends BaseController {
     try {
       const service = await Service.findByPk(req.params.id, {
         include: [
-          { model: Vehicle, as: "vehicle", attributes: ["id", "vehicleNumber", "vehicleType"] },
+          { model: Machine, as: "machine", attributes: ["id", "vehicleNumber", "vehicleType"] }, // Changed alias
           { model: Compressor, as: "compressor", attributes: ["id", "compressorName"] },
           { 
-            model: ItemInstance, 
-            as: "itemInstance", 
-            attributes: ["id", "instanceNumber", "currentRPM"],
+            model: Item, 
+            as: "item", 
+            attributes: ["id", "modelName", "currentRPM", "itemName", "partNumber"],
             include: [
-              { model: Item, as: "item", attributes: ["id", "itemName", "partNumber"] }
+              {
+                model: Machine,
+                as: "fittedToMachine",
+                attributes: ["id", "vehicleNumber", "vehicleType"],
+                required: false
+              }
             ]
           }
         ]

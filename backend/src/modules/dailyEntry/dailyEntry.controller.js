@@ -1,11 +1,11 @@
 import DailyEntry from "./dailyEntry.model.js";
-import Vehicle from "../vehicle/vehicle.model.js";
+import Machine from "../vehicle/vehicle.model.js";
 import Compressor from "../compressor/compressor.model.js";
 import Service from "../service/service.model.js";
 import EmployeeList from "../employee/employeeList.model.js";
 import Item from "../item/item.model.js";
-import ItemInstance from "../itemInstance/itemInstance.model.js";
 import EmployeeAttendance from "../employee/employeeAttendance.model.js";
+import Site from "../site/site.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
 import DailyEntryEmployee from "./dailyEntryEmployee.model.js";
@@ -43,7 +43,7 @@ class DailyEntryCustomController extends BaseController {
   };
 
   // Helper: Upsert attendance for employees in daily entry
-  upsertEmployeeAttendance = async (employees, siteId, vehicleId, date, username, transaction) => {
+  upsertEmployeeAttendance = async (employees, siteId, machineId, date, username, transaction) => {
     try {
       for (const emp of employees) {
         const employeeId = emp.employeeId;
@@ -60,7 +60,7 @@ class DailyEntryCustomController extends BaseController {
             presence: 'present',
             workStatus: 'working',
             siteId,
-            vehicleId,
+            vehicleId: machineId, // DB column kept as vehicleId
             updatedBy: username
           }, { transaction });
         } else {
@@ -72,7 +72,7 @@ class DailyEntryCustomController extends BaseController {
             workStatus: 'working',
             salary: 0,
             siteId,
-            vehicleId,
+            vehicleId: machineId, // DB column kept as vehicleId
             createdBy: username
           }, { transaction });
         }
@@ -83,207 +83,13 @@ class DailyEntryCustomController extends BaseController {
     }
   };
 
-  // create = async (req, res, next) => {
-  //   const transaction = await DailyEntry.sequelize.transaction();
-  //   try {
-  //     const { 
-  //       vehicleId, 
-  //       vehicleOpeningRPM, 
-  //       vehicleClosingRPM,
-  //       compressorId, 
-  //       compressorOpeningRPM, 
-  //       compressorClosingRPM, 
-  //       vehicleServiceDone, 
-  //       compressorServiceDone, 
-  //       employeeId, 
-  //       employeeIds = [],
-  //       fittedItems = [],
-  //       removedItems = [],
-  //       notes
-  //     } = req.body;
-
-  //     // Auto-generate reference number if not provided
-  //     const refNo = req.body.refNo || await this.generateRefNo();
-
-  //     // Create entry first
-  //     const entryPayload = { 
-  //       ...req.body, 
-  //       refNo,
-  //       notes: req.body.notes || null,
-  //       createdBy: req.user.username 
-  //     };
-  //     const entry = await DailyEntry.create(entryPayload, { transaction });
-
-  //     // Attach additional employees (many-to-many)
-  //     const additionalIds = Array.isArray(req.body.additionalEmployeeIds) ? req.body.additionalEmployeeIds : [];
-  //     const effectiveEmployeeIds = (employeeIds && Array.isArray(employeeIds) ? employeeIds : additionalIds);
-  //     if (effectiveEmployeeIds && effectiveEmployeeIds.length) {
-  //       const allEmployeeIds = [...new Set([employeeId, ...employeeIds])];
-  //       const rows = allEmployeeIds.map((eid) => ({ dailyEntryId: entry.id, employeeId: eid }));
-  //       await DailyEntryEmployee.bulkCreate(rows, { transaction });
-  //     } else {
-  //       await DailyEntryEmployee.create({ dailyEntryId: entry.id, employeeId }, { transaction });
-  //     }
-
-  //     // Handle item fitting - update ItemInstance
-  //     if (fittedItems && fittedItems.length > 0) {
-  //       for (const item of fittedItems) {
-  //         // Find the ItemInstance
-  //         const itemInstance = await ItemInstance.findByPk(item.itemInstanceId, { transaction });
-  //         if (itemInstance && itemInstance.status === 'in_stock') {
-  //           // Update ItemInstance to fitted status
-  //           await itemInstance.update({
-  //             status: 'fitted',
-  //             fittedToVehicleId: vehicleId,
-  //             fittedDate: entry.date,
-  //             updatedBy: req.user?.username || "system"
-  //           }, { transaction });
-
-  //           // Update meter and RPM from daily entry
-  //           const meterIncrement = item.meterIncrement || 0;
-  //           const rpmIncrement = item.rpmIncrement || 0;
-            
-  //           await itemInstance.update({
-  //             currentMeter: (itemInstance.currentMeter || 0) + meterIncrement,
-  //             currentRPM: (itemInstance.currentRPM || 0) + rpmIncrement,
-  //             updatedBy: req.user?.username || "system"
-  //           }, { transaction });
-
-  //           // Create outward stock transaction
-  //           await StockTransaction.create({
-  //             itemId: itemInstance.itemId,
-  //             type: 'OUT',
-  //             quantity: 1,
-  //             rate: 0,
-  //             reference: 'DAILY_ENTRY_FITTING',
-  //             referenceId: entry.id,
-  //             createdBy: req.user?.username || "system"
-  //           }, { transaction });
-  //         }
-  //       }
-  //     }
-
-  //     // Handle item removal - update ItemInstance
-  //     if (removedItems && removedItems.length > 0) {
-  //       for (const item of removedItems) {
-  //         // Find the ItemInstance
-  //         const itemInstance = await ItemInstance.findByPk(item.itemInstanceId, { transaction });
-  //         if (itemInstance && itemInstance.status === 'fitted' && itemInstance.fittedToVehicleId === vehicleId) {
-  //           // Update ItemInstance to in_stock status
-  //           await itemInstance.update({
-  //             status: 'in_stock',
-  //             fittedToVehicleId: null,
-  //             fittedDate: null,
-  //             removedDate: entry.date,
-  //             updatedBy: req.user?.username || "system"
-  //           }, { transaction });
-
-  //           // Create inward stock transaction for removed items
-  //           await StockTransaction.create({
-  //             itemId: itemInstance.itemId,
-  //             type: 'IN',
-  //             quantity: 1,
-  //             rate: 0,
-  //             reference: 'DAILY_ENTRY_REMOVAL',
-  //             referenceId: entry.id,
-  //             createdBy: req.user?.username || "system"
-  //           }, { transaction });
-  //         }
-  //       }
-  //     }
-
-  //     // Update vehicle RPM totals
-  //     const vehicle = await Vehicle.findByPk(vehicleId, { transaction });
-  //     if (vehicle) {
-  //       const vehicleRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
-  //       const compressorRPMDiff = (compressorClosingRPM || 0) - (compressorOpeningRPM || 0);
-        
-  //       const updatedVehicleRPM = (vehicle.vehicleRPM || 0) + Math.max(0, vehicleRPMDiff);
-  //       const updatedCompressorRPM = (vehicle.compressorRPM || 0) + Math.max(0, compressorRPMDiff);
-        
-  //       await vehicle.update({ 
-  //         vehicleRPM: updatedVehicleRPM, 
-  //         compressorRPM: updatedCompressorRPM 
-  //       }, { transaction });
-
-  //       // Create service records if needed
-  //       const serviceCreates = [];
-  //       if (vehicleServiceDone) {
-  //         serviceCreates.push(
-  //           Service.create({
-  //             serviceRPM: updatedVehicleRPM,
-  //             serviceType: "vehicle",
-  //             vehicleId: vehicle.id,
-  //             compressorId: vehicle.compressorId,
-  //             createdBy: req.user.username,
-  //           }, { transaction })
-  //         );
-  //       }
-  //       if (compressorServiceDone && compressorId) {
-  //         serviceCreates.push(
-  //           Service.create({
-  //             serviceRPM: updatedCompressorRPM,
-  //             serviceType: "compressor",
-  //             vehicleId: vehicle.id,
-  //             compressorId,
-  //             createdBy: req.user.username,
-  //           }, { transaction })
-  //         );
-  //       }
-
-  //       // Handle spare parts service tracking
-  //       if (fittedItems && fittedItems.length > 0) {
-  //         for (const item of fittedItems) {
-  //           if (item.serviceDone) {
-  //             await ItemService.create({
-  //               itemId: item.itemId,
-  //               vehicleId: vehicle.id,
-  //               serviceRPM: item.startingRPM || 0,
-  //               serviceDate: entry.date,
-  //               dailyEntryId: entry.id,
-  //               notes: `Service completed for ${item.itemName || 'item'} fitted to ${vehicle.vehicleNumber}`,
-  //               createdBy: req.user.username
-  //             }, { transaction });
-  //           }
-  //         }
-  //       }
-
-  //       if (removedItems && removedItems.length > 0) {
-  //         for (const item of removedItems) {
-  //           if (item.serviceDone) {
-  //             await ItemService.create({
-  //               itemId: item.itemId,
-  //               vehicleId: vehicle.id,
-  //               serviceRPM: item.closingRPM || 0,
-  //               serviceDate: entry.date,
-  //               dailyEntryId: entry.id,
-  //               notes: `Service completed for ${item.itemName || 'item'} removed from ${vehicle.vehicleNumber}`,
-  //               createdBy: req.user.username
-  //             }, { transaction });
-  //           }
-  //         }
-  //       }
-  //       if (serviceCreates.length) await Promise.all(serviceCreates);
-  //     }
-
-  //     await transaction.commit();
-
-  //     return res.status(201).json({
-  //       success: true,
-  //       message: `DailyEntry created successfully`,
-  //       data: entry,
-  //     });
-  //   } catch (error) {
-  //     await transaction.rollback();
-  //     next(error);
-  //   }
-  // };
+  
 
   create = async (req, res, next) => {
   const transaction = await DailyEntry.sequelize.transaction();
   try {
     const { 
-      vehicleId, 
+      vehicleId, // Keep for DB compatibility, but treat as machineId in code
       vehicleOpeningRPM, 
       vehicleClosingRPM,
       compressorId, 
@@ -304,6 +110,7 @@ class DailyEntryCustomController extends BaseController {
       date,
       siteId
     } = req.body;
+    const machineId = vehicleId; // Alias for clarity in code
 
     // Auto-generate reference number if not provided
     const refNo = req.body.refNo || await this.generateRefNo();
@@ -372,14 +179,14 @@ class DailyEntryCustomController extends BaseController {
       await DailyEntryEmployee.bulkCreate(rows, { transaction });
     }
 
-    // Handle item fitting - just update status, no stock changes
+    // Handle item fitting - update status to fitted
     if (fittedItemInstanceIds.length > 0) {
-      for (const instanceId of fittedItemInstanceIds) {
-        const itemInstance = await ItemInstance.findByPk(instanceId, { transaction });
-        if (itemInstance && itemInstance.status === 'in_stock') {
-          await itemInstance.update({
+      for (const itemId of fittedItemInstanceIds) {
+        const item = await Item.findByPk(itemId, { transaction });
+        if (item && item.canBeFitted && item.status === 'in_stock') {
+          await item.update({
             status: 'fitted',
-            fittedToVehicleId: vehicleId,
+            fittedToVehicleId: machineId, // DB column kept
             fittedDate: entry.date,
             updatedBy: req.user?.username || "system"
           }, { transaction });
@@ -387,12 +194,12 @@ class DailyEntryCustomController extends BaseController {
       }
     }
 
-    // Handle item removal - just update status, no stock changes
+    // Handle item removal - update status back to in_stock
     if (removedItemInstanceIds.length > 0) {
-      for (const instanceId of removedItemInstanceIds) {
-        const itemInstance = await ItemInstance.findByPk(instanceId, { transaction });
-        if (itemInstance && itemInstance.status === 'fitted' && itemInstance.fittedToVehicleId === vehicleId) {
-          await itemInstance.update({
+      for (const itemId of removedItemInstanceIds) {
+        const item = await Item.findByPk(itemId, { transaction });
+        if (item && item.canBeFitted && item.status === 'fitted' && item.fittedToVehicleId === machineId) {
+          await item.update({
             status: 'in_stock',
             fittedToVehicleId: null,
             fittedDate: null,
@@ -403,16 +210,16 @@ class DailyEntryCustomController extends BaseController {
       }
     }
 
-    // Update vehicle RPM totals
-    const vehicle = await Vehicle.findByPk(vehicleId, { transaction });
-    if (vehicle) {
-      const vehicleRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
-      await vehicle.update({
-        vehicleRPM: (vehicle.vehicleRPM || 0) + Math.max(0, vehicleRPMDiff)
+    // Update machine RPM totals
+    const machine = await Machine.findByPk(machineId, { transaction });
+    if (machine) {
+      const machineRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
+      await machine.update({
+        vehicleRPM: (machine.vehicleRPM || 0) + Math.max(0, machineRPMDiff) // DB column kept
       }, { transaction });
 
       const serviceCreates = [];
-      if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: vehicle.vehicleRPM, serviceType: "vehicle", serviceName: vehicleServiceName || null, vehicleId, compressorId: vehicle.compressorId, createdBy: req.user.username }, { transaction }));
+      if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: machine.vehicleRPM, serviceType: "machine", serviceName: vehicleServiceName || null, vehicleId: machineId, compressorId: machine.compressorId, createdBy: req.user.username }, { transaction }));
       if (serviceCreates.length) await Promise.all(serviceCreates);
     }
 
@@ -430,7 +237,7 @@ class DailyEntryCustomController extends BaseController {
             serviceRPM: compressor.compressorRPM,
             serviceType: "compressor",
             serviceName: compressorServiceName || null,
-            vehicleId,
+            vehicleId: machineId, // DB column kept
             compressorId,
             createdBy: req.user.username
           }, { transaction });
@@ -438,13 +245,26 @@ class DailyEntryCustomController extends BaseController {
       }
     }
 
-    // Update RPM for fitted item instances
-    const vehicleRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
-    if (vehicleRPMDiff > 0 && fittedItemInstanceIds.length > 0) {
-      for (const instanceId of fittedItemInstanceIds) {
-        await ItemInstance.increment('currentRPM', {
-          by: vehicleRPMDiff,
-          where: { id: instanceId },
+    // Update RPM for fitted items using compressor RPM
+    // Each shift adds its own compressor RPM - total accumulates naturally
+    const shiftCompressorRPM = Math.max(0, (compressorClosingRPM || 0) - (compressorOpeningRPM || 0));
+    
+    if (shiftCompressorRPM > 0 && compressorId) {
+      // Get all items currently fitted to this machine (including newly fitted ones)
+      const allFittedItems = await Item.findAll({
+        where: {
+          fittedToVehicleId: machineId,
+          status: 'fitted',
+          canBeFitted: true,
+        },
+        transaction
+      });
+
+      // Add this shift's compressor RPM to all fitted items
+      // When both shifts are saved, the total (shift1 + shift2) will be added
+      for (const item of allFittedItems) {
+        await item.increment('currentRPM', {
+          by: shiftCompressorRPM,
           transaction
         });
       }
@@ -455,7 +275,7 @@ class DailyEntryCustomController extends BaseController {
       await this.upsertEmployeeAttendance(
         processedEmployees,
         siteId,
-        vehicleId,
+        machineId,
         date || entry.date,
         req.user.username,
         transaction
@@ -463,7 +283,18 @@ class DailyEntryCustomController extends BaseController {
     }
 
     await transaction.commit();
-    return res.status(201).json({ success: true, message: "DailyEntry created successfully", data: entry });
+    
+    // Fetch the created entry with relationships
+    const createdEntry = await DailyEntry.findByPk(entry.id, {
+      include: [
+        { model: EmployeeList, as: "primaryEmployee", attributes: ["id", "name", "empId"] },
+        { model: EmployeeList, as: "employees", attributes: ["id", "name", "empId"] },
+        { model: Machine, as: "machine", attributes: ["id", "vehicleType", "vehicleNumber"] },
+        { model: Site, as: "site", attributes: ["id", "siteName"] },
+      ],
+    });
+    
+    return res.status(201).json({ success: true, message: "DailyEntry created successfully", data: createdEntry });
   } catch (error) {
     await transaction.rollback();
     next(error);
@@ -475,7 +306,7 @@ update = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { 
-      vehicleId, 
+      vehicleId, // Keep for DB compatibility, but treat as machineId in code
       vehicleOpeningRPM, 
       vehicleClosingRPM,
       compressorId, 
@@ -496,12 +327,12 @@ update = async (req, res, next) => {
       date,
       siteId
     } = req.body;
-
     // Find the existing entry
     const existingEntry = await DailyEntry.findByPk(id, { transaction });
     if (!existingEntry) {
       return res.status(404).json({ success: false, message: "DailyEntry not found" });
     }
+    const machineId = vehicleId || existingEntry.vehicleId; // Alias for clarity
 
     // Handle employees array - new structure with roles and shifts
     let processedEmployees = [];
@@ -572,14 +403,14 @@ update = async (req, res, next) => {
       }
     }
 
-    // Handle item fitting - just update status, no stock changes
+    // Handle item fitting - update status to fitted
     if (fittedItemInstanceIds && fittedItemInstanceIds.length > 0) {
-      for (const instanceId of fittedItemInstanceIds) {
-        const itemInstance = await ItemInstance.findByPk(instanceId, { transaction });
-        if (itemInstance && itemInstance.status === 'in_stock') {
-          await itemInstance.update({
+      for (const itemId of fittedItemInstanceIds) {
+        const item = await Item.findByPk(itemId, { transaction });
+        if (item && item.canBeFitted && item.status === 'in_stock') {
+          await item.update({
             status: 'fitted',
-            fittedToVehicleId: vehicleId,
+            fittedToVehicleId: machineId, // DB column kept
             fittedDate: existingEntry.date,
             updatedBy: req.user?.username || "system"
           }, { transaction });
@@ -587,12 +418,12 @@ update = async (req, res, next) => {
       }
     }
 
-    // Handle item removal - just update status, no stock changes
+    // Handle item removal - update status back to in_stock
     if (removedItemInstanceIds && removedItemInstanceIds.length > 0) {
-      for (const instanceId of removedItemInstanceIds) {
-        const itemInstance = await ItemInstance.findByPk(instanceId, { transaction });
-        if (itemInstance && itemInstance.status === 'fitted' && itemInstance.fittedToVehicleId === vehicleId) {
-          await itemInstance.update({
+      for (const itemId of removedItemInstanceIds) {
+        const item = await Item.findByPk(itemId, { transaction });
+        if (item && item.canBeFitted && item.status === 'fitted' && item.fittedToVehicleId === machineId) {
+          await item.update({
             status: 'in_stock',
             fittedToVehicleId: null,
             fittedDate: null,
@@ -603,17 +434,17 @@ update = async (req, res, next) => {
       }
     }
 
-    // Update vehicle RPM totals
-    if (vehicleId) {
-      const vehicle = await Vehicle.findByPk(vehicleId, { transaction });
-      if (vehicle) {
-        const vehicleRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
-        await vehicle.update({
-          vehicleRPM: (vehicle.vehicleRPM || 0) + Math.max(0, vehicleRPMDiff)
+    // Update machine RPM totals
+    if (machineId) {
+      const machine = await Machine.findByPk(machineId, { transaction });
+      if (machine) {
+        const machineRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
+        await machine.update({
+          vehicleRPM: (machine.vehicleRPM || 0) + Math.max(0, machineRPMDiff) // DB column kept
         }, { transaction });
 
         const serviceCreates = [];
-        if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: vehicle.vehicleRPM, serviceType: "vehicle", serviceName: vehicleServiceName || null, vehicleId, compressorId: vehicle.compressorId, createdBy: req.user.username }, { transaction }));
+        if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: machine.vehicleRPM, serviceType: "machine", serviceName: vehicleServiceName || null, vehicleId: machineId, compressorId: machine.compressorId, createdBy: req.user.username }, { transaction }));
         if (serviceCreates.length) await Promise.all(serviceCreates);
       }
     }
@@ -632,7 +463,7 @@ update = async (req, res, next) => {
             serviceRPM: compressor.compressorRPM,
             serviceType: "compressor",
             serviceName: compressorServiceName || null,
-            vehicleId,
+            vehicleId: machineId, // DB column kept
             compressorId,
             createdBy: req.user.username
           }, { transaction });
@@ -646,7 +477,7 @@ update = async (req, res, next) => {
         await this.upsertEmployeeAttendance(
           processedEmployees,
           siteId || existingEntry.siteId,
-          vehicleId || existingEntry.vehicleId,
+          machineId,
           date || existingEntry.date,
           req.user.username,
           transaction
@@ -661,6 +492,8 @@ update = async (req, res, next) => {
       include: [
         { model: EmployeeList, as: "primaryEmployee", attributes: ["id", "name", "empId"] },
         { model: EmployeeList, as: "employees", attributes: ["id", "name", "empId"] },
+        { model: Machine, as: "machine", attributes: ["id", "vehicleType", "vehicleNumber"] },
+        { model: Site, as: "site", attributes: ["id", "siteName"] },
       ],
     });
 
@@ -678,7 +511,7 @@ update = async (req, res, next) => {
 
   getAll = async (req, res, next) => {
     try {
-      const { page = 1, limit = 10, startDate, endDate, date, siteId, vehicleId } = req.query;
+      const { page = 1, limit = 10, startDate, endDate, date, siteId, vehicleId, machineId, empId } = req.query;
       const where = {};
       if (date) {
         where.date = date;
@@ -692,27 +525,42 @@ update = async (req, res, next) => {
       if (siteId) {
         where.siteId = siteId;
       }
-      if (vehicleId) {
-        where.vehicleId = vehicleId;
+      // Support both vehicleId (legacy) and machineId (new)
+      const effectiveMachineId = machineId || vehicleId;
+      if (effectiveMachineId) {
+        where.vehicleId = effectiveMachineId; // DB column kept as vehicleId
+      }
+
+      // Build include with optional employee code filter
+      const employeeInclude = {
+        model: EmployeeList, 
+        as: "employees", 
+        attributes: ["id", "name", "empId"],
+        through: { attributes: ["role", "shift"] }
+      };
+      
+      // Filter by employee code if provided
+      if (empId) {
+        employeeInclude.where = { empId: { [Op.like]: `%${empId}%` } };
       }
 
       const items = await this.service.getAll(page, limit, {
         where,
         include: [
           { model: EmployeeList, as: "primaryEmployee", attributes: ["id", "name", "empId"] },
-          { 
-            model: EmployeeList, 
-            as: "employees", 
-            attributes: ["id", "name", "empId"],
-            through: { attributes: ["role", "shift"] }
-          },
-          { model: Vehicle, as: "vehicle", attributes: ["id", "vehicleType", "vehicleNumber"] },
+          employeeInclude,
+          { model: Machine, as: "machine", attributes: ["id", "vehicleType", "vehicleNumber"] }, // Changed alias to machine
+          { model: Site, as: "site", attributes: ["id", "siteName"] },
         ],
       });
       
       // Transform employees to include role and shift from through table
       if (items.data) {
         items.data = items.data.map(item => {
+          // Get site before toJSON to ensure it's preserved
+          const siteData = item.site || (item.get && item.get('site'));
+          const siteObj = siteData ? (siteData.toJSON ? siteData.toJSON() : siteData) : null;
+          
           const transformed = item.toJSON ? item.toJSON() : item;
           if (transformed.employees) {
             transformed.employees = transformed.employees.map(emp => ({
@@ -720,6 +568,13 @@ update = async (req, res, next) => {
               role: emp.DailyEntryEmployee?.role || 'operator',
               shift: emp.DailyEntryEmployee?.shift || 1
             }));
+          }
+          // Explicitly preserve site object
+          if (siteObj) {
+            transformed.site = siteObj;
+          } else if (!transformed.site && transformed.siteId) {
+            // If site wasn't loaded but we have siteId, set a placeholder
+            transformed.site = { id: transformed.siteId, siteName: null };
           }
           return transformed;
         });
@@ -742,6 +597,8 @@ update = async (req, res, next) => {
             attributes: ["id", "name", "empId"],
             through: { attributes: ["role", "shift"] }
           },
+          { model: Machine, as: "machine", attributes: ["id", "vehicleType", "vehicleNumber"] },
+          { model: Site, as: "site", attributes: ["id", "siteName"] },
         ],
       });
       if (!entry) return res.status(404).json({ success: false, message: "DailyEntry not found" });

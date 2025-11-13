@@ -1,7 +1,7 @@
 import EmployeeList from "../../modules/employee/employeeList.model.js";
 import EmployeeAttendance from "../../modules/employee/employeeAttendance.model.js";
 import Brand from "../../modules/brand/brand.model.js";
-import Vehicle from "../../modules/vehicle/vehicle.model.js";
+import Machine from "../../modules/vehicle/vehicle.model.js";
 import Service from "../../modules/service/service.model.js";
 import Site from "../../modules/site/site.model.js";
 import Item from "../../modules/item/item.model.js";
@@ -14,7 +14,6 @@ import DailyEntryEmployee from "../../modules/dailyEntry/dailyEntryEmployee.mode
 import Compressor from "../../modules/compressor/compressor.model.js";
 import Address from "../../modules/address/address.model.js";
 import User from "../../modules/user/user.model.js";
-import ItemInstance from "../../modules/itemInstance/itemInstance.model.js";
 
 export const defineAssociations = () => {
   // ========== EMPLOYEE MODULE RELATIONSHIPS ==========
@@ -27,24 +26,24 @@ export const defineAssociations = () => {
     as: "employee",
   });
 
-  // ========== VEHICLE MODULE RELATIONSHIPS ==========
-  Brand.hasMany(Vehicle, { foreignKey: "brandId", as: "vehicles" });
-  Vehicle.belongsTo(Brand, { foreignKey: "brandId", as: "brand" });
+  // ========== MACHINE MODULE RELATIONSHIPS ==========
+  Brand.hasMany(Machine, { foreignKey: "brandId", as: "machines" });
+  Machine.belongsTo(Brand, { foreignKey: "brandId", as: "brand" });
 
-  Site.hasMany(Vehicle, { foreignKey: "siteId", as: "vehicles" });
-  Vehicle.belongsTo(Site, { foreignKey: "siteId", as: "site" });
+  Site.hasMany(Machine, { foreignKey: "siteId", as: "machines" });
+  Machine.belongsTo(Site, { foreignKey: "siteId", as: "site" });
 
-  Compressor.hasMany(Vehicle, { foreignKey: "compressorId", as: "vehicles" });
-  Vehicle.belongsTo(Compressor, {
+  Compressor.hasMany(Machine, { foreignKey: "compressorId", as: "machines" });
+  Machine.belongsTo(Compressor, {
     foreignKey: "compressorId",
     as: "compressor",
   });
 
-  Vehicle.hasMany(DailyEntry, { foreignKey: "vehicleId", as: "dailyEntries" });
-  DailyEntry.belongsTo(Vehicle, { foreignKey: "vehicleId", as: "vehicle" });
+  Machine.hasMany(DailyEntry, { foreignKey: "vehicleId", as: "dailyEntries" }); // DB column kept as vehicleId
+  DailyEntry.belongsTo(Machine, { foreignKey: "vehicleId", as: "machine" }); // Changed alias to machine
 
-  Vehicle.hasMany(Service, { foreignKey: "vehicleId", as: "services" });
-  Service.belongsTo(Vehicle, { foreignKey: "vehicleId", as: "vehicle" });
+  Machine.hasMany(Service, { foreignKey: "vehicleId", as: "services" }); // DB column kept as vehicleId
+  Service.belongsTo(Machine, { foreignKey: "vehicleId", as: "machine" }); // Changed alias to machine
 
   Compressor.hasMany(Service, { foreignKey: "compressorId", as: "services" });
   Service.belongsTo(Compressor, {
@@ -114,26 +113,32 @@ export const defineAssociations = () => {
   Site.hasMany(EmployeeAttendance, { foreignKey: "siteId", as: "attendances" });
   EmployeeAttendance.belongsTo(Site, { foreignKey: "siteId", as: "site" });
 
-  Vehicle.hasMany(EmployeeAttendance, {
-    foreignKey: "vehicleId",
+  Machine.hasMany(EmployeeAttendance, {
+    foreignKey: "vehicleId", // DB column kept
     as: "attendances",
   });
-  EmployeeAttendance.belongsTo(Vehicle, {
-    foreignKey: "vehicleId",
-    as: "vehicle",
+  EmployeeAttendance.belongsTo(Machine, {
+    foreignKey: "vehicleId", // DB column kept
+    as: "machine", // Changed alias to machine
   });
 
 
-  // ========== ITEM INSTANCE RELATIONSHIPS ==========
-  Item.hasMany(ItemInstance, { foreignKey: "itemId", as: "instances" });
-  ItemInstance.belongsTo(Item, { foreignKey: "itemId", as: "item" });
+  // ========== ITEM RELATIONSHIPS (Fittable Items) ==========
+  // Fittable items can be fitted to machines
+  Machine.hasMany(Item, { 
+    foreignKey: "fittedToVehicleId", 
+    as: "fittedItems",
+    onDelete: 'SET NULL'  // When machine deleted, unfit the items
+  }); // DB column kept
+  Item.belongsTo(Machine, { 
+    foreignKey: "fittedToVehicleId", 
+    as: "fittedToMachine",
+    onDelete: 'SET NULL'
+  }); // Changed alias
 
-  Vehicle.hasMany(ItemInstance, { foreignKey: "fittedToVehicleId", as: "fittedInstances" });
-  ItemInstance.belongsTo(Vehicle, { foreignKey: "fittedToVehicleId", as: "fittedToVehicle" });
-
-  // Service relationships with ItemInstance
-  ItemInstance.hasMany(Service, { foreignKey: "itemInstanceId", as: "services" });
-  Service.belongsTo(ItemInstance, { foreignKey: "itemInstanceId", as: "itemInstance" });
+  // Service relationships with Item (for fittable items)
+  Item.hasMany(Service, { foreignKey: "itemId", as: "services" });
+  Service.belongsTo(Item, { foreignKey: "itemId", as: "item" });
 
   // ========== USER RELATIONSHIPS ==========
   // User model relationships (if needed for createdBy/updatedBy tracking)

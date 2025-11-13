@@ -17,7 +17,7 @@ const Item = sequelize.define(
     partNumber: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true,
+      // Remove unique constraint - same partNumber can have multiple rows for fittable items
     },
     groupName: {
       type: DataTypes.STRING,
@@ -42,11 +42,58 @@ const Item = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
-    // Simple stock quantity tracking
+    // Simple stock quantity tracking (for non-fittable items only)
     stock: {
       type: DataTypes.DOUBLE,
-      allowNull: false,
+      allowNull: true,
       defaultValue: 0,
+    },
+    // Fields for fittable items (one row per physical unit)
+    modelName: {
+      type: DataTypes.STRING,
+      allowNull: true, // Only required when canBeFitted=true
+      unique: true,
+    },
+    // Current RPM reading (cumulative) for fittable items
+    currentRPM: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    // Next service RPM for this unit
+    nextServiceRPM: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+    },
+    // Current status of the unit (for fittable items)
+    status: {
+      type: DataTypes.ENUM("in_stock", "fitted", "removed"),
+      allowNull: true, // Only for fittable items
+      defaultValue: "in_stock",
+    },
+    // Currently fitted to which machine/vehicle
+    fittedToVehicleId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "vehicle",
+        key: "id",
+      },
+    },
+    // When it was fitted
+    fittedDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    // When it was removed
+    removedDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    // Last service date
+    lastServiceDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
     },
     ...commonFields,
   },

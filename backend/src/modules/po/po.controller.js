@@ -6,7 +6,6 @@ import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
 import sequelize from "../../config/db.js";
 import Item from "../item/item.model.js";
-import ItemInstance from "../itemInstance/itemInstance.model.js";
 import { Op } from "sequelize";
 
 // 1. Create CRUD service from model

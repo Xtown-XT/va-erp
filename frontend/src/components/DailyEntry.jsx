@@ -31,22 +31,25 @@ import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
 import dayjs from "dayjs";
 import { truncateToFixed } from "../utils/textUtils";
+import { 
+  useSites, 
+  useVehicles, 
+  useCompressors, 
+  useEmployees, 
+  useAvailableItems, 
+  useDailyEntries
+} from "../hooks/useQueries";
+import { useCreateDailyEntry, useDeleteDailyEntry } from "../hooks/useMutations";
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
 
 const DailyEntry = () => {
   const [form] = Form.useForm();
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [sites, setSites] = useState([]);
-  const [machines, setMachines] = useState([]);
-  const [compressors, setCompressors] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -54,6 +57,23 @@ const DailyEntry = () => {
     showSizeChanger: true,
     pageSizeOptions: ['10', '20', '50'],
   });
+  
+  // React Query hooks - use pagination state directly
+  const { data: entriesData = { data: [], total: 0, page: 1, limit: 10 }, isLoading: loading, refetch: refetchEntries } = useDailyEntries({ 
+    page: pagination.current, 
+    limit: pagination.pageSize 
+  });
+  const { data: sites = [] } = useSites();
+  const { data: machines = [] } = useVehicles();
+  const { data: compressors = [] } = useCompressors();
+  const { data: employees = [] } = useEmployees();
+  const { data: availableItems = [] } = useAvailableItems();
+  
+  // Mutations
+  const createDailyEntry = useCreateDailyEntry();
+  const deleteDailyEntry = useDeleteDailyEntry();
+  
+  const entries = entriesData.data || [];
   
   // Shift 1 state
   const [shift1Data, setShift1Data] = useState({
@@ -108,96 +128,23 @@ const DailyEntry = () => {
   const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
   const [selectedShift2Compressor, setSelectedShift2Compressor] = useState(null);
-  const [availableItems, setAvailableItems] = useState([]);
   const [showFitItemModal, setShowFitItemModal] = useState(false);
   const [currentShiftForModal, setCurrentShiftForModal] = useState(null);
   const [selectedItemInstances, setSelectedItemInstances] = useState([]);
-  
-  const hasFetchedRef = useRef(false);
+  const [validationWarnings, setValidationWarnings] = useState([]);
 
-  // Fetch data
-  const fetchEntries = async (page = 1, limit = 10) => {
-    setLoading(true);
-    try {
-      const res = await api.get(`/api/dailyEntries?page=${page}&limit=${limit}`);
-      setEntries(res.data.data || []);
-      setPagination(prev => ({
-        ...prev,
-        current: res.data.page || page,
-        total: res.data.total || 0,
-        pageSize: res.data.limit || limit,
-      }));
-    } catch (err) {
-      message.error(`Failed to fetch daily entries: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchSites = async () => {
-    try {
-      const res = await api.get("/api/sites?limit=1000");
-      setSites(res.data.data || []);
-    } catch (err) {
-      message.error("Error fetching sites");
-    }
-  };
-
-  const fetchMachines = async () => {
-    try {
-      const res = await api.get("/api/vehicles?limit=1000");
-      setMachines(res.data.data || []);
-    } catch (err) {
-      message.error("Error fetching machines");
-    }
-  };
-
-  const fetchCompressors = async () => {
-    try {
-      const res = await api.get("/api/compressors?limit=1000");
-      setCompressors(res.data.data || []);
-    } catch (err) {
-      message.error("Error fetching compressors");
-    }
-  };
-
-  const fetchEmployees = async () => {
-    try {
-      const res = await api.get("/api/employeeLists?limit=10000");
-      setEmployees(res.data.data || []);
-    } catch (err) {
-      message.error("Error fetching employees");
-    }
-  };
-
-  const fetchAvailableItems = async () => {
-    try {
-      const res = await api.get("/api/itemInstances/search?status=in_stock&limit=1000");
-      // Filter to only show items that can be fitted - check both item.item?.canBeFitted and handle undefined
-      const items = (res.data.data || []).filter(item => {
-        // Check if item.item exists and canBeFitted is true
-        return item.item && item.item.canBeFitted === true;
-      });
-      setAvailableItems(items);
-    } catch (err) {
-      message.error("Error fetching available items");
-    }
-  };
-
+  // Update pagination when entries data changes
   useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-    
-    fetchEntries();
-    fetchSites();
-    fetchMachines();
-    fetchCompressors();
-    fetchEmployees();
-    fetchAvailableItems();
-  }, []);
+    setPagination(prev => ({
+      ...prev,
+      current: entriesData.page || prev.current,
+      total: entriesData.total || 0,
+      pageSize: entriesData.limit || prev.pageSize,
+    }));
+  }, [entriesData]);
 
-  // Auto-generate reference number
-  const generateRefNo = async () => {
+  // Auto-generate reference number helper
+  const generateRefNoHelper = async () => {
     try {
       const res = await api.get("/api/dailyEntries/generate-ref");
       return res.data.refNo;
@@ -234,6 +181,28 @@ const DailyEntry = () => {
           compressorOpeningRPM: null,
         }));
       }
+      
+      // Sync machine, compressor, and site from Shift 1 to Shift 2
+      setSelectedShift2Machine(machine);
+      if (machine?.compressorId) {
+        const compressor = compressors.find(c => c.id === machine.compressorId);
+        setSelectedShift2Compressor(compressor);
+      } else {
+        setSelectedShift2Compressor(null);
+      }
+      
+      // Sync Shift 2 data - use Shift 1's closing RPM if set, otherwise use machine's current RPM
+      const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
+      setShift2Data(prev => ({
+        ...prev,
+        vehicleId: machineId,
+        compressorId: machine?.compressorId || null,
+        siteId: shift1Data.siteId || prev.siteId, // Sync site from Shift 1
+        vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
+        compressorOpeningRPM: shouldAutoFill 
+          ? (machine?.compressorId ? compressors.find(c => c.id === machine.compressorId)?.compressorRPM || null : null)
+          : prev.compressorOpeningRPM,
+      }));
     } else {
       setSelectedShift2Machine(machine);
       // Only auto-fill if Shift 1 closing RPM hasn't been set yet
@@ -365,48 +334,64 @@ const DailyEntry = () => {
     }
     
     setSubmitting(true);
+    setValidationWarnings([]); // Clear previous warnings
+    
     try {
       const dateStr = selectedDate.format("YYYY-MM-DD");
+      const warnings = [];
       
-      // Validate Shift 1 (at least one operator required)
+      // Collect validation warnings (non-blocking)
       if (shift1Enabled) {
         const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
         if (shift1Operators.length === 0) {
-          message.error("Shift 1 must have at least one operator");
-          setSubmitting(false);
-          return;
+          warnings.push("Shift 1: No operator selected");
         }
-        if (!shift1Data.siteId || !shift1Data.vehicleId) {
-          message.error("Shift 1 must have site and machine selected");
-          setSubmitting(false);
-          return;
+        if (!shift1Data.siteId) {
+          warnings.push("Shift 1: Site not selected");
+        }
+        if (!shift1Data.vehicleId) {
+          warnings.push("Shift 1: Machine not selected");
         }
       }
       
       // Validate Shift 2 (always enabled)
-        const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-        if (shift2Operators.length === 0) {
-          message.error("Shift 2 must have at least one operator");
-        setSubmitting(false);
-          return;
-        }
-        if (!shift2Data.siteId || !shift2Data.vehicleId) {
-          message.error("Shift 2 must have site and machine selected");
-        setSubmitting(false);
-          return;
-        }
+      const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
+      if (shift2Operators.length === 0) {
+        warnings.push("Shift 2: No operator selected");
+      }
+      if (!shift2Data.siteId) {
+        warnings.push("Shift 2: Site not selected");
+      }
+      if (!shift2Data.vehicleId) {
+        warnings.push("Shift 2: Machine not selected");
+      }
+      
+      // Display warnings if any
+      if (warnings.length > 0) {
+        setValidationWarnings(warnings);
+      }
       
       // Generate ref numbers sequentially upfront to ensure unique sequential numbers
       let refNo1 = null;
       let refNo2 = null;
       if (shift1Enabled) {
-        refNo1 = await generateRefNo();
+        refNo1 = await generateRefNoHelper();
       }
-      refNo2 = await generateRefNo(); // Always generate for Shift 2
+      refNo2 = await generateRefNoHelper(); // Always generate for Shift 2
+
+      // Helper function to clean null values from payload (convert to undefined)
+      const cleanPayload = (payload) => {
+        const cleaned = { ...payload };
+        // Convert null to undefined for optional fields so they're omitted from JSON
+        if (cleaned.siteId === null) delete cleaned.siteId;
+        if (cleaned.vehicleId === null) delete cleaned.vehicleId;
+        if (cleaned.compressorId === null) delete cleaned.compressorId;
+        return cleaned;
+      };
 
       // Save Shift 1
       if (shift1Enabled) {
-        const payload1 = {
+        const payload1 = cleanPayload({
           refNo: refNo1,
           date: dateStr,
           shift: 1,
@@ -430,20 +415,19 @@ const DailyEntry = () => {
           fittedItemInstanceIds: shift1Data.fittedItems.map(item => item.id),
           removedItemInstanceIds: [],
           notes: "",
-        };
+        });
         
-        await api.post("/api/dailyEntries", payload1);
-        message.success("Shift 1 entry saved successfully");
+        await createDailyEntry.mutateAsync(payload1);
       }
 
       // Save Shift 2 (always enabled)
-        const payload2 = {
-          refNo: refNo2,
-          date: dateStr,
-          shift: 2,
-          siteId: shift2Data.siteId,
-          vehicleId: shift2Data.vehicleId,
-          compressorId: shift2Data.compressorId,
+      const payload2 = cleanPayload({
+        refNo: refNo2,
+        date: dateStr,
+        shift: 2,
+        siteId: shift2Data.siteId,
+        vehicleId: shift2Data.vehicleId,
+        compressorId: shift2Data.compressorId,
         vehicleOpeningRPM: shift2Data.vehicleOpeningRPM ?? 0,
         vehicleClosingRPM: shift2Data.vehicleClosingRPM ?? 0,
         compressorOpeningRPM: shift2Data.compressorOpeningRPM ?? 0,
@@ -453,29 +437,26 @@ const DailyEntry = () => {
         compressorHSD: shift2Data.compressorHSD ?? 0,
         noOfHoles: shift2Data.noOfHoles ?? 0,
         meter: shift2Data.meter ?? 0,
-          employees: shift2Data.employees
-            .filter(e => e.employeeId)
-            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
-          vehicleServiceDone: Boolean(shift2Data.vehicleServiceDone),
-          compressorServiceDone: Boolean(shift2Data.compressorServiceDone),
-          fittedItemInstanceIds: shift2Data.fittedItems.map(item => item.id),
-          removedItemInstanceIds: [],
-          notes: "",
-        };
-        
-        await api.post("/api/dailyEntries", payload2);
-        message.success("Shift 2 entry saved successfully");
+        employees: shift2Data.employees
+          .filter(e => e.employeeId)
+          .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
+        vehicleServiceDone: Boolean(shift2Data.vehicleServiceDone),
+        compressorServiceDone: Boolean(shift2Data.compressorServiceDone),
+        fittedItemInstanceIds: shift2Data.fittedItems.map(item => item.id),
+        removedItemInstanceIds: [],
+        notes: "",
+      });
+      
+      await createDailyEntry.mutateAsync(payload2);
 
-      // Refresh and close form
-      message.success("Daily entries saved successfully");
-      await fetchEntries();
-      await fetchMachines();
-      await fetchCompressors();
+      // Clear warnings on success (mutations handle success messages)
+      setValidationWarnings([]);
+      setSubmitting(false);
+      refetchEntries();
       handleCancel();
       
     } catch (err) {
-      message.error(`Failed to save daily entries: ${err.response?.data?.message || err.message}`);
-    } finally {
+      // Error is already handled by mutation hook
       setSubmitting(false);
     }
   };
@@ -484,6 +465,7 @@ const DailyEntry = () => {
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
+    setValidationWarnings([]); // Clear warnings on cancel
     setShift1Enabled(true);
     setShift2Enabled(false);
     setShift1Data({
@@ -530,13 +512,7 @@ const DailyEntry = () => {
 
   // Handle delete
   const handleDelete = async (id) => {
-    try {
-      await api.delete(`/api/dailyEntries/${id}`, { data: {} });
-      setEntries(entries.filter((entry) => entry.id !== id));
-      message.success("Entry deleted successfully");
-    } catch (err) {
-      message.error("Error deleting daily entry");
-    }
+    deleteDailyEntry.mutate(id);
   };
 
   // Render shift section
@@ -1516,29 +1492,26 @@ const DailyEntry = () => {
                   { 
                     title: 'Item Name', 
                     key: 'itemName', 
-                    render: (_, record) => record.item?.itemName || record.instanceNumber 
+                    render: (_, record) => record.itemName || record.modelName 
                   },
                   { 
-                    title: 'Instance #', 
-                    key: 'instanceNumber',
+                    title: 'Model Name', 
+                    key: 'modelName',
                     width: 120,
-                    dataIndex: 'instanceNumber'
+                    dataIndex: 'modelName'
                   },
                   { 
                     title: 'Current RPM', 
                     key: 'currentRPM', 
                     width: 120,
-                    render: (_, record) => truncateToFixed(record.currentCount || 0, 2)
+                    render: (_, record) => truncateToFixed(record.currentRPM || record.currentCount || 0, 2)
                   },
                   { 
                     title: 'Next Service RPM', 
                     key: 'nextServiceRPM', 
                     width: 140,
                     render: (_, record) => {
-                      const serviceInterval = record.item?.serviceIntervalCount || 0;
-                      const lastUsed = record.lastUsedCount || 0;
-                      const nextService = lastUsed + serviceInterval;
-                      return truncateToFixed(nextService, 2);
+                      return truncateToFixed(record.nextServiceRPM || 0, 2);
                     }
                   },
                   {
@@ -1560,6 +1533,17 @@ const DailyEntry = () => {
                 style={{ fontSize: '11px' }}
               />
             </div>
+
+            {/* Validation Warnings */}
+            {validationWarnings.length > 0 && (
+              <div style={{ marginTop: '4px', marginBottom: '4px' }}>
+                {validationWarnings.map((warning, idx) => (
+                  <div key={idx} style={{ color: 'red', fontSize: '11px', marginBottom: '2px' }}>
+                    {warning}
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Buttons */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '4px' }}>
@@ -1591,7 +1575,6 @@ const DailyEntry = () => {
             ...pagination,
             onChange: (page, pageSize) => {
               setPagination(prev => ({ ...prev, current: page, pageSize }));
-              fetchEntries(page, pageSize);
             },
           }}
           size="middle"
@@ -1625,30 +1608,27 @@ const DailyEntry = () => {
             }
             options={availableItems.map(item => ({
               value: item.id,
-              label: item.displayLabel || `${item.item?.itemName} (${item.item?.partNumber}) - ${item.instanceNumber}`,
+              label: item.displayLabel || `${item.itemName} (${item.partNumber}) - ${item.modelName}`,
             }))}
           />
           <Table
             dataSource={availableItems.filter(item => selectedItemInstances.includes(item.id))}
             columns={[
-              { title: "Instance #", dataIndex: "instanceNumber", key: "instanceNumber", width: 120 },
-              { title: "Item Name", dataIndex: ["item", "itemName"], key: "itemName" },
-              { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber", width: 150 },
+              { title: "Model Name", dataIndex: "modelName", key: "modelName", width: 120 },
+              { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+              { title: "Part Number", dataIndex: "partNumber", key: "partNumber", width: 150 },
               { 
                 title: "Current RPM", 
                 key: "currentRPM",
                 width: 120,
-                render: (_, record) => truncateToFixed(record.currentCount || 0, 2)
+                render: (_, record) => truncateToFixed(record.currentRPM || record.currentCount || 0, 2)
               },
               { 
                 title: "Next Service RPM", 
                 key: "nextServiceRPM",
                 width: 150,
                 render: (_, record) => {
-                  const serviceInterval = record.item?.serviceIntervalCount || 0;
-                  const lastUsed = record.lastUsedCount || 0;
-                  const nextService = lastUsed + serviceInterval;
-                  return truncateToFixed(nextService, 2);
+                  return truncateToFixed(record.nextServiceRPM || 0, 2);
                 }
               },
             ]}

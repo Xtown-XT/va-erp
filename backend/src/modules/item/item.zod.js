@@ -8,7 +8,12 @@ export const createItemSchema = z.object({
   purchaseRate: z.number().min(0).optional(),
   gst: z.number().min(0).optional(),
   canBeFitted: z.boolean().optional(),
-  stock: z.number().min(0).optional(),
+  stock: z.union([z.number().min(0), z.null()]).optional(), // For non-fittable items (number), null for fittable items
+  // Fields for fittable items (auto-generated when canBeFitted=true)
+  modelName: z.string().optional(),
+  currentRPM: z.number().min(0).optional(),
+  nextServiceRPM: z.number().min(0).optional(),
+  status: z.enum(["in_stock", "fitted", "removed"]).optional(),
 });
 
 export const updateItemSchema = createItemSchema.partial();

@@ -29,12 +29,12 @@ export const createDailyEntrySchema = z.object({
     role: z.enum(["operator", "helper"]),
     shift: z.number().int().min(1),
   })).optional(),
-  siteId: z.string().uuid("Invalid site ID format"),
-  vehicleId: z.string().uuid("Invalid vehicle ID format"),
+  siteId: z.string().uuid("Invalid site ID format").optional(),
+  vehicleId: z.string().uuid("Invalid vehicle ID format").optional(),
   compressorId: z.string().uuid("Invalid compressor ID format").optional(),
-  // Item fitting data
-  fittedItemInstanceIds: z.array(z.string().uuid("Invalid item instance ID format")).optional(),
-  removedItemInstanceIds: z.array(z.string().uuid("Invalid item instance ID format")).optional(),
+  // Item fitting data (now using Item table directly, not ItemInstance)
+  fittedItemInstanceIds: z.array(z.string().uuid("Invalid item ID format")).optional(), // Kept name for backward compatibility
+  removedItemInstanceIds: z.array(z.string().uuid("Invalid item ID format")).optional(), // Kept name for backward compatibility
   additionalEmployeeIds: z.array(z.string().uuid("Invalid employee ID format")).optional(),
   notes: z.string().optional(),
   shift: z.number().int().min(1).max(2, "Shift must be 1 or 2"),

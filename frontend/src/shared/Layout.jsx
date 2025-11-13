@@ -1,11 +1,11 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { BellOutlined, ExclamationCircleOutlined, ToolOutlined, MenuOutlined } from "@ant-design/icons";
+import { useState } from "react";
+import { BellOutlined, ExclamationCircleOutlined, MenuOutlined } from "@ant-design/icons";
 import { Badge, Dropdown, List, Typography, Button, Space } from "antd";
 import vaLogo from "../assets/VA.png";
 import lightLogo from "../assets/hi.jpg";
 import { getUserRole, getUsername, isTownAdmin } from "../service/auth";
-import api from "../service/api";
+import { useServiceAlerts } from "../hooks/useQueries";
 import { MdDashboard } from "react-icons/md";
 import { TbReport } from "react-icons/tb";
 import { FaUsers, FaList, FaWpforms, FaClipboardList, FaShoppingCart, FaBox, FaCog, FaWarehouse, FaTruck, FaCompressArrowsAlt, FaChartBar, FaTags, FaMapMarkerAlt, FaAddressBook, FaUsersCog } from 'react-icons/fa';
@@ -25,14 +25,7 @@ const navArray = [
   },
   { icon: <FaClipboardList />, label: "Daily Entry", path: "/daily-entry" },
   { icon: <TbReport />, label: "Production Report", path: "/reports/production" },
-  {
-    icon: <FaBox />,
-    label: "Stock & Inventory",
-    children: [
-      { icon: <FaBox />, label: "Item Management", path: "/item-management" },
-      { icon: <ToolOutlined />, label: "Machine Items", path: "/item-instances" },
-    ],
-  },
+  { icon: <FaBox />, label: "Item Management", path: "/item-management" },
   { icon: <FaShoppingCart />, label: "Purchase Order", path: "/purchase-order" },
   { icon: <FaCog />, label: "Service Management", path: "/service-management" },
   { icon: <FaTruck />, label: "Machine", path: "/vehicle" },
@@ -47,41 +40,12 @@ const navArray = [
 export default function Layout() {
   const [activeMenu, setActiveMenu] = useState(null);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [serviceAlerts, setServiceAlerts] = useState([]);
-  const [alertsLoading, setAlertsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Fetch urgent service alerts for notifications (RPM difference < 50)
-  const fetchServiceAlerts = async () => {
-    try {
-      setAlertsLoading(true);
-      const response = await api.get("/api/service-alerts/urgent");
-      const alerts = response.data.data || [];
-      setServiceAlerts(alerts);
-      return alerts;
-    } catch (error) {
-      console.error("Error fetching urgent service alerts:", error);
-      setServiceAlerts([]);
-      return [];
-    } finally {
-      setAlertsLoading(false);
-    }
-  };
-
-  // Fetch alerts on component mount and every 5 minutes
-  useEffect(() => {
-    let interval;
-    fetchServiceAlerts()
-      .then(() => {
-        interval = setInterval(fetchServiceAlerts, 5 * 60 * 1000);
-      })
-      .catch(() => {
-        // do nothing; error handled inside
-      });
-    return () => interval && clearInterval(interval);
-  }, []);
+  // Use React Query for service alerts (with auto-refetch every 5 minutes)
+  const { data: serviceAlerts = [], isLoading: alertsLoading } = useServiceAlerts(true);
 
   function logout() {
     localStorage.removeItem("token");
@@ -217,16 +181,50 @@ export default function Layout() {
             )}
           >
             <button className="relative hover:bg-white/10 p-2 rounded-full transition-colors">
-              <Badge
-                count={serviceAlerts.length}
-                overflowCount={99}
-                style={{
-                  backgroundColor: serviceAlerts.some(a => a.priority === 'high') ? '#ff4d4f' :
-                    serviceAlerts.some(a => a.priority === 'medium') ? '#faad14' : '#52c41a'
-                }}
-              >
-                <BellOutlined className="text-xl" style={{ color: 'white' }} />
-              </Badge>
+              <style>{`
+                @keyframes blink {
+                  0%, 100% { 
+                    opacity: 1; 
+                    background-color: #ff0000 !important;
+                    box-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+                  }
+                  50% { 
+                    opacity: 0.5; 
+                    background-color: #cc0000 !important;
+                    box-shadow: 0 0 12px rgba(255, 0, 0, 1);
+                  }
+                }
+                .notification-badge-wrapper {
+                  position: relative;
+                }
+                .notification-badge-wrapper.animate .ant-badge-count {
+                  animation: blink 1s ease-in-out infinite;
+                  background-color: #ff0000 !important;
+                }
+                .notification-badge-wrapper.animate .anticon {
+                  color: #ff4d4f !important;
+                  animation: blink 1s ease-in-out infinite;
+                }
+              `}</style>
+              <span className={`notification-badge-wrapper ${serviceAlerts.length > 0 ? 'animate' : ''}`}>
+                <Badge
+                  count={serviceAlerts.length}
+                  overflowCount={99}
+                  style={{
+                    backgroundColor: serviceAlerts.length > 0 ? '#ff0000' : 
+                      (serviceAlerts.some(a => a.priority === 'high') ? '#ff4d4f' :
+                      serviceAlerts.some(a => a.priority === 'medium') ? '#faad14' : '#52c41a')
+                  }}
+                >
+                  <BellOutlined 
+                    className="text-xl" 
+                    style={{ 
+                      color: serviceAlerts.length > 0 ? '#ff4d4f' : 'white',
+                      transition: 'color 0.3s ease'
+                    }} 
+                  />
+                </Badge>
+              </span>
             </button>
           </Dropdown>
 
