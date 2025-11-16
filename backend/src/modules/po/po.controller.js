@@ -164,13 +164,15 @@ class PoCustomController extends BaseController {
         return res.status(400).json({ success: false, message: "PO already received" });
       }
 
-      // Process each POItem - just update stock (no item instances created here)
+      // Process each POItem - update inventory tracking
       for (const poItem of po.poItems) {
         const item = poItem.item;
         
-        // Simply increment stock
+        // Update inventory: inward and balance
         await item.update({
-          stock: (item.stock || 0) + poItem.quantity,
+          inward: (item.inward || 0) + poItem.quantity,
+          balance: (item.balance || 0) + poItem.quantity,
+          stock: (item.stock || 0) + poItem.quantity, // Keep stock for backward compatibility
           updatedBy
         }, { transaction: t });
       }

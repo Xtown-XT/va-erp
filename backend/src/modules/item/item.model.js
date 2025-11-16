@@ -17,7 +17,7 @@ const Item = sequelize.define(
     partNumber: {
       type: DataTypes.STRING,
       allowNull: false,
-      // Remove unique constraint - same partNumber can have multiple rows for fittable items
+      // Unique for drilling tools, can be same for regular items
     },
     groupName: {
       type: DataTypes.STRING,
@@ -36,64 +36,47 @@ const Item = sequelize.define(
       allowNull: false,
       defaultValue: 0.0,
     },
-    // Track if item can be fitted to machines
-    canBeFitted: {
-      type: DataTypes.BOOLEAN,
+    // Item type: machine name, compressor name, or "Drilling Tools"
+    itemType: {
+      type: DataTypes.STRING,
       allowNull: false,
-      defaultValue: false,
     },
-    // Simple stock quantity tracking (for non-fittable items only)
+    // Simple stock quantity tracking (deprecated in favor of balance)
     stock: {
       type: DataTypes.DOUBLE,
       allowNull: true,
       defaultValue: 0,
     },
-    // Fields for fittable items (one row per physical unit)
-    modelName: {
-      type: DataTypes.STRING,
-      allowNull: true, // Only required when canBeFitted=true
-      unique: true,
-    },
-    // Current RPM reading (cumulative) for fittable items
-    currentRPM: {
+    // Monthly inventory tracking
+    openingStock: {
       type: DataTypes.DOUBLE,
-      allowNull: true,
+      allowNull: false,
       defaultValue: 0,
     },
-    // Next service RPM for this unit
-    nextServiceRPM: {
+    inward: {
       type: DataTypes.DOUBLE,
-      allowNull: true,
+      allowNull: false,
+      defaultValue: 0,
     },
-    // Current status of the unit (for fittable items)
-    status: {
-      type: DataTypes.ENUM("in_stock", "fitted", "removed"),
-      allowNull: true, // Only for fittable items
-      defaultValue: "in_stock",
+    outward: {
+      type: DataTypes.DOUBLE,
+      allowNull: false,
+      defaultValue: 0,
     },
-    // Currently fitted to which machine/vehicle
-    fittedToVehicleId: {
-      type: DataTypes.UUID,
-      allowNull: true,
-      references: {
-        model: "vehicle",
-        key: "id",
-      },
+    balance: {
+      type: DataTypes.DOUBLE,
+      allowNull: false,
+      defaultValue: 0,
     },
-    // When it was fitted
-    fittedDate: {
-      type: DataTypes.DATEONLY,
-      allowNull: true,
+    currentMonth: {
+      type: DataTypes.STRING, // Format: "YYYY-MM"
+      allowNull: false,
     },
-    // When it was removed
-    removedDate: {
-      type: DataTypes.DATEONLY,
+    // Model name for drilling tools (unique identifier)
+    modelName: {
+      type: DataTypes.STRING,
       allowNull: true,
-    },
-    // Last service date
-    lastServiceDate: {
-      type: DataTypes.DATEONLY,
-      allowNull: true,
+      unique: true,
     },
     ...commonFields,
   },

@@ -26,6 +26,7 @@ import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
 import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
+import EmployeeWorkHistoryModal from "./EmployeeWorkHistoryModal";
 
 const EmployeeList = () => {
   const [form] = Form.useForm();
@@ -43,6 +44,10 @@ const EmployeeList = () => {
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
+  
+  // Work history modal state
+  const [showWorkHistory, setShowWorkHistory] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // Fetch employees
   const fetchEmployees = async (page = 1, limit = 10) => {
@@ -131,6 +136,12 @@ const EmployeeList = () => {
     } catch (err) {
       console.error("Error deleting employee", err);
     }
+  };
+
+  // Handle view work history
+  const handleViewWorkHistory = (employee) => {
+    setSelectedEmployee(employee);
+    setShowWorkHistory(true);
   };
 
 
@@ -249,14 +260,14 @@ const EmployeeList = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          {/* <Button
+          <Button
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => window.location.href = `/employee/details/${record.id}`}
-            title="View Details"
+            onClick={() => handleViewWorkHistory(record)}
+            title="View Work History"
           >
             View
-          </Button> */}
+          </Button>
           {canEdit() && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           )}
@@ -454,6 +465,16 @@ const EmployeeList = () => {
         onChange={handleTableChange}
       />
 
+      {/* Work History Modal */}
+      <EmployeeWorkHistoryModal
+        visible={showWorkHistory}
+        onClose={() => {
+          setShowWorkHistory(false);
+          setSelectedEmployee(null);
+        }}
+        employeeId={selectedEmployee?.id}
+        employeeName={selectedEmployee?.name}
+      />
     </div>
   );
 };

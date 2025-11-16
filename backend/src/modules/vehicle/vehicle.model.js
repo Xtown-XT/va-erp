@@ -51,6 +51,14 @@ const Machine = sequelize.define(
         key: "id",
       },
     },
+    siteId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "site",
+        key: "id",
+      },
+    },
     ...commonFields,
   },
   {

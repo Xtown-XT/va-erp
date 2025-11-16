@@ -19,6 +19,7 @@ import {
 import { brandRoutes } from "./src/modules/brand/index.js";
 import { dailyEntryRoutes } from "./src/modules/dailyEntry/index.js";
 import { itemRoutes } from "./src/modules/item/index.js";
+import { itemServiceRoutes } from "./src/modules/itemService/index.js";
 import { poRoutes } from "./src/modules/po/index.js";
 import { poItemRoutes } from "./src/modules/poItem/index.js";
 import { serviceRoutes } from "./src/modules/service/index.js";
@@ -32,6 +33,7 @@ import { addressRoutes } from "./src/modules/address/index.js";
 import stockTransactionRoutes from "./src/modules/stockTransaction/stockTransaction.routes.js";
 import { defineAssociations } from "./src/shared/models/associations.js";
 import Service from "./src/modules/service/service.model.js";
+import ItemService from "./src/modules/itemService/itemService.model.js";
 import DailyEntryEmployee from "./src/modules/dailyEntry/dailyEntryEmployee.model.js";
 import DailyEntry from "./src/modules/dailyEntry/dailyEntry.model.js";
 import Compressor from "./src/modules/compressor/compressor.model.js";
@@ -93,6 +95,10 @@ const initializeDatabase = async () => {
       await DailyEntry.sync({ alter: true, logging: false });
       console.log("✅ DailyEntry table synced");
       
+      // Sync ItemService table (new)
+      await ItemService.sync({ alter: true, logging: false });
+      console.log("✅ ItemService table synced");
+      
       // Alter Service table to add serviceName column
       await Service.sync({ alter: true, logging: false });
       console.log("✅ Service table columns updated");
@@ -146,12 +152,13 @@ protectedRoutes.use("/dailyEntries", dailyEntryRoutes);
 
 // Item routes
 protectedRoutes.use("/items", itemRoutes);
+protectedRoutes.use("/itemServices", itemServiceRoutes);
 
 // Purchase Order routes
 protectedRoutes.use("/pos", poRoutes);
 protectedRoutes.use("/poItems", poItemRoutes);
 
-// Service routes
+// Service routes (deprecated, but kept for backward compatibility)
 protectedRoutes.use("/services", serviceRoutes);
 protectedRoutes.use("/service-alerts", serviceAlertsRoutes);
 

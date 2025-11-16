@@ -50,7 +50,7 @@ export class EmployeeAttendanceController extends BaseController {
             attributes: ['id', 'siteName']
           },
           {
-            association: 'vehicle',
+            association: 'machine',
             attributes: ['id', 'vehicleNumber', 'vehicleType']
           }
         ]

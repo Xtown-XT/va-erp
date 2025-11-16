@@ -129,44 +129,62 @@ export const useDailyEntries = (params = { page: 1, limit: 10 }) => {
   });
 };
 
-// Service Alerts
-export const useServiceAlerts = (urgent = false) => {
+// ItemService - Get fitted items
+export const useFittedItems = (vehicleId, compressorId) => {
   return useQuery({
-    queryKey: queryKeys.serviceAlerts({ urgent }),
+    queryKey: ["fittedItems", { vehicleId, compressorId }],
     queryFn: async () => {
-      const endpoint = urgent ? "/api/service-alerts/urgent" : "/api/service-alerts?limit=100";
-      const res = await api.get(endpoint);
+      const params = new URLSearchParams();
+      if (vehicleId) params.append("vehicleId", vehicleId);
+      if (compressorId) params.append("compressorId", compressorId);
+      const res = await api.get(`/api/itemServices/fitted?${params.toString()}`);
       return res.data.data || [];
     },
-    staleTime: 2 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes for alerts
+    enabled: !!(vehicleId || compressorId),
+    staleTime: 1 * 60 * 1000,
   });
 };
 
-// Services
-export const useServices = (params = { limit: 1000 }) => {
+// ItemService - Get items by type
+export const useItemsByType = (itemType) => {
   return useQuery({
-    queryKey: queryKeys.services(params),
+    queryKey: ["itemsByType", itemType],
     queryFn: async () => {
-      const queryString = new URLSearchParams(params).toString();
-      const res = await api.get(`/api/services?${queryString}`);
+      const res = await api.get(`/api/items/by-type/${encodeURIComponent(itemType)}`);
       return res.data.data || [];
     },
+    enabled: !!itemType,
     staleTime: 2 * 60 * 1000,
   });
 };
 
-// Service History
-export const useServiceHistory = (params = { page: 1, limit: 10 }) => {
+// Inventory Report
+export const useInventoryReport = (month, year, itemType) => {
   return useQuery({
-    queryKey: queryKeys.serviceHistory(params),
+    queryKey: ["inventoryReport", { month, year, itemType }],
     queryFn: async () => {
-      const queryString = new URLSearchParams(params).toString();
-      const res = await api.get(`/api/services/history?${queryString}`);
-      return {
-        data: res.data.data || [],
-        pagination: res.data.pagination || { page: 1, limit: 10, total: 0 },
-      };
+      const params = new URLSearchParams({ month, year });
+      if (itemType) params.append("itemType", itemType);
+      const res = await api.get(`/api/items/monthly-report?${params.toString()}`);
+      return res.data;
+    },
+    enabled: !!(month && year),
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+// Service Usage Report
+export const useServiceUsageReport = (startDate, endDate, vehicleId, compressorId) => {
+  return useQuery({
+    queryKey: ["serviceUsageReport", { startDate, endDate, vehicleId, compressorId }],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (startDate) params.append("startDate", startDate);
+      if (endDate) params.append("endDate", endDate);
+      if (vehicleId) params.append("vehicleId", vehicleId);
+      if (compressorId) params.append("compressorId", compressorId);
+      const res = await api.get(`/api/itemServices/usage-report?${params.toString()}`);
+      return res.data.data || [];
     },
     staleTime: 2 * 60 * 1000,
   });

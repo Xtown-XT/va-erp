@@ -68,6 +68,15 @@ const DailyEntry = sequelize.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    // Service items used (stored as JSON for backward compatibility)
+    machineServiceItems: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
+    compressorServiceItems: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,

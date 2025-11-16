@@ -5,6 +5,7 @@ import Machine from "../../modules/vehicle/vehicle.model.js";
 import Service from "../../modules/service/service.model.js";
 import Site from "../../modules/site/site.model.js";
 import Item from "../../modules/item/item.model.js";
+import ItemService from "../../modules/itemService/itemService.model.js";
 import StockTransaction from "../../modules/stockTransaction/stockTransaction.model.js";
 import Supplier from "../../modules/supplier/supplier.model.js";
 import Po from "../../modules/po/po.model.js";
@@ -123,20 +124,21 @@ export const defineAssociations = () => {
   });
 
 
-  // ========== ITEM RELATIONSHIPS (Fittable Items) ==========
-  // Fittable items can be fitted to machines
-  Machine.hasMany(Item, { 
-    foreignKey: "fittedToVehicleId", 
-    as: "fittedItems",
-    onDelete: 'SET NULL'  // When machine deleted, unfit the items
-  }); // DB column kept
-  Item.belongsTo(Machine, { 
-    foreignKey: "fittedToVehicleId", 
-    as: "fittedToMachine",
-    onDelete: 'SET NULL'
-  }); // Changed alias
+  // ========== ITEM SERVICE RELATIONSHIPS ==========
+  // ItemService tracks item fitting/usage
+  Item.hasMany(ItemService, { foreignKey: "itemId", as: "itemServices" });
+  ItemService.belongsTo(Item, { foreignKey: "itemId", as: "item" });
 
-  // Service relationships with Item (for fittable items)
+  DailyEntry.hasMany(ItemService, { foreignKey: "dailyEntryId", as: "itemServices" });
+  ItemService.belongsTo(DailyEntry, { foreignKey: "dailyEntryId", as: "dailyEntry" });
+
+  Machine.hasMany(ItemService, { foreignKey: "vehicleId", as: "itemServices" });
+  ItemService.belongsTo(Machine, { foreignKey: "vehicleId", as: "machine" });
+
+  Compressor.hasMany(ItemService, { foreignKey: "compressorId", as: "itemServices" });
+  ItemService.belongsTo(Compressor, { foreignKey: "compressorId", as: "compressor" });
+
+  // Service relationships with Item (deprecated, now using ItemService)
   Item.hasMany(Service, { foreignKey: "itemId", as: "services" });
   Service.belongsTo(Item, { foreignKey: "itemId", as: "item" });
 

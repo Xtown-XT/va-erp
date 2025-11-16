@@ -10,7 +10,6 @@ import {
   Card,
   Popconfirm,
   InputNumber,
-  Switch,
   Typography,
   message,
   Row,
@@ -18,17 +17,22 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  FilePdfOutlined,
+  BarChartOutlined,
   EditOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
 import { truncateToFixed } from "../utils/textUtils";
+import { useVehicles, useCompressors } from "../hooks/useQueries";
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 const ItemManagement = () => {
+  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,14 +40,31 @@ const ItemManagement = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [canBeFittedFilter, setCanBeFittedFilter] = useState("all"); // "all", "true", "false"
+  const [itemTypeFilter, setItemTypeFilter] = useState("all");
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
     total: 0,
     showSizeChanger: true,
-    pageSizeOptions: ['10', '20', '50'],
+    pageSizeOptions: ["10", "20", "50"],
   });
+
+  // Fetch machines and compressors for item type dropdown
+  const { data: machines = [] } = useVehicles();
+  const { data: compressors = [] } = useCompressors();
+
+  // Build item type options
+  const itemTypeOptions = [
+    { label: "Drilling Tools", value: "Drilling Tools" },
+    ...machines.map((m) => ({
+      label: `Machine: ${m.vehicleNumber}`,
+      value: m.vehicleNumber,
+    })),
+    ...compressors.map((c) => ({
+      label: `Compressor: ${c.compressorName}`,
+      value: c.compressorName,
+    })),
+  ];
 
   // Fetch items
   const fetchItems = async (page = 1, limit = 10) => {
@@ -53,30 +74,14 @@ const ItemManagement = () => {
       if (searchTerm) {
         url += `&search=${encodeURIComponent(searchTerm)}`;
       }
-      if (canBeFittedFilter !== "all") {
-        url += `&canBeFitted=${canBeFittedFilter}`;
+      if (itemTypeFilter !== "all") {
+        url += `&itemType=${encodeURIComponent(itemTypeFilter)}`;
       }
-      
-      const res = await api.get(url);
-      let itemsData = res.data.data || [];
-      
-      // Backend returns grouped items when canBeFitted=true
-      // We need to flatten them to show individual units
-      const flattenedItems = [];
-      itemsData.forEach(item => {
-        if (item.canBeFitted && item.items && Array.isArray(item.items) && item.items.length > 0) {
-          // This is a grouped fittable item - show individual units
-          flattenedItems.push(...item.items);
-        } else {
-          // Regular item or non-fittable (already individual)
-          flattenedItems.push(item);
-        }
-      });
-      
-      setItems(flattenedItems);
 
-      // Update pagination state
-      setPagination(prev => ({
+      const res = await api.get(url);
+      setItems(res.data.data || []);
+
+      setPagination((prev) => ({
         ...prev,
         current: res.data.page || page,
         total: res.data.total || 0,
@@ -100,28 +105,31 @@ const ItemManagement = () => {
       fetchItems(1, pagination.pageSize);
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchTerm, canBeFittedFilter]);
+  }, [searchTerm, itemTypeFilter]);
 
- 
+  // Initialize month
+  const handleInitializeMonth = async () => {
+    try {
+      await api.post("/api/items/initialize-month");
+      message.success("Month initialized successfully");
+      fetchItems(pagination.current, pagination.pageSize);
+    } catch (err) {
+      console.error("Error initializing month", err);
+      message.error(err.response?.data?.message || "Error initializing month");
+    }
+  };
 
   // Handle form submission
   const handleSubmit = async (values) => {
-    // Prevent duplicate submissions
-    if (submitting) {
-      return;
-    }
-    
+    if (submitting) return;
+
     setSubmitting(true);
     try {
-      // Ensure numeric fields are numbers
       const payload = {
         ...values,
         purchaseRate: Number(values.purchaseRate) || 0,
         gst: values.gst !== undefined ? Number(values.gst) : 0,
-        stock: values.canBeFitted ? null : (values.stock !== undefined ? Number(values.stock) : 1),
-        canBeFitted: values.canBeFitted || false,
-        currentRPM: values.canBeFitted ? (Number(values.currentRPM) || 0) : undefined,
-        nextServiceRPM: values.canBeFitted ? (values.nextServiceRPM !== undefined ? Number(values.nextServiceRPM) : undefined) : undefined,
+        stock: values.stock !== undefined ? Number(values.stock) : 0,
       };
 
       if (editingId) {
@@ -152,15 +160,11 @@ const ItemManagement = () => {
       ...record,
       purchaseRate: Number(record.purchaseRate) || 0,
       gst: record.gst !== undefined ? Number(record.gst) : 0,
-      stock: record.canBeFitted ? 1 : (record.stock !== null && record.stock !== undefined ? Number(record.stock) : 1),
-      canBeFitted: record.canBeFitted || false,
-      currentRPM: record.currentRPM !== undefined ? Number(record.currentRPM) : 0,
-      nextServiceRPM: record.nextServiceRPM !== undefined ? Number(record.nextServiceRPM) : undefined,
+      stock: record.stock !== undefined ? Number(record.stock) : 0,
     });
   };
 
-
-  // Handle hard delete
+  // Handle delete
   const handleDelete = async (id) => {
     try {
       await api.delete(`/api/items/${id}/hard`);
@@ -177,189 +181,63 @@ const ItemManagement = () => {
     fetchItems(pagination.current, pagination.pageSize);
   };
 
-  // Export to PDF
-  const exportToPDF = async () => {
-
-    const res = await api.get("/api/items?page=1&limit=1000"); 
-    const allItems = res.data.data || [];
-    
-    const printWindow = window.open("", "_blank");
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Item Management Report - ${new Date().toLocaleDateString()}</title>
-          <style>
-            body { font-family: Arial, sans-serif; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .header { text-align: center; margin-bottom: 20px; }
-            .summary { margin: 20px 0; padding: 15px; background-color: #f9f9f9; border-radius: 5px; }
-            .item-detail { margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
-            .rpm-info { background-color: #e6f7ff; padding: 8px; border-radius: 3px; margin-top: 5px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Item Management Report</h1>
-            <p>Generated on: ${new Date().toLocaleDateString()}</p>
-          </div>
-          
-          <div class="summary">
-            <h3>Summary</h3>
-            <p><strong>Total Items:</strong> ${allItems.length}</p>
-            <p><strong>Total Stock Value:</strong> ₹${allItems.reduce((sum, item) => sum + ((item.stock || 0) * (item.purchaseRate || 0)), 0).toLocaleString()}</p>
-            <p><strong>Items with Stock:</strong> ${allItems.filter(item => (item.stock || 0) > 0).length}</p>
-            <p><strong>Items Out of Stock:</strong> ${allItems.filter(item => (item.stock || 0) === 0).length}</p>
-          </div>
-          
-          <h3>Item Details</h3>
-    
-          ${allItems
-          // items
-          
-          .map(item => `
-            <div class="item-detail">
-              <h4>${item.itemName} (${item.partNumber || 'No Part Number'})</h4>
-              <p><strong>Group:</strong> ${item.groupName || 'N/A'} | <strong>Units:</strong> ${item.units || 'N/A'}</p>
-              <p><strong>Unit Price:</strong> ₹${item.purchaseRate || 0} | <strong>GST:</strong> ${item.gst || 0}%</p>
-              <p><strong>Stock Available:</strong> <span style="color: ${(item.stock || 0) > 0 ? 'green' : 'red'}; font-weight: bold;">${item.stock || 0}</span></p>
-              <p><strong>Can Be Fitted:</strong> ${item.canBeFitted ? 'Yes' : 'No'}</p>
-              ${item.canBeFitted && item.instances && item.instances.length > 0 ? `
-                <div class="rpm-info">
-                  <strong>Machine Items with RPM Tracking:</strong>
-                  <ul>
-                    ${item.instances.map(instance => `
-                      <li>
-                        <strong>${instance.instanceNumber}:</strong> 
-                        Current RPM: ${instance.currentRPM || 0} | 
-                        Status: ${instance.status} | 
-                        Service Schedule: ${instance.serviceSchedule && instance.serviceSchedule.length > 0 ? instance.serviceSchedule.join(', ') + ' RPM' : 'Not set'}
-                        ${instance.fittedToVehicle ? ` | Fitted to: ${instance.fittedToVehicle.vehicleNumber || 'Unknown'}` : ''}
-                      </li>
-                    `).join('')}
-                  </ul>
-                </div>
-              ` : ''}
-            </div>
-          `).join('')}
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
-  };
-
   const columns = [
-    { title: "Item Name", dataIndex: "itemName", key: "itemName" },
-    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-    { title: "Category", dataIndex: "groupName", key: "groupName" },
-    { title: "Units", dataIndex: "units", key: "units" },
+    { title: "Item Name", dataIndex: "itemName", key: "itemName", fixed: "left", width: 180 },
+    { title: "Part Number", dataIndex: "partNumber", key: "partNumber", width: 150 },
+    { 
+      title: "Item Type", 
+      dataIndex: "itemType", 
+      key: "itemType",
+      width: 180,
+      render: (value) => <Tag color="blue">{value}</Tag>
+    },
+    { title: "Category", dataIndex: "groupName", key: "groupName", width: 150 },
+    { title: "Units", dataIndex: "units", key: "units", width: 100 },
     {
       title: "Purchase Rate",
       dataIndex: "purchaseRate",
       key: "purchaseRate",
+      width: 140,
       render: (value) => `₹${truncateToFixed(value, 2)}`,
     },
     {
       title: "GST %",
       dataIndex: "gst",
       key: "gst",
-      render: (value) => value ? `${value}%` : 'No GST',
+      width: 100,
+      render: (value) => (value ? `${value}%` : "No GST"),
     },
     {
-      title: "Can Be Fitted",
-      dataIndex: "canBeFitted",
-      key: "canBeFitted",
+      title: "Current Balance",
+      dataIndex: "balance",
+      key: "balance",
+      width: 150,
       render: (value) => (
-        <Tag color={value ? "blue" : "default"}>
-          {value ? "Yes" : "No"}
-        </Tag>
+        <Text
+          strong
+          style={{
+            color: value > 0 ? "#52c41a" : value < 0 ? "#ff4d4f" : "#000",
+            fontSize: "16px",
+          }}
+        >
+          {truncateToFixed(value || 0, 2)}
+        </Text>
       ),
-    },
-    {
-      title: "Stock",
-      dataIndex: "stock",
-      key: "stock",
-      render: (value, record) => {
-        // For fittable items, stock is calculated from status count
-        const stockValue = value !== null && value !== undefined ? value : (record.in_stock || 0);
-        return (
-          <Text strong style={{ 
-            color: stockValue > 0 ? '#52c41a' : '#ff4d4f',
-            fontSize: '16px'
-          }}>
-            {stockValue}
-          </Text>
-        );
-      },
-    },
-    {
-      title: "Current RPM",
-      dataIndex: "currentRPM",
-      key: "currentRPM",
-      render: (value, record) => {
-        // Only show for fittable items
-        if (record.canBeFitted) {
-          return truncateToFixed(value || 0, 2);
-        }
-        return '-';
-      },
-    },
-    {
-      title: "Next Service RPM",
-      dataIndex: "nextServiceRPM",
-      key: "nextServiceRPM",
-      render: (value, record) => {
-        // Only show for fittable items
-        if (record.canBeFitted) {
-          return value ? truncateToFixed(value, 2) : '-';
-        }
-        return '-';
-      },
-    },
-    {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      render: (value, record) => {
-        // Only show for fittable items
-        if (record.canBeFitted) {
-          const statusColors = {
-            'in_stock': 'green',
-            'fitted': 'blue',
-            'removed': 'default'
-          };
-          return value ? <Tag color={statusColors[value] || 'default'}>{value}</Tag> : '-';
-        }
-        return '-';
-      },
-    },
-    {
-      title: "Created By",
-      dataIndex: "createdBy",
-      key: "createdBy",
-      render: (createdBy) => createdBy || "-",
-    },
-    {
-      title: "Updated By",
-      dataIndex: "updatedBy",
-      key: "updatedBy",
-      render: (updatedBy) => updatedBy || "-",
     },
     {
       title: "Actions",
       key: "actions",
+      fixed: "right",
+      width: 120,
       render: (_, record) => (
         <Space>
           {canEdit() && (
             <Button
-             
+              type="link"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
-            >
-          
-            </Button>
+              size="small"
+            />
           )}
           {canDelete() && (
             <Popconfirm
@@ -368,9 +246,12 @@ const ItemManagement = () => {
               okText="Yes"
               cancelText="No"
             >
-              <Button  danger icon={<DeleteOutlined />}>
-              
-              </Button>
+              <Button
+                type="link"
+                danger
+                icon={<DeleteOutlined />}
+                size="small"
+              />
             </Popconfirm>
           )}
         </Space>
@@ -379,333 +260,218 @@ const ItemManagement = () => {
   ];
 
   return (
-    <div className="space-y-2">
-      {/* Header */}
-      {!showForm && (
-        <div className="flex justify-end items-center mb-2">
-          <Space>
-            <Button
-              icon={<FilePdfOutlined />}
-              onClick={exportToPDF}
-              type="primary"
-              danger
-              size="small"
-            >
-              Export PDF
-            </Button>
-            {canCreate() && (
+    <div style={{ padding: "20px" }}>
+      <Card>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
+          <Col>
+            <Title level={2}>Item Management & Inventory</Title>
+          </Col>
+          <Col>
+            <Space>
               <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => {
-                  setShowForm(true);
-                  setEditingId(null);
-                  form.resetFields();
-                  form.setFieldsValue({ stock: 1, canBeFitted: false });
-                }}
-                size="small"
+                icon={<BarChartOutlined />}
+                onClick={() => navigate("/stock-report")}
+                type="default"
               >
-                Add Item
+                View Stock Report
               </Button>
-            )}
-          </Space>
-        </div>
-      )}
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={handleInitializeMonth}
+                type="default"
+              >
+                Initialize New Month
+              </Button>
+              {canCreate() && (
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setShowForm(!showForm);
+                    setEditingId(null);
+                    form.resetFields();
+                  }}
+                >
+                  {showForm ? "Cancel" : "Add Item"}
+                </Button>
+              )}
+            </Space>
+          </Col>
+        </Row>
 
-      {/* Form - Compact Layout */}
-      {showForm && (
-        <Card 
-          title={editingId ? "Edit Item" : "Add New Item"} 
-          className="mb-1" 
-          bodyStyle={{ padding: '4px' }}
-        >
-          <Form layout="vertical" form={form} onFinish={handleSubmit}>
-            <div style={{ padding: '0', margin: '0' }}>
-              {/* Row 1: Item Name, Part Number, Category */}
-              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Item Name *</Text>
+        {/* Filters */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+          <Col xs={24} sm={12} md={12}>
+            <Input
+              placeholder="Search items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              allowClear
+            />
+          </Col>
+          <Col xs={24} sm={12} md={12}>
+            <Select
+              placeholder="Filter by Item Type"
+              value={itemTypeFilter}
+              onChange={setItemTypeFilter}
+              style={{ width: "100%" }}
+              allowClear
+              onClear={() => setItemTypeFilter("all")}
+            >
+              <Option value="all">All Types</Option>
+              {itemTypeOptions.map((opt) => (
+                <Option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+        </Row>
+
+        {/* Form */}
+        {showForm && (
+          <Card style={{ marginBottom: 20, backgroundColor: "#f0f2f5" }}>
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={handleSubmit}
+              initialValues={{ gst: 0, stock: 0 }}
+            >
+              <Row gutter={16}>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
                     name="itemName"
-                    rules={[{ required: true }]}
-                    style={{ marginBottom: '2px' }}
+                    label="Item Name"
+                    rules={[{ required: true, message: "Please enter item name" }]}
                   >
-                    <Input size="small" style={{ fontSize: '11px' }} />
+                    <Input placeholder="Enter item name" />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Part Number *</Text>
-                  <Form.Item 
-                    name="partNumber" 
-                    rules={[{ required: true, message: "Part number is required" }]}
-                    style={{ marginBottom: '2px' }}
-                  >
-                    <Input size="small" style={{ fontSize: '11px' }} />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Category *</Text>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
-                    name="groupName"
-                    rules={[{ required: true, message: "Please enter category" }]}
-                    style={{ marginBottom: '2px' }}
+                    name="partNumber"
+                    label="Part Number"
+                    rules={[{ required: true, message: "Please enter part number" }]}
                   >
-                    <Input size="small" style={{ fontSize: '11px' }} />
+                    <Input placeholder="Enter part number" />
                   </Form.Item>
                 </Col>
-              </Row>
-
-              {/* Row 2: Units, Purchase Rate, GST */}
-              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Units *</Text>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
-                    name="units"
-                    rules={[{ required: true, message: "Please select units" }]}
-                    style={{ marginBottom: '2px' }}
+                    name="itemType"
+                    label="Item Type"
+                    rules={[{ required: true, message: "Please select item type" }]}
                   >
-                    <Select 
-                      size="small" 
-                      placeholder="Select units" 
-                      showSearch 
-                      optionFilterProp="children"
-                      style={{ fontSize: '11px' }}
-                    >
-                      <Select.Option value="kg">kg</Select.Option>
-                      <Select.Option value="ltr">ltr</Select.Option>
-                      <Select.Option value="mtr">mtr</Select.Option>
-                      <Select.Option value="nos">nos</Select.Option>
-                      <Select.Option value="set">set</Select.Option>
-                      <Select.Option value="unit">unit</Select.Option>
-                      <Select.Option value="kit">kit</Select.Option>
+                    <Select placeholder="Select item type" showSearch>
+                      {itemTypeOptions.map((opt) => (
+                        <Option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </Option>
+                      ))}
                     </Select>
                   </Form.Item>
                 </Col>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Purchase Rate (₹) *</Text>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
-                    name="purchaseRate"
-                    rules={[{ required: true, message: "Please enter purchase rate" }]}
-                    style={{ marginBottom: '2px' }}
+                    name="groupName"
+                    label="Category/Group"
+                    rules={[{ required: true, message: "Please enter category" }]}
                   >
-                    <InputNumber
-                      size="small"
-                      className="w-full"
-                      min={0}
-                      step={0.01}
-                      precision={2}
-                      placeholder="0.00"
-                      style={{ width: '100%', fontSize: '11px' }}
-                      controls={false}
-                    />
+                    <Input placeholder="Enter category" />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>GST % (Optional)</Text>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
-                    name="gst"
-                    rules={[{ type: 'number', min: 0, max: 100 }]}
-                    style={{ marginBottom: '2px' }}
+                    name="units"
+                    label="Units"
+                    rules={[{ required: true, message: "Please select units" }]}
                   >
-                    <InputNumber
-                      size="small"
-                      className="w-full"
-                      min={0}
-                      max={100}
-                      step={0.01}
-                      precision={2}
-                      placeholder="0.00"
-                      style={{ width: '100%', fontSize: '11px' }}
-                      controls={false}
-                    />
+                    <Select placeholder="Select units">
+                      <Option value="kg">Kilograms (kg)</Option>
+                      <Option value="ltr">Liters (ltr)</Option>
+                      <Option value="mtr">Meters (mtr)</Option>
+                      <Option value="nos">Numbers (nos)</Option>
+                      <Option value="set">Set</Option>
+                      <Option value="unit">Unit</Option>
+                      <Option value="kit">Kit</Option>
+                    </Select>
                   </Form.Item>
                 </Col>
-              </Row>
-
-              {/* Row 3: Stock, Can Be Fitted */}
-              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Stock</Text>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
                     name="stock"
-                    rules={[{ type: 'number', min: 0 }]}
-                    style={{ marginBottom: '2px' }}
-                    initialValue={1}
+                    label="Initial Stock Quantity"
+                    rules={[{ required: true, message: "Please enter stock" }]}
                   >
-                    <Form.Item shouldUpdate={(prevValues, currentValues) => prevValues.canBeFitted !== currentValues.canBeFitted} noStyle>
-                      {({ getFieldValue }) => {
-                        const canBeFitted = getFieldValue('canBeFitted');
-                        return (
-                          <InputNumber
-                            size="small"
-                            className="w-full"
-                            min={0}
-                            step={0.1}
-                            precision={1}
-                            placeholder="1"
-                            style={{ width: '100%', fontSize: '11px' }}
-                            disabled={canBeFitted}
-                            controls={false}
-                          />
-                        );
-                      }}
-                    </Form.Item>
+                    <InputNumber
+                      placeholder="Enter quantity"
+                      min={0}
+                      style={{ width: "100%" }}
+                    />
                   </Form.Item>
                 </Col>
-                <Col span={8}>
-                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Can Be Fitted</Text>
+                <Col xs={24} sm={12} md={8}>
                   <Form.Item
-                    name="canBeFitted"
-                    valuePropName="checked"
-                    style={{ marginBottom: '2px' }}
-                    initialValue={false}
+                    name="purchaseRate"
+                    label="Purchase Rate (₹)"
+                    rules={[{ required: true, message: "Please enter rate" }]}
                   >
-                    <Switch 
-                      size="small"
-                      onChange={(checked) => {
-                        if (checked) {
-                          form.setFieldsValue({ stock: 1 });
-                        } else {
-                          form.setFieldsValue({ currentRPM: undefined, nextServiceRPM: undefined });
-                        }
-                      }}
+                    <InputNumber
+                      placeholder="Enter purchase rate"
+                      min={0}
+                      style={{ width: "100%" }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item name="gst" label="GST %">
+                    <InputNumber
+                      placeholder="Enter GST %"
+                      min={0}
+                      max={100}
+                      style={{ width: "100%" }}
                     />
                   </Form.Item>
                 </Col>
               </Row>
+              <Row>
+                <Col span={24}>
+                  <Space>
+                    <Button
+                      type="primary"
+                      htmlType="submit"
+                      loading={submitting}
+                    >
+                      {editingId ? "Update" : "Create"} Item
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingId(null);
+                        form.resetFields();
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </Space>
+                </Col>
+              </Row>
+            </Form>
+          </Card>
+        )}
 
-              {/* Row 4: RPM Fields (only when canBeFitted is true) */}
-              <Form.Item shouldUpdate={(prevValues, currentValues) => prevValues.canBeFitted !== currentValues.canBeFitted}>
-                {({ getFieldValue }) => {
-                  const canBeFitted = getFieldValue('canBeFitted');
-                  if (canBeFitted) {
-                    return (
-                      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-                        <Col span={8}>
-                          <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Current RPM</Text>
-                          <Form.Item
-                            name="currentRPM"
-                            rules={[{ type: 'number', min: 0 }]}
-                            style={{ marginBottom: '2px' }}
-                          >
-                            <InputNumber
-                              size="small"
-                              className="w-full"
-                              min={0}
-                              step={0.1}
-                              precision={2}
-                              placeholder="0.00"
-                              style={{ width: '100%', fontSize: '11px' }}
-                              controls={false}
-                            />
-                          </Form.Item>
-                        </Col>
-                        <Col span={8}>
-                          <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Next Service RPM</Text>
-                          <Form.Item
-                            name="nextServiceRPM"
-                            rules={[{ type: 'number', min: 0 }]}
-                            style={{ marginBottom: '2px' }}
-                          >
-                            <InputNumber
-                              size="small"
-                              className="w-full"
-                              min={0}
-                              step={0.1}
-                              precision={2}
-                              placeholder="0.00"
-                              style={{ width: '100%', fontSize: '11px' }}
-                              controls={false}
-                            />
-                          </Form.Item>
-                        </Col>
-                      </Row>
-                    );
-                  }
-                  return null;
-                }}
-              </Form.Item>
-
-              {/* Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '4px' }}>
-                <Button 
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                    form.resetFields();
-                  }} 
-                  size="small" 
-                  style={{ height: '28px', fontSize: '11px' }}
-                >
-                  Cancel
-                </Button>
-                <Button 
-                  type="primary" 
-                  htmlType="submit" 
-                  size="small"
-                  loading={submitting}
-                  disabled={submitting}
-                  style={{ height: '28px', fontSize: '11px' }}
-                >
-                  {editingId ? "Update Item" : "Save Item"}
-                </Button>
-              </div>
-            </div>
-          </Form>
-        </Card>
-      )}
-
-      {/* Filters */}
-      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
-        <Row gutter={8} align="middle">
-          <Col xs={24} sm={12} md={8}>
-            <Input.Search
-              placeholder="Search by item name or part number"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
-            />
-          </Col>
-          <Col xs={24} sm={8} md={4}>
-            <Select
-              value={canBeFittedFilter}
-              onChange={setCanBeFittedFilter}
-              size="small"
-              className="w-full"
-            >
-              <Select.Option value="all">All Items</Select.Option>
-              <Select.Option value="true">Fittable Items</Select.Option>
-              <Select.Option value="false">Non-Fittable Items</Select.Option>
-            </Select>
-          </Col>
-          <Col xs={24} sm={4} md={2}>
-            <Button
-              onClick={() => {
-                setSearchTerm('');
-                setCanBeFittedFilter('all');
-              }}
-              disabled={!searchTerm && canBeFittedFilter === 'all'}
-              size="small"
-              className="w-full"
-            >
-              Clear
-            </Button>
-          </Col>
-        </Row>
+        {/* Table */}
+        <Table
+          columns={columns}
+          dataSource={items}
+          loading={loading}
+          rowKey="id"
+          pagination={pagination}
+          onChange={handleTableChange}
+          scroll={{ x: 1200 }}
+          size="small"
+        />
       </Card>
-
-      {/* Table */}
-      <Table
-        columns={columns}
-        dataSource={items || []}
-        rowKey="id"
-        loading={loading}
-        pagination={{
-          ...pagination,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-        }}
-        onChange={handleTableChange}
-      />
     </div>
   );
 };

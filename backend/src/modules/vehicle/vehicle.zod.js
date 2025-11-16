@@ -8,6 +8,7 @@ export const createMachineSchema = z.object({
   vehicleRPM: z.number().min(0, "Starting RPM must be non-negative").optional(), // DB column name kept
   nextServiceRPM: z.number().min(0, "Next service RPM must be non-negative").optional(),
   compressorId: z.string().uuid("Invalid compressor ID format").optional(),
+  siteId: z.string().uuid("Invalid site ID format").optional(),
 });
 
 export const updateMachineSchema = createMachineSchema.partial();

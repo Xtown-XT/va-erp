@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   Row,
@@ -13,10 +14,13 @@ import {
   Space,
   Divider,
   message,
+  Modal,
+  Tag,
 } from "antd";
 import {
   FilePdfOutlined,
   ReloadOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { truncateToFixed } from "../utils/textUtils";
@@ -32,10 +36,16 @@ const ProductionReport = () => {
   const [sites, setSites] = useState([]);
   const [machines, setMachines] = useState([]);
   const [compressors, setCompressors] = useState([]);
-  const [selectedSite, setSelectedSite] = useState('');
+  const [employees, setEmployees] = useState([]);
+  const [selectedSite, setSelectedSite] = useState(undefined);
   const [selectedSiteName, setSelectedSiteName] = useState('');
-  const [selectedMachine, setSelectedMachine] = useState('');
+  const [selectedMachine, setSelectedMachine] = useState(undefined);
   const [selectedMachineName, setSelectedMachineName] = useState('');
+  const [selectedEmployee, setSelectedEmployee] = useState(undefined);
+  const [selectedEmployeeName, setSelectedEmployeeName] = useState('');
+  const navigate = useNavigate();
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState(null);
 
   // Fetch production data
   const fetchProductionData = async () => {
@@ -50,6 +60,9 @@ const ProductionReport = () => {
       }
       if (selectedMachine) {
         url += `&vehicleId=${selectedMachine}`;
+      }
+      if (selectedEmployee) {
+        url += `&employeeId=${selectedEmployee}`;
       }
 
       const res = await api.get(url);
@@ -376,25 +389,25 @@ const ProductionReport = () => {
       title: "Crawler HSD",
       dataIndex: "crawlerHSDDisplay",
       key: "crawlerHSD",
-      render: (value, record) => record.isCrawler ? Number(value || 0).toFixed(2) : '',
+      render: (value, record) => record.isCrawler ? Math.round(value || 0) : '',
     },
     {
-      title: "Compressor HSD",
+      title: "Comp HSD",
       dataIndex: "compressorHSD",
       key: "compressorHSD",
-      render: (value) => truncateToFixed(value || 0, 2),
+      render: (value) => Math.round(value || 0),
     },
     {
       title: "Camper HSD",
       dataIndex: "camperHSDDisplay",
       key: "camperHSD",
-      render: (value, record) => record.isCamper ? Number(value || 0).toFixed(2) : '',
+      render: (value, record) => record.isCamper ? Math.round(value || 0) : '',
     },
     {
       title: "Total HSD",
       dataIndex: "totalHSD",
       key: "totalHSD",
-      render: (value) => truncateToFixed(value || 0, 2),
+      render: (value) => Math.round(value || 0),
     },
     {
       title: "Crawler RPM",
@@ -403,7 +416,7 @@ const ProductionReport = () => {
       render: (value, record) => record.isCrawler ? Number(value || 0).toFixed(2) : '',
     },
     {
-      title: "Compressor RPM",
+      title: "Comp RPM",
       dataIndex: "compressorRPM",
       key: "compressorRPM",
       render: (value) => truncateToFixed(value || 0, 2),
@@ -444,6 +457,24 @@ const ProductionReport = () => {
       key: "depthAvg",
       render: (value) => truncateToFixed(value || 0, 2),
     },
+    {
+      title: "Actions",
+      key: "actions",
+      width: 100,
+      fixed: "right",
+      render: (_, record) => (
+        <Button
+          icon={<EyeOutlined />}
+          size="small"
+          onClick={() => {
+            setSelectedEntry(record);
+            setShowDetailModal(true);
+          }}
+        >
+          Detail
+        </Button>
+      ),
+    },
   ];
 
   // Export to PDF
@@ -456,6 +487,7 @@ const ProductionReport = () => {
       let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
       if (selectedSite) url += `&siteId=${selectedSite}`;
       if (selectedMachine) url += `&vehicleId=${selectedMachine}`;
+      if (selectedEmployee) url += `&employeeId=${selectedEmployee}`;
 
       const res = await api.get(url);
       let entries = res.data.data || [];
@@ -584,8 +616,8 @@ const ProductionReport = () => {
       '</div>' +
       '<table><thead><tr>' +
       '<th>Date</th><th>Shift</th><th>Site</th><th>Meter</th>' +
-      '<th>Crawler HSD</th><th>Compressor HSD</th><th>Camper HSD</th><th>Total HSD</th>' +
-      '<th>Crawler RPM</th><th>Compressor RPM</th><th>HSD/MTR</th><th>MTR/RPM</th>' +
+      '<th>Crawler HSD</th><th>Comp HSD</th><th>Camper HSD</th><th>Total HSD</th>' +
+      '<th>Crawler RPM</th><th>Comp RPM</th><th>HSD/MTR</th><th>MTR/RPM</th>' +
       '<th>Crawler HSD/Crawler RPM</th><th>Comp HSD/Comp RPM</th>' +
       '<th>Number of Holes</th><th>Depth Avg</th>' +
       '</tr></thead><tbody>';
@@ -611,10 +643,10 @@ const ProductionReport = () => {
       const shiftText = String(entry.shift || 1);
       const dateStr = dayjs(entry.date).format("DD/MM/YYYY");
       const meter = truncateToFixed(entry.meter || 0, 2);
-      const crawlerHSD = truncateToFixed(entry.crawlerHSD || 0, 2);
-      const compressorHSD = truncateToFixed(entry.compressorHSD || 0, 2);
-      const camperHSD = truncateToFixed(entry.camperHSD || 0, 2);
-      const totalHSD = truncateToFixed(entry.totalHSD || 0, 2);
+      const crawlerHSD = Math.round(entry.crawlerHSD || 0);
+      const compressorHSD = Math.round(entry.compressorHSD || 0);
+      const camperHSD = Math.round(entry.camperHSD || 0);
+      const totalHSD = Math.round(entry.totalHSD || 0);
       const crawlerRPM = truncateToFixed(entry.crawlerRPM || 0, 2);
       const compressorRPM = truncateToFixed(entry.compressorRPM || 0, 2);
       const hsdMtr = truncateToFixed(entry.hsdMtr || 0, 2);
@@ -648,10 +680,10 @@ const ProductionReport = () => {
     htmlContent += '</tbody><tfoot><tr class="total-row">' +
       '<td>Total</td><td></td><td></td>' +
       '<td>' + truncateToFixed(totals.totalMeter || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalCrawlerHSD || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalCompressorHSD || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalCamperHSD || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalTotalHSD || 0, 2) + '</td>' +
+      '<td>' + Math.round(totals.totalCrawlerHSD || 0) + '</td>' +
+      '<td>' + Math.round(totals.totalCompressorHSD || 0) + '</td>' +
+      '<td>' + Math.round(totals.totalCamperHSD || 0) + '</td>' +
+      '<td>' + Math.round(totals.totalTotalHSD || 0) + '</td>' +
       '<td>' + truncateToFixed(totals.totalCrawlerRPM || 0, 2) + '</td>' +
       '<td>' + truncateToFixed(totals.totalCompressorRPM || 0, 2) + '</td>' +
       '<td>' + truncateToFixed(totals.totalHsdMtr || 0, 2) + '</td>' +
@@ -805,17 +837,27 @@ const ProductionReport = () => {
     }
   };
 
+  const fetchEmployees = async () => {
+    try {
+      const res = await api.get('/api/employeeLists?limit=1000');
+      setEmployees(res.data.data || []);
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+    }
+  };
+
   // Fetch refs on component mount
   useEffect(() => {
     fetchSites();
     fetchMachines();
     fetchCompressors();
+    fetchEmployees();
   }, []);
 
   // Fetch production data when filters change
   useEffect(() => {
     fetchProductionData();
-  }, [dateRange, selectedSite, selectedMachine]);
+  }, [dateRange, selectedSite, selectedMachine, selectedEmployee]);
 
   return (
     <div className="space-y-2">
@@ -835,9 +877,9 @@ const ProductionReport = () => {
             <Select
               className="w-full"
               placeholder="Filter by Site"
-              value={selectedSite}
+              value={selectedSite || undefined}
               onChange={(value) => {
-                setSelectedSite(value);
+                setSelectedSite(value || undefined);
                 const site = sites.find(s => s.id === value);
                 setSelectedSiteName(site ? site.siteName : '');
               }}
@@ -856,10 +898,10 @@ const ProductionReport = () => {
           <Col xs={24} sm={6} md={3}>
             <Select
               className="w-full"
-              placeholder="Filter by Vehicle"
-              value={selectedMachine}
+              placeholder="Filter by Machine"
+              value={selectedMachine || undefined}
               onChange={(value) => {
-                setSelectedMachine(value);
+                setSelectedMachine(value || undefined);
                 const machine = machines.find(m => m.id === value);
                 setSelectedMachineName(machine ? `${machine.vehicleNumber} (${machine.vehicleType})` : '');
               }}
@@ -876,14 +918,65 @@ const ProductionReport = () => {
             </Select>
           </Col>
           <Col xs={24} sm={6} md={3}>
+            <Select
+              className="w-full"
+              placeholder="Filter by Employee"
+              value={selectedEmployee || undefined}
+              onChange={(value) => {
+                setSelectedEmployee(value || undefined);
+                const employee = employees.find(e => e.id === value);
+                setSelectedEmployeeName(employee ? employee.name : '');
+              }}
+              allowClear
+              showSearch
+              optionFilterProp="children"
+              size="small"
+            >
+              {employees.map(employee => (
+                <Select.Option key={employee.id} value={employee.id}>
+                  {employee.name} ({employee.empId})
+                </Select.Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={24} sm={6} md={2}>
+            <Button
+              icon={<EyeOutlined />}
+              onClick={() => navigate('/reports/production/detail')}
+              type="default"
+              size="small"
+              className="w-full"
+            >
+              Show Detail
+            </Button>
+          </Col>
+          <Col xs={24} sm={6} md={2}>
             <Button
               icon={<FilePdfOutlined />}
               onClick={exportToPDF}
               type="primary"
               danger
               size="small"
+              className="w-full"
             >
-              Export PDF
+              PDF
+            </Button>
+          </Col>
+          <Col xs={24} sm={6} md={2}>
+            <Button
+              onClick={() => {
+                setSelectedSite(undefined);
+                setSelectedSiteName('');
+                setSelectedMachine(undefined);
+                setSelectedMachineName('');
+                setSelectedEmployee(undefined);
+                setSelectedEmployeeName('');
+              }}
+              disabled={!selectedSite && !selectedMachine && !selectedEmployee}
+              size="small"
+              className="w-full"
+            >
+              Clear Filters
             </Button>
           </Col>
         </Row>
@@ -919,19 +1012,19 @@ const ProductionReport = () => {
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={2}>
-                  <Text strong>{truncateToFixed(totals.totalCrawlerHSD || 0, 2)}</Text>
+                  <Text strong>{Math.round(totals.totalCrawlerHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={3}>
-                  <Text strong>{truncateToFixed(totals.totalCompressorHSD || 0, 2)}</Text>
+                  <Text strong>{Math.round(totals.totalCompressorHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={4}>
-                  <Text strong>{truncateToFixed(totals.totalCamperHSD || 0, 2)}</Text>
+                  <Text strong>{Math.round(totals.totalCamperHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={5}>
-                  <Text strong>{truncateToFixed(totals.totalTotalHSD || 0, 2)}</Text>
+                  <Text strong>{Math.round(totals.totalTotalHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
                 <Table.Summary.Cell index={6}>
@@ -1024,7 +1117,7 @@ const ProductionReport = () => {
                 }
               },
               {
-                title: "Compressor",
+                title: "Comp",
                 key: "compressor",
                 render: (_, record) => {
                   if (!record.compressorId) return '-';
@@ -1071,7 +1164,7 @@ const ProductionReport = () => {
                 }
               },
               {
-                title: "Compressor Next Service",
+                title: "Comp Next Service",
                 key: "compressorNextService",
                 render: (_, record) => {
                   if (!record.compressorId) return '-';
@@ -1083,6 +1176,162 @@ const ProductionReport = () => {
           />
         </Card>
       )}
+
+      {/* Detail Modal - Show Employees */}
+      <Modal
+        title={
+          <Space>
+            <EyeOutlined />
+            <span>Entry Details</span>
+          </Space>
+        }
+        open={showDetailModal}
+        onCancel={() => {
+          setShowDetailModal(false);
+          setSelectedEntry(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => setShowDetailModal(false)}>
+            Close
+          </Button>
+        ]}
+        width={800}
+      >
+        {selectedEntry && (
+          <div>
+            {/* Entry Information */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={6}>
+                  <Text strong>Date:</Text>
+                  <div>{dayjs(selectedEntry.date).format('DD MMM YYYY')}</div>
+                </Col>
+                <Col span={6}>
+                  <Text strong>Shift:</Text>
+                  <div><Tag>{selectedEntry.shift || 1}</Tag></div>
+                </Col>
+                <Col span={6}>
+                  <Text strong>Ref No:</Text>
+                  <div>{selectedEntry.refNo || '-'}</div>
+                </Col>
+                <Col span={6}>
+                  <Text strong>Site:</Text>
+                  <div>
+                    {selectedEntry.site?.siteName || 
+                     sites.find(s => s.id === selectedEntry.siteId)?.siteName || 
+                     '-'}
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+
+            {/* Machine & Compressor Info */}
+            <Card size="small" style={{ marginBottom: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Text strong>Machine:</Text>
+                  <div>
+                    {selectedEntry.vehicle ? 
+                      `${selectedEntry.vehicle.vehicleType} (${selectedEntry.vehicle.vehicleNumber})` :
+                      machines.find(m => m.id === selectedEntry.vehicleId) ? 
+                        `${machines.find(m => m.id === selectedEntry.vehicleId).vehicleType} (${machines.find(m => m.id === selectedEntry.vehicleId).vehicleNumber})` :
+                        '-'
+                    }
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <Text type="secondary" style={{ fontSize: '12px' }}>
+                      Opening: {truncateToFixed(selectedEntry.vehicleOpeningRPM || 0, 2)} | 
+                      Closing: {truncateToFixed(selectedEntry.vehicleClosingRPM || 0, 2)}
+                    </Text>
+                  </div>
+                </Col>
+                <Col span={12}>
+                  <Text strong>Compressor:</Text>
+                  <div>
+                    {selectedEntry.compressorId ? 
+                      (compressors.find(c => c.id === selectedEntry.compressorId)?.compressorName || '-') :
+                      '-'
+                    }
+                  </div>
+                  {selectedEntry.compressorId && (
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        Opening: {truncateToFixed(selectedEntry.compressorOpeningRPM || 0, 2)} | 
+                        Closing: {truncateToFixed(selectedEntry.compressorClosingRPM || 0, 2)}
+                      </Text>
+                    </div>
+                  )}
+                </Col>
+              </Row>
+            </Card>
+
+            {/* Employees Table */}
+            <div>
+              <Title level={5}>Employees</Title>
+              <Table
+                dataSource={selectedEntry.employees || []}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                columns={[
+                  {
+                    title: 'Employee ID',
+                    dataIndex: 'empId',
+                    key: 'empId',
+                    width: '25%',
+                  },
+                  {
+                    title: 'Name',
+                    dataIndex: 'name',
+                    key: 'name',
+                    width: '35%',
+                  },
+                  {
+                    title: 'Role',
+                    key: 'role',
+                    width: '20%',
+                    render: (_, record) => {
+                      const role = record.role || record.DailyEntryEmployee?.role || 'operator';
+                      return (
+                        <Tag color={role === 'operator' ? 'blue' : 'green'}>
+                          {role === 'operator' ? 'Operator' : 'Helper'}
+                        </Tag>
+                      );
+                    },
+                  },
+                  {
+                    title: 'Shift',
+                    key: 'shift',
+                    width: '20%',
+                    render: (_, record) => {
+                      const shift = record.shift || record.DailyEntryEmployee?.shift || 1;
+                      return <Tag>{shift}</Tag>;
+                    },
+                  },
+                ]}
+                locale={{ emptyText: 'No employees assigned' }}
+              />
+            </div>
+
+            {/* Production Metrics */}
+            <Card size="small" style={{ marginTop: 16 }}>
+              <Title level={5}>Production Metrics</Title>
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Text strong>Meter:</Text> {truncateToFixed(selectedEntry.meter || 0, 2)}
+                </Col>
+                <Col span={8}>
+                  <Text strong>Holes:</Text> {selectedEntry.noOfHoles || 0}
+                </Col>
+                <Col span={8}>
+                  <Text strong>Total HSD:</Text> {Math.round(selectedEntry.totalHSD || 0)}
+                </Col>
+              </Row>
+            </Card>
+          </div>
+        )}
+      </Modal>
+
     </div>
   );
 };

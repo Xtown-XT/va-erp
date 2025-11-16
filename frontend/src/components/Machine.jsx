@@ -35,6 +35,7 @@ const Machine = () => {
   const [editingId, setEditingId] = useState(null);
   const [brands, setBrands] = useState([]);
   const [compressors, setCompressors] = useState([]);
+  const [sites, setSites] = useState([]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -91,10 +92,20 @@ const Machine = () => {
     }
   };
 
+  const fetchSites = async () => {
+    try {
+      const res = await api.get("/api/sites?limit=1000");
+      setSites(res.data.data || []);
+    } catch (err) {
+      console.error("Error fetching sites", err);
+    }
+  };
+
   useEffect(() => {
     fetchMachines();
     fetchBrands();
     fetchCompressors();
+    fetchSites();
   }, []);
 
   // Handle form submit (create or update)
@@ -125,7 +136,9 @@ const Machine = () => {
         payload.compressorId = values.compressorId;
       }
 
-
+      if (values.siteId) {
+        payload.siteId = values.siteId;
+      }
 
       if (editingId) {
         await api.put(`/api/vehicles/${editingId}`, payload); // API route kept
@@ -159,6 +172,7 @@ const Machine = () => {
       vehicleRPM: record.vehicleRPM ?? undefined,
       nextServiceRPM: record.nextServiceRPM ?? undefined,
       compressorId: record.compressorId || record.compressor?.id || undefined,
+      siteId: record.siteId || record.site?.id || undefined,
     });
   };
 
@@ -286,6 +300,20 @@ const Machine = () => {
         // Find compressor by ID if we have the ID
         const compressor = compressors.find(c => c.id === record.compressorId);
         return compressor ? compressor.compressorName : "-";
+      }
+    },
+    {
+      title: "Site",
+      key: "siteName",
+      render: (_, record) => {
+        if (record.site?.siteName) {
+          return record.site.siteName;
+        }
+        if (record.siteName) {
+          return record.siteName;
+        }
+        const site = sites.find(s => s.id === record.siteId);
+        return site ? site.siteName : "-";
       }
     },
     {
@@ -468,6 +496,19 @@ const Machine = () => {
                   {compressors.map((compressor) => (
                     <Select.Option key={compressor.id} value={compressor.id}>
                       {compressor.compressorName}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item
+                name="siteId"
+                label="Assigned Site"
+                tooltip="Assign this machine to a specific site"
+              >
+                <Select placeholder="Select site" allowClear showSearch optionFilterProp="children">
+                  {sites.map((site) => (
+                    <Select.Option key={site.id} value={site.id}>
+                      {site.siteName}
                     </Select.Option>
                   ))}
                 </Select>

@@ -4,6 +4,7 @@ import Compressor from "../compressor/compressor.model.js";
 import Service from "../service/service.model.js";
 import EmployeeList from "../employee/employeeList.model.js";
 import Item from "../item/item.model.js";
+import ItemService from "../itemService/itemService.model.js";
 import EmployeeAttendance from "../employee/employeeAttendance.model.js";
 import Site from "../site/site.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
@@ -83,6 +84,69 @@ class DailyEntryCustomController extends BaseController {
     }
   };
 
+  // Helper: Process service items (fit or remove)
+  processServiceItems = async (serviceItems, dailyEntryId, vehicleId, compressorId, serviceType, currentRPM, currentMeter, date, username, transaction) => {
+    if (!serviceItems || serviceItems.length === 0) return;
+
+    for (const svcItem of serviceItems) {
+      const { itemId, action, quantity = 1, itemServiceId } = svcItem;
+
+      if (action === 'fit') {
+        // Fit a new item
+        const item = await Item.findByPk(itemId, { transaction });
+        if (!item) continue;
+
+        // Verify sufficient balance
+        if (item.balance < quantity) {
+          throw new Error(`Insufficient balance for item ${item.itemName}`);
+        }
+
+        // Create ItemService record
+        await ItemService.create({
+          itemId,
+          dailyEntryId,
+          vehicleId: serviceType === 'machine' ? vehicleId : null,
+          compressorId: serviceType === 'compressor' || serviceType === 'drilling_tool' ? compressorId : null,
+          serviceType,
+          fittedDate: date,
+          fittedRPM: currentRPM,
+          fittedMeter: currentMeter,
+          quantity,
+          status: 'fitted',
+          createdBy: username,
+        }, { transaction });
+
+        // Update item inventory
+        await item.update({
+          outward: item.outward + quantity,
+          balance: item.balance - quantity,
+          updatedBy: username,
+        }, { transaction });
+      } else if (action === 'remove' && itemServiceId) {
+        // Remove an existing fitted item
+        const itemService = await ItemService.findByPk(itemServiceId, { transaction });
+        if (!itemService || itemService.status !== 'fitted') continue;
+
+        // Calculate totals
+        const totalRPMRun = currentRPM - itemService.fittedRPM;
+        const totalMeterRun = currentMeter && itemService.fittedMeter 
+          ? currentMeter - itemService.fittedMeter 
+          : null;
+
+        // Update ItemService record
+        await itemService.update({
+          removedDate: date,
+          removedRPM: currentRPM,
+          removedMeter: currentMeter,
+          totalRPMRun,
+          totalMeterRun,
+          status: 'removed',
+          updatedBy: username,
+        }, { transaction });
+      }
+    }
+  };
+
   
 
   create = async (req, res, next) => {
@@ -102,8 +166,6 @@ class DailyEntryCustomController extends BaseController {
       employeeId, 
       employees = [],
       additionalEmployeeIds = [],
-      fittedItemInstanceIds = [],
-      removedItemInstanceIds = [],
       notes,
       compressorHSD,
       shift = 1,
@@ -179,37 +241,6 @@ class DailyEntryCustomController extends BaseController {
       await DailyEntryEmployee.bulkCreate(rows, { transaction });
     }
 
-    // Handle item fitting - update status to fitted
-    if (fittedItemInstanceIds.length > 0) {
-      for (const itemId of fittedItemInstanceIds) {
-        const item = await Item.findByPk(itemId, { transaction });
-        if (item && item.canBeFitted && item.status === 'in_stock') {
-          await item.update({
-            status: 'fitted',
-            fittedToVehicleId: machineId, // DB column kept
-            fittedDate: entry.date,
-            updatedBy: req.user?.username || "system"
-          }, { transaction });
-        }
-      }
-    }
-
-    // Handle item removal - update status back to in_stock
-    if (removedItemInstanceIds.length > 0) {
-      for (const itemId of removedItemInstanceIds) {
-        const item = await Item.findByPk(itemId, { transaction });
-        if (item && item.canBeFitted && item.status === 'fitted' && item.fittedToVehicleId === machineId) {
-          await item.update({
-            status: 'in_stock',
-            fittedToVehicleId: null,
-            fittedDate: null,
-            removedDate: entry.date,
-            updatedBy: req.user?.username || "system"
-          }, { transaction });
-        }
-      }
-    }
-
     // Update machine RPM totals
     const machine = await Machine.findByPk(machineId, { transaction });
     if (machine) {
@@ -245,30 +276,6 @@ class DailyEntryCustomController extends BaseController {
       }
     }
 
-    // Update RPM for fitted items using compressor RPM
-    // Each shift adds its own compressor RPM - total accumulates naturally
-    const shiftCompressorRPM = Math.max(0, (compressorClosingRPM || 0) - (compressorOpeningRPM || 0));
-    
-    if (shiftCompressorRPM > 0 && compressorId) {
-      // Get all items currently fitted to this machine (including newly fitted ones)
-      const allFittedItems = await Item.findAll({
-        where: {
-          fittedToVehicleId: machineId,
-          status: 'fitted',
-          canBeFitted: true,
-        },
-        transaction
-      });
-
-      // Add this shift's compressor RPM to all fitted items
-      // When both shifts are saved, the total (shift1 + shift2) will be added
-      for (const item of allFittedItems) {
-        await item.increment('currentRPM', {
-          by: shiftCompressorRPM,
-          transaction
-        });
-      }
-    }
 
     // Auto-create/update attendance for all employees
     if (processedEmployees.length > 0) {
@@ -280,6 +287,102 @@ class DailyEntryCustomController extends BaseController {
         req.user.username,
         transaction
       );
+    }
+
+    // Process service items for machine
+    if (req.body.machineServiceItems && req.body.machineServiceItems.length > 0) {
+      await this.processServiceItems(
+        req.body.machineServiceItems,
+        entry.id,
+        machineId,
+        null,
+        'machine',
+        vehicleClosingRPM || machine?.vehicleRPM || 0,
+        null,
+        entry.date,
+        req.user.username,
+        transaction
+      );
+    }
+
+    // Process service items for compressor
+    if (req.body.compressorServiceItems && req.body.compressorServiceItems.length > 0 && compressorId) {
+      const compressor = await Compressor.findByPk(compressorId, { transaction });
+      await this.processServiceItems(
+        req.body.compressorServiceItems,
+        entry.id,
+        null,
+        compressorId,
+        'compressor',
+        compressorClosingRPM || compressor?.compressorRPM || 0,
+        req.body.meter || 0,
+        entry.date,
+        req.user.username,
+        transaction
+      );
+    }
+
+    // Process drilling tools
+    if (req.body.drillingTools && req.body.drillingTools.length > 0 && compressorId) {
+      const compressor = await Compressor.findByPk(compressorId, { transaction });
+      const currentCompressorRPM = compressorClosingRPM || compressor?.compressorRPM || 0;
+      const currentMeter = req.body.meter || 0;
+      
+      for (const tool of req.body.drillingTools) {
+        const { itemId, action, startingRPM, endingRPM, startingMeter, endingMeter, itemServiceId } = tool;
+        
+        if (action === 'fit') {
+          // Fit a new drilling tool
+          const item = await Item.findByPk(itemId, { transaction });
+          if (!item || item.balance < 1) {
+            throw new Error(`Insufficient balance for drilling tool ${item?.itemName || itemId}`);
+          }
+
+          // Create ItemService record for drilling tool
+          await ItemService.create({
+            itemId,
+            dailyEntryId: entry.id,
+            vehicleId: null,
+            compressorId,
+            serviceType: 'drilling_tool',
+            fittedDate: entry.date,
+            fittedRPM: startingRPM || currentCompressorRPM,
+            fittedMeter: startingMeter || currentMeter,
+            quantity: 1,
+            status: 'fitted',
+            createdBy: req.user.username,
+          }, { transaction });
+
+          // Update item inventory
+          await item.update({
+            outward: item.outward + 1,
+            balance: item.balance - 1,
+            updatedBy: req.user.username,
+          }, { transaction });
+        } else if (action === 'remove' && itemServiceId) {
+          // Remove an existing drilling tool
+          const itemService = await ItemService.findByPk(itemServiceId, { transaction });
+          if (!itemService || itemService.status !== 'fitted') continue;
+
+          const endingRPMValue = endingRPM || currentCompressorRPM;
+          const endingMeterValue = endingMeter || currentMeter;
+          const totalRPMRun = endingRPMValue - itemService.fittedRPM;
+          const totalMeterRun = endingMeterValue && itemService.fittedMeter 
+            ? endingMeterValue - itemService.fittedMeter 
+            : null;
+
+          // Update ItemService record
+          await itemService.update({
+            removedDate: entry.date,
+            removedRPM: endingRPMValue,
+            removedMeter: endingMeterValue,
+            totalRPMRun,
+            totalMeterRun,
+            status: 'removed',
+            updatedBy: req.user.username,
+          }, { transaction });
+        }
+      }
     }
 
     await transaction.commit();
@@ -319,8 +422,6 @@ update = async (req, res, next) => {
       employeeId, 
       employees = [],
       additionalEmployeeIds = [],
-      fittedItemInstanceIds = [],
-      removedItemInstanceIds = [],
       notes,
       compressorHSD,
       shift,
@@ -403,37 +504,6 @@ update = async (req, res, next) => {
       }
     }
 
-    // Handle item fitting - update status to fitted
-    if (fittedItemInstanceIds && fittedItemInstanceIds.length > 0) {
-      for (const itemId of fittedItemInstanceIds) {
-        const item = await Item.findByPk(itemId, { transaction });
-        if (item && item.canBeFitted && item.status === 'in_stock') {
-          await item.update({
-            status: 'fitted',
-            fittedToVehicleId: machineId, // DB column kept
-            fittedDate: existingEntry.date,
-            updatedBy: req.user?.username || "system"
-          }, { transaction });
-        }
-      }
-    }
-
-    // Handle item removal - update status back to in_stock
-    if (removedItemInstanceIds && removedItemInstanceIds.length > 0) {
-      for (const itemId of removedItemInstanceIds) {
-        const item = await Item.findByPk(itemId, { transaction });
-        if (item && item.canBeFitted && item.status === 'fitted' && item.fittedToVehicleId === machineId) {
-          await item.update({
-            status: 'in_stock',
-            fittedToVehicleId: null,
-            fittedDate: null,
-            removedDate: existingEntry.date,
-            updatedBy: req.user?.username || "system"
-          }, { transaction });
-        }
-      }
-    }
-
     // Update machine RPM totals
     if (machineId) {
       const machine = await Machine.findByPk(machineId, { transaction });
@@ -485,6 +555,104 @@ update = async (req, res, next) => {
       }
     }
 
+    // Process service items for machine
+    if (req.body.machineServiceItems && req.body.machineServiceItems.length > 0 && machineId) {
+      const machine = await Machine.findByPk(machineId, { transaction });
+      await this.processServiceItems(
+        req.body.machineServiceItems,
+        id,
+        machineId,
+        null,
+        'machine',
+        vehicleClosingRPM || machine?.vehicleRPM || 0,
+        null,
+        date || existingEntry.date,
+        req.user.username,
+        transaction
+      );
+    }
+
+    // Process service items for compressor
+    const effectiveCompressorId = compressorId || existingEntry.compressorId;
+    if (req.body.compressorServiceItems && req.body.compressorServiceItems.length > 0 && effectiveCompressorId) {
+      const compressor = await Compressor.findByPk(effectiveCompressorId, { transaction });
+      await this.processServiceItems(
+        req.body.compressorServiceItems,
+        id,
+        null,
+        effectiveCompressorId,
+        'compressor',
+        compressorClosingRPM || compressor?.compressorRPM || 0,
+        req.body.meter || existingEntry.meter || 0,
+        date || existingEntry.date,
+        req.user.username,
+        transaction
+      );
+    }
+
+    // Process drilling tools
+    if (req.body.drillingTools && req.body.drillingTools.length > 0 && effectiveCompressorId) {
+      const compressor = await Compressor.findByPk(effectiveCompressorId, { transaction });
+      const currentCompressorRPM = compressorClosingRPM || compressor?.compressorRPM || 0;
+      const currentMeter = req.body.meter || existingEntry.meter || 0;
+      
+      for (const tool of req.body.drillingTools) {
+        const { itemId, action, startingRPM, endingRPM, startingMeter, endingMeter, itemServiceId } = tool;
+        
+        if (action === 'fit') {
+          // Fit a new drilling tool
+          const item = await Item.findByPk(itemId, { transaction });
+          if (!item || item.balance < 1) {
+            throw new Error(`Insufficient balance for drilling tool ${item?.itemName || itemId}`);
+          }
+
+          // Create ItemService record for drilling tool
+          await ItemService.create({
+            itemId,
+            dailyEntryId: id,
+            vehicleId: null,
+            compressorId: effectiveCompressorId,
+            serviceType: 'drilling_tool',
+            fittedDate: date || existingEntry.date,
+            fittedRPM: startingRPM || currentCompressorRPM,
+            fittedMeter: startingMeter || currentMeter,
+            quantity: 1,
+            status: 'fitted',
+            createdBy: req.user.username,
+          }, { transaction });
+
+          // Update item inventory
+          await item.update({
+            outward: item.outward + 1,
+            balance: item.balance - 1,
+            updatedBy: req.user.username,
+          }, { transaction });
+        } else if (action === 'remove' && itemServiceId) {
+          // Remove an existing drilling tool
+          const itemService = await ItemService.findByPk(itemServiceId, { transaction });
+          if (!itemService || itemService.status !== 'fitted') continue;
+
+          const endingRPMValue = endingRPM || currentCompressorRPM;
+          const endingMeterValue = endingMeter || currentMeter;
+          const totalRPMRun = endingRPMValue - itemService.fittedRPM;
+          const totalMeterRun = endingMeterValue && itemService.fittedMeter 
+            ? endingMeterValue - itemService.fittedMeter 
+            : null;
+
+          // Update ItemService record
+          await itemService.update({
+            removedDate: date || existingEntry.date,
+            removedRPM: endingRPMValue,
+            removedMeter: endingMeterValue,
+            totalRPMRun,
+            totalMeterRun,
+            status: 'removed',
+            updatedBy: req.user.username,
+          }, { transaction });
+        }
+      }
+    }
+
     await transaction.commit();
 
     // Fetch the updated entry with relationships
@@ -511,7 +679,7 @@ update = async (req, res, next) => {
 
   getAll = async (req, res, next) => {
     try {
-      const { page = 1, limit = 10, startDate, endDate, date, siteId, vehicleId, machineId, empId } = req.query;
+      const { page = 1, limit = 10, startDate, endDate, date, siteId, vehicleId, machineId, empId, employeeId, compressorId, shift } = req.query;
       const where = {};
       if (date) {
         where.date = date;
@@ -530,8 +698,14 @@ update = async (req, res, next) => {
       if (effectiveMachineId) {
         where.vehicleId = effectiveMachineId; // DB column kept as vehicleId
       }
+      if (compressorId) {
+        where.compressorId = compressorId;
+      }
+      if (shift) {
+        where.shift = parseInt(shift);
+      }
 
-      // Build include with optional employee code filter
+      // Build include with optional employee filter
       const employeeInclude = {
         model: EmployeeList, 
         as: "employees", 
@@ -539,9 +713,13 @@ update = async (req, res, next) => {
         through: { attributes: ["role", "shift"] }
       };
       
-      // Filter by employee code if provided
+      // Filter by employee code or ID if provided
       if (empId) {
         employeeInclude.where = { empId: { [Op.like]: `%${empId}%` } };
+        employeeInclude.required = true; // Only return entries with matching employees
+      } else if (employeeId) {
+        employeeInclude.where = { id: employeeId };
+        employeeInclude.required = true; // Only return entries with matching employees
       }
 
       const items = await this.service.getAll(page, limit, {

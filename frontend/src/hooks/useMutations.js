@@ -202,26 +202,37 @@ export const useDeleteCompressor = createMutationHook(
   }
 );
 
-// Service Mutations
-export const useCreateService = createMutationHook(
+// ItemService Mutations
+export const useFitItem = createMutationHook(
   async (payload) => {
-    const res = await api.post("/api/services", payload);
+    const res = await api.post("/api/itemServices/fit", payload);
     return res.data;
   },
   {
-    successMessage: "Service created successfully",
-    invalidateQueries: [queryKeys.services(), queryKeys.serviceHistory(), queryKeys.serviceAlerts()],
+    successMessage: "Item fitted successfully",
+    invalidateQueries: [["fittedItems"], ["items"], ["itemsByType"]],
   }
 );
 
-export const useUpdateService = createMutationHook(
+export const useRemoveItem = createMutationHook(
   async ({ id, ...payload }) => {
-    const res = await api.put(`/api/services/${id}`, payload);
+    const res = await api.put(`/api/itemServices/${id}/remove`, payload);
     return res.data;
   },
   {
-    successMessage: "Service updated successfully",
-    invalidateQueries: [queryKeys.services(), queryKeys.serviceHistory(), queryKeys.serviceAlerts()],
+    successMessage: "Item removed successfully",
+    invalidateQueries: [["fittedItems"], ["serviceUsageReport"]],
+  }
+);
+
+export const useInitializeMonth = createMutationHook(
+  async () => {
+    const res = await api.post("/api/items/initialize-month");
+    return res.data;
+  },
+  {
+    successMessage: "Month initialized successfully",
+    invalidateQueries: [["items"], ["inventoryReport"]],
   }
 );
 

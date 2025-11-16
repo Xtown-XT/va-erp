@@ -14,6 +14,7 @@ import Dashboard from "./components/Dashboard";
 import BrandManagement from "./components/BrandManagement";
 import DailyEntry from "./components/DailyEntry";
 import ItemManagement from "./components/ItemManagement";
+import StockReport from "./components/StockReport";
 import PurchaseOrderComplete from "./components/PurchaseOrderComplete";
 import SiteManagement from "./components/SiteManagement";
 import SupplierManagement from "./components/SupplierManagement";
@@ -24,11 +25,13 @@ import Reports from "./components/Reports";
 // import ItemStockReport from "./components/ItemStockReport"; // Commented out - page hidden
 import MachineServiceHistory from "./components/MachineServiceHistory";
 import CompressorServiceHistory from "./components/CompressorServiceHistory";
-import ServiceManagement from "./components/ServiceManagement";
 import AddressManagement from "./components/AddressManagement";
 // import InventoryManagement from "./components/InventoryManagement"; // Commented out - page hidden
 import ProductionReport from "./components/ProductionReport";
+import ProductionDetail from "./components/ProductionDetail";
 import EmployeeDetails from "./components/EmployeeDetails";
+import InventoryReport from "./components/InventoryReport";
+import ServiceUsageReport from "./components/ServiceUsageReport";
 import NotFound from "./components/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -51,12 +54,13 @@ function App() {
             <Route path="brand" element={<BrandManagement />} />
             <Route path="daily-entry" element={<DailyEntry />} />
             <Route path="item-management" element={<ItemManagement />} />
+            <Route path="items" element={<ItemManagement />} />
+            <Route path="stock-report" element={<StockReport />} />
             {/* <Route path="inventory-management" element={<InventoryManagement />} /> */} {/* Commented out - page hidden */}
             <Route path="site" element={<SiteManagement />} />
             <Route path="supplier" element={<SupplierManagement />} />
             <Route path="vehicle" element={<Machine />} /> {/* Route path kept for compatibility */}
             <Route path="compressor" element={<CompressorManagement />} />
-            <Route path="service-management" element={<ServiceManagement />} />
             <Route path="user-management" element={<UserManagement />} />
             <Route path="address" element={<AddressManagement />} />
 
@@ -72,6 +76,9 @@ function App() {
             <Route path="reports" element={<Reports />} />
             {/* <Route path="reports/item-stock" element={<ItemStockReport />} /> */} {/* Commented out - page hidden */}
             <Route path="reports/production" element={<ProductionReport />} />
+            <Route path="reports/production/detail" element={<ProductionDetail />} />
+            <Route path="reports/inventory" element={<InventoryReport />} />
+            <Route path="reports/service-usage" element={<ServiceUsageReport />} />
             <Route path="reports/vehicle-service/:vehicleId" element={<MachineServiceHistory />} /> {/* Route path kept for compatibility */}
             <Route path="reports/compressor-service/:compressorId" element={<CompressorServiceHistory />} />
           </Route>
