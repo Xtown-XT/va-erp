@@ -96,7 +96,7 @@ const DailyEntry = () => {
   
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [shift1Enabled, setShift1Enabled] = useState(true);
-  const [shift2Enabled, setShift2Enabled] = useState(false);
+  const [shift2Enabled, setShift2Enabled] = useState(true);
   const [selectedShift1Machine, setSelectedShift1Machine] = useState(null);
   const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
@@ -334,6 +334,75 @@ const DailyEntry = () => {
     try {
       const dateStr = selectedDate.format("YYYY-MM-DD");
       
+      // If editing, update existing entry
+      if (editingId) {
+        // Determine which shift is being edited
+        const editingEntry = entries.find(e => e.id === editingId);
+        const editingShift = editingEntry?.shift || 1;
+        
+        // Validate the shift being edited
+        if (editingShift === 1 && shift1Enabled) {
+          const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
+          if (shift1Operators.length === 0) {
+            message.error("Shift 1 must have at least one operator");
+            return;
+          }
+          if (!shift1Data.siteId || !shift1Data.vehicleId) {
+            message.error("Shift 1 must have site and machine selected");
+            return;
+          }
+        } else if (editingShift === 2 && shift2Enabled) {
+          const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
+          if (shift2Operators.length === 0) {
+            message.error("Shift 2 must have at least one operator");
+            return;
+          }
+          if (!shift2Data.siteId || !shift2Data.vehicleId) {
+            message.error("Shift 2 must have site and machine selected");
+            return;
+          }
+        }
+
+        // Prepare payload based on which shift is being edited
+        const shiftData = editingShift === 1 ? shift1Data : shift2Data;
+        const payload = {
+          date: dateStr,
+          shift: editingShift,
+          siteId: shiftData.siteId,
+          vehicleId: shiftData.vehicleId,
+          compressorId: shiftData.compressorId,
+          vehicleOpeningRPM: shiftData.vehicleOpeningRPM || 0,
+          vehicleClosingRPM: shiftData.vehicleClosingRPM || 0,
+          compressorOpeningRPM: shiftData.compressorOpeningRPM || 0,
+          compressorClosingRPM: shiftData.compressorClosingRPM || 0,
+          dieselUsed: shiftData.dieselUsed || 0,
+          vehicleHSD: shiftData.vehicleHSD || 0,
+          compressorHSD: shiftData.compressorHSD || 0,
+          noOfHoles: shiftData.noOfHoles || 0,
+          meter: shiftData.meter || 0,
+          employees: shiftData.employees
+            .filter(e => e.employeeId)
+            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: editingShift })),
+          vehicleServiceDone: Boolean(shiftData.vehicleServiceDone),
+          compressorServiceDone: Boolean(shiftData.compressorServiceDone),
+          fittedItemInstanceIds: shiftData.fittedItems.map(item => item.id),
+          removedItemInstanceIds: [],
+          notes: editingEntry?.notes || "",
+        };
+
+        // Update using PUT API
+        await api.put(`/api/dailyEntries/${editingId}`, payload);
+        message.success(`Shift ${editingShift} entry updated successfully`);
+        
+        // Refresh and close form
+        await fetchEntries();
+        await fetchMachines();
+        await fetchCompressors();
+        handleCancel();
+        return;
+      }
+
+      // Create new entries (original logic)
       // Validate Shift 1 (at least one operator required)
       if (shift1Enabled) {
         const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
@@ -443,7 +512,7 @@ const DailyEntry = () => {
     setShowForm(false);
     setEditingId(null);
     setShift1Enabled(true);
-    setShift2Enabled(false);
+    setShift2Enabled(true);
     setShift1Data({
       siteId: null,
       vehicleId: null,
@@ -494,6 +563,78 @@ const DailyEntry = () => {
       message.success("Entry deleted successfully");
     } catch (err) {
       message.error("Error deleting daily entry");
+    }
+  };
+
+  // Handle edit
+  const handleEdit = async (id) => {
+    try {
+      setLoading(true);
+      const res = await api.get(`/api/dailyEntries/${id}`);
+      const entry = res.data.data;
+
+      if (!entry) {
+        message.error("Entry not found");
+        return;
+      }
+
+      // Set editing ID
+      setEditingId(id);
+
+      // Set date
+      setSelectedDate(entry.date ? dayjs(entry.date) : dayjs());
+
+      // Determine which shift this entry belongs to
+      const entryShift = entry.shift || 1;
+
+      // Prepare employee data
+      const entryEmployees = entry.employees || [];
+      const employeesData = entryEmployees.map((emp, index) => ({
+        id: Date.now() + index,
+        employeeId: emp.id,
+        role: emp.role || 'operator',
+      }));
+
+      // Prepare entry data
+      const entryData = {
+        siteId: entry.siteId,
+        vehicleId: entry.vehicleId,
+        compressorId: entry.compressorId,
+        vehicleOpeningRPM: entry.vehicleOpeningRPM || 0,
+        vehicleClosingRPM: entry.vehicleClosingRPM || 0,
+        compressorOpeningRPM: entry.compressorOpeningRPM || 0,
+        compressorClosingRPM: entry.compressorClosingRPM || 0,
+        vehicleHSD: entry.vehicleHSD || 0,
+        compressorHSD: entry.compressorHSD || 0,
+        dieselUsed: entry.dieselUsed || 0,
+        noOfHoles: entry.noOfHoles || 0,
+        meter: entry.meter || 0,
+        employees: employeesData,
+        fittedItems: [], // Will need to fetch separately if needed
+        vehicleServiceDone: entry.vehicleServiceDone || false,
+        compressorServiceDone: entry.compressorServiceDone || false,
+      };
+
+      // Set machine and compressor selections
+      if (entryShift === 1) {
+        setShift1Enabled(true);
+        setShift1Data(entryData);
+        setSelectedShift1Machine(entry.vehicleId);
+        setSelectedShift1Compressor(entry.compressorId);
+      } else {
+        setShift2Enabled(true);
+        setShift2Data(entryData);
+        setSelectedShift2Machine(entry.vehicleId);
+        setSelectedShift2Compressor(entry.compressorId);
+      }
+
+      // Show form
+      setShowForm(true);
+      message.success("Entry loaded for editing");
+    } catch (err) {
+      message.error(`Failed to load entry: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -908,6 +1049,12 @@ const DailyEntry = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
+          {canEdit() && (
+            <Button 
+              icon={<EditOutlined />} 
+              onClick={() => handleEdit(record.id)}
+            />
+          )}
           {canDelete() && (
             <Popconfirm
               title="Are you sure you want to delete this entry?"

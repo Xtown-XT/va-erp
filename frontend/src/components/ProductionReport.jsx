@@ -1007,55 +1007,59 @@ const ProductionReport = () => {
                   <Text strong>Total</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={1}>
+                <Table.Summary.Cell index={1}></Table.Summary.Cell>
+
+                <Table.Summary.Cell index={2}></Table.Summary.Cell>
+
+                <Table.Summary.Cell index={3}>
                   <Text strong>{truncateToFixed(totals.totalMeter || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={2}>
+                <Table.Summary.Cell index={4}>
                   <Text strong>{Math.round(totals.totalCrawlerHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={3}>
+                <Table.Summary.Cell index={5}>
                   <Text strong>{Math.round(totals.totalCompressorHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={4}>
+                <Table.Summary.Cell index={6}>
                   <Text strong>{Math.round(totals.totalCamperHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={5}>
+                <Table.Summary.Cell index={7}>
                   <Text strong>{Math.round(totals.totalTotalHSD || 0)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={6}>
+                <Table.Summary.Cell index={8}>
                   <Text strong>{truncateToFixed(totals.totalCrawlerRPM || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={7}>
+                <Table.Summary.Cell index={9}>
                   <Text strong>{truncateToFixed(totals.totalCompressorRPM || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={8}>
+                <Table.Summary.Cell index={10}>
                   <Text strong>{truncateToFixed(totals.totalHsdMtr || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={9}>
+                <Table.Summary.Cell index={11}>
                   <Text strong>{truncateToFixed(totals.totalMtrRPM || 0, 2)}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={10}>
+                <Table.Summary.Cell index={12}>
                   <Text strong>{totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-'}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={11}>
+                <Table.Summary.Cell index={13}>
                   <Text strong>{totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-'}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={12}>
+                <Table.Summary.Cell index={14}>
                   <Text strong>{totals.totalHoles || 0}</Text>
                 </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={13}>
+                <Table.Summary.Cell index={15}>
                   <Text strong>{truncateToFixed(totals.totalDepthAvg || 0, 2)}</Text>
                 </Table.Summary.Cell>
               </Table.Summary.Row>

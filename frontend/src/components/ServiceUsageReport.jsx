@@ -54,14 +54,8 @@ const ServiceUsageReport = () => {
         "Date",
         "Item Name",
         "Part Number",
-        "Machine",
-        "Compressor",
         "Service Type",
-        "Fitted RPM",
-        "Removed RPM",
         "Total RPM Run",
-        "Fitted Meter",
-        "Removed Meter",
         "Total Meter Run",
         "Quantity",
         "Status",
@@ -70,14 +64,8 @@ const ServiceUsageReport = () => {
         item.fittedDate,
         item.item?.itemName || "",
         item.item?.partNumber || "",
-        item.machine?.vehicleNumber || "",
-        item.compressor?.compressorName || "",
         item.serviceType,
-        item.fittedRPM || 0,
-        item.removedRPM || "",
         item.totalRPMRun || "",
-        item.fittedMeter || "",
-        item.removedMeter || "",
         item.totalMeterRun || "",
         item.quantity,
         item.status,
@@ -124,10 +112,7 @@ const ServiceUsageReport = () => {
                 <th>Date</th>
                 <th>Item Name</th>
                 <th>Part Number</th>
-                <th>Machine/Compressor</th>
                 <th>Type</th>
-                <th>Fitted RPM</th>
-                <th>Removed RPM</th>
                 <th>RPM Run</th>
                 <th>Meter Run</th>
                 <th>Qty</th>
@@ -140,10 +125,7 @@ const ServiceUsageReport = () => {
                   <td>${item.fittedDate}</td>
                   <td>${item.item?.itemName || ""}</td>
                   <td>${item.item?.partNumber || ""}</td>
-                  <td>${item.machine?.vehicleNumber || item.compressor?.compressorName || ""}</td>
                   <td>${item.serviceType}</td>
-                  <td>${truncateToFixed(item.fittedRPM || 0, 2)}</td>
-                  <td>${item.removedRPM ? truncateToFixed(item.removedRPM, 2) : "-"}</td>
                   <td><strong>${item.totalRPMRun ? truncateToFixed(item.totalRPMRun, 2) : "-"}</strong></td>
                   <td>${item.totalMeterRun ? truncateToFixed(item.totalMeterRun, 2) : "-"}</td>
                   <td>${item.quantity}</td>
@@ -170,39 +152,25 @@ const ServiceUsageReport = () => {
       title: "Fitted Date",
       dataIndex: "fittedDate",
       key: "fittedDate",
-      width: 100,
+      width: 90,
     },
     {
       title: "Item Name",
       dataIndex: ["item", "itemName"],
       key: "itemName",
-      width: 150,
+      width: 120,
     },
     {
       title: "Part Number",
       dataIndex: ["item", "partNumber"],
       key: "partNumber",
-      width: 120,
-    },
-    {
-      title: "Machine",
-      dataIndex: ["machine", "vehicleNumber"],
-      key: "machine",
       width: 100,
-      render: (value) => value || "-",
-    },
-    {
-      title: "Compressor",
-      dataIndex: ["compressor", "compressorName"],
-      key: "compressor",
-      width: 120,
-      render: (value) => value || "-",
     },
     {
       title: "Service Type",
       dataIndex: "serviceType",
       key: "serviceType",
-      width: 120,
+      width: 100,
       render: (value) => {
         const colors = {
           machine: "blue",
@@ -213,24 +181,10 @@ const ServiceUsageReport = () => {
       },
     },
     {
-      title: "Fitted RPM",
-      dataIndex: "fittedRPM",
-      key: "fittedRPM",
-      width: 100,
-      render: (value) => truncateToFixed(value || 0, 2),
-    },
-    {
-      title: "Removed RPM",
-      dataIndex: "removedRPM",
-      key: "removedRPM",
-      width: 100,
-      render: (value) => (value ? truncateToFixed(value, 2) : "-"),
-    },
-    {
       title: "Total RPM Run",
       dataIndex: "totalRPMRun",
       key: "totalRPMRun",
-      width: 120,
+      width: 100,
       render: (value) => (
         value ? (
           <Text strong style={{ color: "#1890ff" }}>
@@ -245,7 +199,7 @@ const ServiceUsageReport = () => {
       title: "Total Meter Run",
       dataIndex: "totalMeterRun",
       key: "totalMeterRun",
-      width: 120,
+      width: 100,
       render: (value) => (
         value ? (
           <Text strong style={{ color: "#52c41a" }}>
@@ -260,13 +214,13 @@ const ServiceUsageReport = () => {
       title: "Quantity",
       dataIndex: "quantity",
       key: "quantity",
-      width: 80,
+      width: 70,
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
-      width: 100,
+      width: 80,
       render: (value) => {
         const colors = {
           fitted: "blue",
@@ -305,23 +259,32 @@ const ServiceUsageReport = () => {
         </Row>
 
         {/* Filters */}
-        <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
-          <Col xs={24} sm={12}>
+        <Row gutter={[8, 8]} style={{ marginBottom: 20 }}>
+          <Col xs={24} sm={8} md={6}>
+            <Text strong style={{ display: "block", marginBottom: 4 }}>
+              Date Range
+            </Text>
             <RangePicker
               value={dateRange}
               onChange={(dates) => setDateRange(dates || [dayjs(), dayjs()])}
               style={{ width: "100%" }}
               format="YYYY-MM-DD"
+              placeholder={["Start Date", "End Date"]}
+              size="small"
             />
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={8} md={6}>
+            <Text strong style={{ display: "block", marginBottom: 4 }}>
+              Machine
+            </Text>
             <Select
-              placeholder="Filter by Machine"
+              placeholder="Select Machine"
               value={selectedVehicle}
               onChange={setSelectedVehicle}
               style={{ width: "100%" }}
               allowClear
               showSearch
+              size="small"
               filterOption={(input, option) =>
                 option.children.toLowerCase().includes(input.toLowerCase())
               }
@@ -333,14 +296,18 @@ const ServiceUsageReport = () => {
               ))}
             </Select>
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={8} md={6}>
+            <Text strong style={{ display: "block", marginBottom: 4 }}>
+              Compressor
+            </Text>
             <Select
-              placeholder="Filter by Compressor"
+              placeholder="Select Compressor"
               value={selectedCompressor}
               onChange={setSelectedCompressor}
               style={{ width: "100%" }}
               allowClear
               showSearch
+              size="small"
               filterOption={(input, option) =>
                 option.children.toLowerCase().includes(input.toLowerCase())
               }
@@ -388,7 +355,6 @@ const ServiceUsageReport = () => {
           dataSource={usageData}
           loading={isLoading}
           rowKey="id"
-          scroll={{ x: 1500 }}
           pagination={{ pageSize: 20 }}
           size="small"
           rowClassName={(record) =>

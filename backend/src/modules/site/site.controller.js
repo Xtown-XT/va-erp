@@ -1,6 +1,7 @@
 import Site from "./site.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
+import { Op } from "sequelize";
 
 // 1. Create CRUD service from model
 const SiteCrud = new BaseCrud(Site);
@@ -8,18 +9,29 @@ const SiteCrud = new BaseCrud(Site);
 // 2. Plug it into BaseController
 const BaseSiteController = new BaseController(SiteCrud, "Site");
 
-// 3. Override getAll to sort by number prefix in siteName
+// 3. Override getAll to add filtering and sort by number prefix in siteName
 export const SiteController = {
   ...BaseSiteController,
   
   getAll: async (req, res, next) => {
     try {
-      const { page = 1, limit = 10 } = req.query;
+      const { page = 1, limit = 10, search, siteStatus } = req.query;
       
-      // Get all sites (or paginated)
+      // Build where clause for filtering
+      const where = {};
+      if (search) {
+        where.siteName = { [Op.iLike]: `%${search}%` };
+      }
+      if (siteStatus) {
+        // Convert "active"/"inactive" string to boolean
+        where.siteStatus = siteStatus.toLowerCase() === "active";
+      }
+      
+      // Get all sites (or paginated) with filters
       const { limit: l, offset, page: safePage } = BaseCrud.paginate(page, limit);
       
       const { rows, count } = await Site.findAndCountAll({
+        where,
         limit: l,
         offset,
         order: [["createdAt", "DESC"]],

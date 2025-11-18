@@ -268,7 +268,7 @@
 // export default SiteManagement;
 
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Button,
   Input,
@@ -296,7 +296,6 @@ const SiteManagement = () => {
   const [form] = Form.useForm();
   const [sites, setSites] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [pagination, setPagination] = useState({
@@ -308,12 +307,26 @@ const SiteManagement = () => {
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
+  const isInitialMount = useRef(true);
 
   // Fetch sites
-  const fetchSites = async (page = 1, limit = 10) => {
+  const fetchSites = async (page = 1, limit = 10, status = null) => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/sites?page=${page}&limit=${limit}`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      
+      // Use provided value or fall back to state
+      const statusValue = status !== null ? status : statusFilter;
+      
+      if (statusValue) {
+        params.append('siteStatus', statusValue);
+      }
+      
+      const res = await api.get(`/api/sites?${params.toString()}`);
       setSites(res.data.data || []);
 
       // Update pagination
@@ -334,6 +347,20 @@ const SiteManagement = () => {
   useEffect(() => {
     fetchSites(pagination.current, pagination.pageSize);
   }, []);
+
+  // Refetch when status filter changes
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    // Reset to page 1 when filter changes
+    setPagination(prev => ({ ...prev, current: 1 }));
+    fetchSites(1, pagination.pageSize, statusFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   // Handle form submit
   const handleSubmit = async (values) => {
@@ -408,10 +435,6 @@ const SiteManagement = () => {
             </thead>
             <tbody>
               ${allSites
-            // (sites || [])
-                .filter((s) =>
-                  s.siteName?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
                 .map(
                   (site) => `
                 <tr>
@@ -471,20 +494,15 @@ const SiteManagement = () => {
       {/* Filters and Actions - Single Row */}
       <Card className="mb-1" bodyStyle={{ padding: '4px' }}>
         <Row gutter={4} align="middle">
-          <Col xs={24} sm={6} md={5}>
-            <Input.Search
-              placeholder="Search by site name"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
-            />
-          </Col>
           <Col xs={12} sm={4} md={3}>
             <Select
               placeholder="Status"
               allowClear
               value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setPagination(prev => ({ ...prev, current: 1 }));
+              }}
               className="w-full"
               size="small"
             >
@@ -495,10 +513,10 @@ const SiteManagement = () => {
           <Col xs={12} sm={3} md={2}>
             <Button
               onClick={() => {
-                setSearchTerm('');
                 setStatusFilter(null);
+                setPagination(prev => ({ ...prev, current: 1 }));
               }}
-              disabled={!searchTerm && !statusFilter}
+              disabled={!statusFilter}
               size="small"
               className="w-full"
             >
@@ -556,60 +574,9 @@ const SiteManagement = () => {
         </Card>
       )}
 
-      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
-        <Row gutter={8} align="middle">
-          <Col xs={24} sm={8} md={6}>
-            <Input.Search
-              placeholder="Search by site name"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
-            />
-          </Col>
-          <Col xs={24} sm={8} md={4}>
-            <Select
-              placeholder="Filter by Status"
-              allowClear
-              value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
-              className="w-full"
-              size="small"
-              showSearch
-              optionFilterProp="children"
-            >
-              <Select.Option value="active">Active</Select.Option>
-              <Select.Option value="inactive">Inactive</Select.Option>
-            </Select>
-          </Col>
-          <Col xs={24} sm={8} md={3}>
-            <Button
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter(null);
-              }}
-              disabled={!searchTerm && !statusFilter}
-              size="small"
-              className="w-full"
-            >
-              Clear Filters
-            </Button>
-          </Col>
-        </Row>
-      </Card>
-
       <Table
         columns={columns}
-        dataSource={(sites || []).filter((s) => {
-          const searchMatch = s.siteName?.toLowerCase().includes(searchTerm.toLowerCase())
-
-          const statusMatch = statusFilter
-            ? s.status?.toLowerCase() === statusFilter.toLowerCase()
-            : true;
-
-          return searchMatch && statusMatch;
-
-        }
-        )}
+        dataSource={sites || []}
         rowKey="id"
         loading={loading}
         pagination={{

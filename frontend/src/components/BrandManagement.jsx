@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Button,
   Input,
@@ -25,7 +25,6 @@ const BrandManagement = () => {
   const [form] = Form.useForm();
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [pagination, setPagination] = useState({
@@ -37,12 +36,26 @@ const BrandManagement = () => {
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
+  const isInitialMount = useRef(true);
 
   // Fetch brands
-  const fetchBrands = async (page = 1, limit = 10) => {
+  const fetchBrands = async (page = 1, limit = 10, status = null) => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/brands?page=${page}&limit=${limit}`);
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      
+      // Use provided value or fall back to state
+      const statusValue = status !== null ? status : statusFilter;
+      
+      if (statusValue) {
+        params.append('brandStatus', statusValue);
+      }
+      
+      const res = await api.get(`/api/brands?${params.toString()}`);
       setBrands(res.data.data || []);
 
       // Update pagination state
@@ -63,6 +76,20 @@ const BrandManagement = () => {
   useEffect(() => {
     fetchBrands(pagination.current, pagination.pageSize);
   }, []);
+
+  // Refetch when status filter changes
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    
+    // Reset to page 1 when filter changes
+    setPagination(prev => ({ ...prev, current: 1 }));
+    fetchBrands(1, pagination.pageSize, statusFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter]);
 
   // Handle form submit (create or update)
   const handleSubmit = async (values) => {
@@ -147,10 +174,6 @@ const BrandManagement = () => {
             </thead>
             <tbody>
               ${allBrands
-            // (brands || [])
-                .filter((b) =>
-                  b.brandName?.toLowerCase().includes(searchTerm.toLowerCase())
-                )
                 .map(
                   (brand) => `
                 <tr>
@@ -220,20 +243,15 @@ const BrandManagement = () => {
       {/* Filters and Actions - Single Row */}
       <Card className="mb-1" bodyStyle={{ padding: '4px' }}>
         <Row gutter={4} align="middle">
-          <Col xs={24} sm={6} md={5}>
-            <Input.Search
-              placeholder="Search by brand name"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
-            />
-          </Col>
           <Col xs={12} sm={4} md={3}>
             <Select
               placeholder="Status"
               allowClear
               value={statusFilter}
-              onChange={(value) => setStatusFilter(value)}
+              onChange={(value) => {
+                setStatusFilter(value);
+                setPagination(prev => ({ ...prev, current: 1 }));
+              }}
               className="w-full"
               size="small"
             >
@@ -244,10 +262,10 @@ const BrandManagement = () => {
           <Col xs={12} sm={3} md={2}>
             <Button
               onClick={() => {
-                setSearchTerm('');
                 setStatusFilter(null);
+                setPagination(prev => ({ ...prev, current: 1 }));
               }}
-              disabled={!searchTerm && !statusFilter}
+              disabled={!statusFilter}
               size="small"
               className="w-full"
             >
@@ -319,56 +337,10 @@ const BrandManagement = () => {
         </Card>
       )}
 
-      {/* Search */}
-    <div style={{ marginBottom: 20, display: 'flex', gap: '10px', alignItems: 'center' }}>
-      <Input.Search
-        placeholder="Search by brand name"
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        style={{ maxWidth: 300,  }}
-      />
-
-        <Select
-          placeholder="Filter by Status"
-          allowClear
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          style={{ width: 180 }}
-          showSearch
-          optionFilterProp="children"
-        >
-          <Select.Option value="active">Active</Select.Option>
-          <Select.Option value="inactive">Inactive</Select.Option>
-        </Select>
-
-        
-        <Button
-          onClick={() => {
-            setSearchTerm('');
-            setStatusFilter(null);
-          }
-          }
-          disabled={!searchTerm && !statusFilter}
-        >
-          Clear Filters
-        </Button>
-        
-      </div>
-
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(brands || []).filter((b) => {
-          const searchMatch = b.brandName?.toLowerCase().includes(searchTerm.toLowerCase());
-
-          const statusMatch = statusFilter ? 
-            b.status?.toLowerCase() === statusFilter.toLowerCase()
-            : true;
-
-          return searchMatch && statusMatch;
-
-          }
-        )}
+        dataSource={brands || []}
         rowKey="id"
         loading={loading}
         pagination={{
