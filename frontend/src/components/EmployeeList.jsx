@@ -287,7 +287,7 @@ const EmployeeList = () => {
   return (
     <div className="bg-white rounded-lg shadow p-2">
       {/* Filters and Actions - Single Row */}
-      <Card className="mb-1" bodyStyle={{ padding: '4px' }}>
+      <Card className="mb-1" styles={{ body: { padding: '4px' } }}>
         <Row gutter={4} align="middle">
           <Col xs={24} sm={6} md={5}>
             <Input.Search

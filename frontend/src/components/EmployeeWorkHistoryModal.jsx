@@ -159,7 +159,7 @@ const EmployeeWorkHistoryModal = ({ visible, onClose, employeeId, employeeName }
       onCancel={onClose}
       width={1200}
       footer={null}
-      bodyStyle={{ padding: '16px' }}
+      styles={{ body: { padding: '16px' } }}
     >
       <div>
         {/* Statistics Cards */}

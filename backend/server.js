@@ -45,7 +45,31 @@ dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
-app.use(cors());
+// CORS configuration
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost and the production frontend URL
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:5174',
+      'https://va-erp-backend.onrender.com',
+      'https://va-erp.xtown.in'
+    ];
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('localhost')) {
+      callback(null, true);
+    } else {
+      callback(null, true); // Allow all origins for now - can be restricted later
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+}));
 app.use(express.json());
 app.use(helmet());
 app.use(morgan("dev"));
