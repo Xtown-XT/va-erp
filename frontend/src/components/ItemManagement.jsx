@@ -132,6 +132,11 @@ const ItemManagement = () => {
         stock: values.stock !== undefined ? Number(values.stock) : 0,
       };
 
+      // Only include balance when editing (for manual override)
+      if (editingId && values.balance !== undefined) {
+        payload.balance = Number(values.balance);
+      }
+
       if (editingId) {
         await api.put(`/api/items/${editingId}`, payload);
         message.success("Item updated successfully");
@@ -161,6 +166,7 @@ const ItemManagement = () => {
       purchaseRate: Number(record.purchaseRate) || 0,
       gst: record.gst !== undefined ? Number(record.gst) : 0,
       stock: record.stock !== undefined ? Number(record.stock) : 0,
+      balance: record.balance !== undefined ? Number(record.balance) : 0,
     });
   };
 
@@ -201,14 +207,7 @@ const ItemManagement = () => {
       render: (value) => `₹${truncateToFixed(value, 2)}`,
     },
     {
-      title: "GST %",
-      dataIndex: "gst",
-      key: "gst",
-      width: 100,
-      render: (value) => (value ? `${value}%` : "No GST"),
-    },
-    {
-      title: "Current Balance",
+      title: "Balance",
       dataIndex: "balance",
       key: "balance",
       width: 150,
@@ -290,6 +289,7 @@ const ItemManagement = () => {
                     setShowForm(!showForm);
                     setEditingId(null);
                     form.resetFields();
+                    form.setFieldsValue({ stock: 1, gst: 0 });
                   }}
                 >
                   {showForm ? "Cancel" : "Add Item"}
@@ -335,7 +335,7 @@ const ItemManagement = () => {
               form={form}
               layout="vertical"
               onFinish={handleSubmit}
-              initialValues={{ gst: 0, stock: 0 }}
+              initialValues={{ gst: 0, stock: 1 }}
             >
               <Row gutter={16}>
                 <Col xs={24} sm={12} md={8}>
@@ -405,6 +405,19 @@ const ItemManagement = () => {
                   >
                     <InputNumber
                       placeholder="Enter quantity"
+                      min={0}
+                      style={{ width: "100%" }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={8}>
+                  <Form.Item
+                    name="balance"
+                    label="Current Balance"
+                    rules={[{ required: false }]}
+                  >
+                    <InputNumber
+                      placeholder="Enter balance"
                       min={0}
                       style={{ width: "100%" }}
                     />

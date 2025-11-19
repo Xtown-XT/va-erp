@@ -17,6 +17,7 @@ router.post(
   DailyEntryController.create
 );
 router.get("/generate-ref", authorize("read"), DailyEntryController.generateRef);
+router.get("/fitted-drilling-tools/:compressorId", authorize("read"), DailyEntryController.getFittedDrillingTools);
 router.get("/", authorize("read"), DailyEntryController.getAll);
 router.get("/:id", authorize("read"), DailyEntryController.getById);
 router.put(

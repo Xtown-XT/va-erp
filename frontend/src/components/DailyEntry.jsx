@@ -38,12 +38,11 @@ import {
   useVehicles, 
   useCompressors, 
   useEmployees, 
-  useAvailableItems, 
-  useDailyEntries
+  useDailyEntries,
+  useFittedDrillingTools
 } from "../hooks/useQueries";
 import { useCreateDailyEntry, useDeleteDailyEntry } from "../hooks/useMutations";
-import ServiceItemsModal from "./ServiceItemsModal";
-import DrillingToolsModal from "./DrillingToolsModal";
+import { useItemsByType } from "../hooks/useQueries";
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -71,7 +70,6 @@ const DailyEntry = () => {
   const { data: machines = [] } = useVehicles();
   const { data: compressors = [] } = useCompressors();
   const { data: employees = [] } = useEmployees();
-  const { data: availableItems = [] } = useAvailableItems();
   
   // Mutations
   const createDailyEntry = useCreateDailyEntry();
@@ -97,12 +95,9 @@ const DailyEntry = () => {
       { id: Date.now(), role: 'operator', employeeId: null },
       { id: Date.now() + 1, role: 'helper', employeeId: null }
     ],
-    fittedItems: [],
-    vehicleServiceDone: false,
-    compressorServiceDone: false,
-    machineServiceItems: [], // NEW: Items used for machine service
-    compressorServiceItems: [], // NEW: Items used for compressor service
-    drillingTools: [], // NEW: Drilling tools fitted/removed
+    machineSpares: [], // Machine spares added
+    compressorSpares: [], // Compressor spares added
+    drillingTools: [], // Drilling tools added
   });
   
   // Shift 2 state  
@@ -123,12 +118,9 @@ const DailyEntry = () => {
       { id: Date.now() + 2, role: 'operator', employeeId: null },
       { id: Date.now() + 3, role: 'helper', employeeId: null }
     ],
-    fittedItems: [],
-    vehicleServiceDone: false,
-    compressorServiceDone: false,
-    machineServiceItems: [], // NEW: Items used for machine service
-    compressorServiceItems: [], // NEW: Items used for compressor service
-    drillingTools: [], // NEW: Drilling tools fitted/removed
+    machineSpares: [], // Machine spares added
+    compressorSpares: [], // Compressor spares added
+    drillingTools: [], // Drilling tools added
   });
   
   const [selectedDate, setSelectedDate] = useState(dayjs());
@@ -138,16 +130,18 @@ const DailyEntry = () => {
   const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
   const [selectedShift2Compressor, setSelectedShift2Compressor] = useState(null);
-  const [showFitItemModal, setShowFitItemModal] = useState(false);
-  const [currentShiftForModal, setCurrentShiftForModal] = useState(null);
-  const [selectedItemInstances, setSelectedItemInstances] = useState([]);
   const [validationWarnings, setValidationWarnings] = useState([]);
   
-  // NEW: Service modals state
-  const [showMachineServiceModal, setShowMachineServiceModal] = useState(false);
-  const [showCompressorServiceModal, setShowCompressorServiceModal] = useState(false);
-  const [showDrillingToolsModal, setShowDrillingToolsModal] = useState(false);
-  const [currentServiceShift, setCurrentServiceShift] = useState(null); // 1 or 2
+  // Inline item selection state
+  const [showMachineSparesSelector, setShowMachineSparesSelector] = useState(false);
+  const [showCompressorSparesSelector, setShowCompressorSparesSelector] = useState(false);
+  const [showDrillingToolsSelector, setShowDrillingToolsSelector] = useState(false);
+  const [serviceNameInput, setServiceNameInput] = useState("");
+  const [showServiceNameModal, setShowServiceNameModal] = useState(false);
+  const [pendingSpareType, setPendingSpareType] = useState(null); // 'machine' or 'compressor'
+
+  // Fetch existing fitted drilling tools when compressor is selected
+  const { data: existingDrillingTools = [] } = useFittedDrillingTools(selectedShift1Compressor?.id || null);
 
   // Update pagination when entries data changes
   useEffect(() => {
@@ -158,6 +152,46 @@ const DailyEntry = () => {
       pageSize: entriesData.limit || prev.pageSize,
     }));
   }, [entriesData]);
+
+  // Auto-populate existing drilling tools when compressor is selected
+  useEffect(() => {
+    if (existingDrillingTools.length > 0 && selectedShift1Compressor) {
+      setShift1Data(prev => {
+        // Check which existing tools are not yet in the state
+        const existingToolIds = new Set(prev.drillingTools.filter(t => t.isExisting).map(t => t.itemServiceId));
+        const newTools = existingDrillingTools
+          .filter(tool => !existingToolIds.has(tool.itemServiceId || tool.id))
+          .map(tool => ({
+            id: tool.itemServiceId || tool.id,
+            itemServiceId: tool.itemServiceId || tool.id,
+            itemId: tool.itemId,
+            itemName: tool.itemName,
+            partNumber: tool.partNumber,
+            quantity: tool.quantity || 1,
+            currentRPM: tool.currentRPM || 0,
+            currentMeter: tool.currentMeter || 0,
+            startingRPM: tool.currentRPM || 0,
+            addedDate: tool.fittedDate || selectedDate.format("YYYY-MM-DD"),
+            isExisting: true,
+            action: 'update', // Default action for existing tools
+          }));
+        
+        if (newTools.length > 0) {
+          return {
+            ...prev,
+            drillingTools: [...prev.drillingTools, ...newTools]
+          };
+        }
+        return prev;
+      });
+    } else if (!selectedShift1Compressor) {
+      // Clear existing drilling tools if compressor is deselected
+      setShift1Data(prev => ({
+        ...prev,
+        drillingTools: prev.drillingTools.filter(t => !t.isExisting)
+      }));
+    }
+  }, [existingDrillingTools, selectedShift1Compressor?.id]);
 
   // Auto-generate reference number helper
   const generateRefNoHelper = async () => {
@@ -299,128 +333,188 @@ const DailyEntry = () => {
     }
   };
 
-  // Open fit item modal
-  const openFitItemModal = (shift) => {
-    setCurrentShiftForModal(shift);
-    setShowFitItemModal(true);
-  };
-
-  // Handle fitting items
-  const handleFitItems = () => {
-    const newFittedItems = availableItems.filter(item =>
-      selectedItemInstances.includes(item.id)
-    );
-    
-    if (currentShiftForModal === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        fittedItems: [...prev.fittedItems, ...newFittedItems],
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        fittedItems: [...prev.fittedItems, ...newFittedItems],
-      }));
+  // Handle Add Machine Spares button click - prompt for service name first
+  const handleAddMachineSparesClick = () => {
+    if (!selectedShift1Machine?.vehicleNumber) {
+      message.warning("Please select a machine first");
+      return;
     }
-    
-    setSelectedItemInstances([]);
-    setShowFitItemModal(false);
+    setPendingSpareType('machine');
+    setShowServiceNameModal(true);
   };
 
-  // Remove fitted item
-  const removeFittedItem = (shift, instanceId) => {
-    if (shift === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        fittedItems: prev.fittedItems.filter(item => item.id !== instanceId),
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        fittedItems: prev.fittedItems.filter(item => item.id !== instanceId),
-      }));
+  // Handle Add Compressor Spares button click - prompt for service name first
+  const handleAddCompressorSparesClick = () => {
+    if (!selectedShift1Compressor?.compressorName) {
+      message.warning("Please select a compressor first");
+      return;
     }
+    setPendingSpareType('compressor');
+    setShowServiceNameModal(true);
   };
 
-  // NEW: Handle machine service items
-  const handleMachineServiceSubmit = (selectedItems) => {
-    const serviceItems = selectedItems.map(item => ({
-      itemId: item.itemId,
+  // Handle Add Drilling Tools button click - no service name needed
+  const handleAddDrillingToolsClick = () => {
+    if (!selectedShift1Compressor?.compressorName) {
+      message.warning("Please select a compressor first");
+      return;
+    }
+    setShowDrillingToolsSelector(true);
+  };
+
+  // Confirm service name and show item selector
+  const handleServiceNameConfirm = () => {
+    if (!serviceNameInput.trim()) {
+      message.warning("Please enter a service name");
+      return;
+    }
+    setShowServiceNameModal(false);
+    if (pendingSpareType === 'machine') {
+      setShowMachineSparesSelector(true);
+    } else if (pendingSpareType === 'compressor') {
+      setShowCompressorSparesSelector(true);
+    }
+    // Don't clear serviceNameInput - keep it for adding multiple items
+  };
+
+  // Add machine spare item
+  const handleAddMachineSpare = (item, quantity, serviceName) => {
+    const currentBalance = item.balance ?? 0;
+    if (quantity <= 0 || quantity > currentBalance) {
+      message.error(`Invalid quantity. Available: ${currentBalance}, Required: ${quantity}`);
+      return;
+    }
+    const newSpare = {
+      id: Date.now() + Math.random(),
+      itemId: item.id,
       itemName: item.itemName,
       partNumber: item.partNumber,
-      quantity: item.quantity,
-      action: 'fit'
+      quantity: quantity,
+      serviceName: serviceName.trim(),
+      addedDate: selectedDate.format("YYYY-MM-DD"),
+      balance: item.balance
+    };
+    setShift1Data(prev => ({
+      ...prev,
+      machineSpares: [...prev.machineSpares, newSpare]
     }));
-
-    if (currentServiceShift === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        machineServiceItems: serviceItems,
-        vehicleServiceDone: true
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        machineServiceItems: serviceItems,
-        vehicleServiceDone: true
-      }));
-    }
-    
-    message.success(`${serviceItems.length} item(s) selected for machine service`);
+    message.success(`${item.itemName} added to machine spares`);
   };
 
-  // NEW: Handle compressor service items
-  const handleCompressorServiceSubmit = (selectedItems) => {
-    const serviceItems = selectedItems.map(item => ({
-      itemId: item.itemId,
+  // Add compressor spare item
+  const handleAddCompressorSpare = (item, quantity, serviceName) => {
+    const currentBalance = item.balance ?? 0;
+    if (quantity <= 0 || quantity > currentBalance) {
+      message.error(`Invalid quantity. Available: ${currentBalance}, Required: ${quantity}`);
+      return;
+    }
+    const newSpare = {
+      id: Date.now() + Math.random(),
+      itemId: item.id,
       itemName: item.itemName,
       partNumber: item.partNumber,
-      quantity: item.quantity,
-      action: 'fit'
+      quantity: quantity,
+      serviceName: serviceName.trim(),
+      addedDate: selectedDate.format("YYYY-MM-DD"),
+      balance: item.balance
+    };
+    setShift1Data(prev => ({
+      ...prev,
+      compressorSpares: [...prev.compressorSpares, newSpare]
     }));
-
-    if (currentServiceShift === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        compressorServiceItems: serviceItems,
-        compressorServiceDone: true
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        compressorServiceItems: serviceItems,
-        compressorServiceDone: true
-      }));
-    }
-    
-    message.success(`${serviceItems.length} item(s) selected for compressor service`);
+    message.success(`${item.itemName} added to compressor spares`);
   };
 
-  // NEW: Handle drilling tools
-  const handleDrillingToolsSubmit = (data) => {
-    const { action, tools, endingRPM } = data;
-    
-    const drillingToolsData = tools.map(tool => ({
-      itemId: tool.itemId,
-      itemName: tool.itemName,
-      action: action,
-      startingRPM: tool.startingRPM,
-      endingRPM: action === 'remove' ? endingRPM : null
-    }));
+  // Add drilling tool
+  const handleAddDrillingTool = (item, quantity) => {
+    // Check if this tool already exists (from existing fitted tools)
+    const existingTool = shift1Data.drillingTools.find(t => t.itemId === item.id && t.isExisting);
+    if (existingTool) {
+      message.warning(`${item.itemName} is already fitted to this compressor`);
+      return;
+    }
 
-    if (currentServiceShift === 1) {
+    const currentBalance = item.balance ?? 0;
+    if (quantity <= 0 || quantity > currentBalance) {
+      message.error(`Invalid quantity. Available: ${currentBalance}, Required: ${quantity}`);
+      return;
+    }
+    // Calculate total compressor RPM from both shifts (current day's RPM)
+    const shift1RPM = (shift1Data.compressorClosingRPM || 0) - (shift1Data.compressorOpeningRPM || 0);
+    const shift2RPM = (shift2Data.compressorClosingRPM || 0) - (shift2Data.compressorOpeningRPM || 0);
+    const totalCompressorRPM = shift1RPM + shift2RPM;
+    
+    const newTool = {
+      id: Date.now() + Math.random(),
+      itemId: item.id,
+      itemName: item.itemName,
+      partNumber: item.partNumber,
+      quantity: quantity,
+      startingRPM: totalCompressorRPM,
+      currentRPM: totalCompressorRPM,
+      currentMeter: 0, // Will accumulate
+      addedDate: selectedDate.format("YYYY-MM-DD"),
+      balance: item.balance,
+      isExisting: false,
+      action: 'fit' // Mark as new tool to fit
+    };
+    setShift1Data(prev => ({
+      ...prev,
+      drillingTools: [...prev.drillingTools, newTool]
+    }));
+    message.success(`${item.itemName} added to drilling tools`);
+  };
+
+  // Remove machine spare (no stock restoration)
+  const handleRemoveMachineSpare = (spareId) => {
+    setShift1Data(prev => ({
+      ...prev,
+      machineSpares: prev.machineSpares.filter(s => s.id !== spareId)
+    }));
+  };
+
+  // Remove compressor spare (no stock restoration)
+  const handleRemoveCompressorSpare = (spareId) => {
+    setShift1Data(prev => ({
+      ...prev,
+      compressorSpares: prev.compressorSpares.filter(s => s.id !== spareId)
+    }));
+  };
+
+  // Remove drilling tool (restore stock)
+  const handleRemoveDrillingTool = (toolId) => {
+    const tool = shift1Data.drillingTools.find(t => t.id === toolId);
+    if (tool) {
+      // Mark as removed - backend will restore stock
+      // Keep in array for payload, but mark as removed
       setShift1Data(prev => ({
         ...prev,
-        drillingTools: [...prev.drillingTools, ...drillingToolsData]
+        drillingTools: prev.drillingTools.map(t => 
+          t.id === toolId ? { ...t, action: 'remove' } : t
+        )
       }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        drillingTools: [...prev.drillingTools, ...drillingToolsData]
-      }));
+      message.info(`${tool.itemName} marked for removal. Stock will be restored on save.`);
     }
-    
-    message.success(`Drilling tools ${action === 'fit' ? 'fitted' : 'removed'} successfully`);
+  };
+
+  // Update drilling tool RPM (manual edit)
+  const handleUpdateDrillingToolRPM = (toolId, newRPM) => {
+    setShift1Data(prev => ({
+      ...prev,
+      drillingTools: prev.drillingTools.map(t => 
+        t.id === toolId ? { ...t, currentRPM: newRPM } : t
+      )
+    }));
+  };
+
+  // Update drilling tool Meter (manual edit)
+  const handleUpdateDrillingToolMeter = (toolId, newMeter) => {
+    setShift1Data(prev => ({
+      ...prev,
+      drillingTools: prev.drillingTools.map(t => 
+        t.id === toolId ? { ...t, currentMeter: newMeter } : t
+      )
+    }));
   };
 
   // Handle form submit
@@ -486,6 +580,29 @@ const DailyEntry = () => {
         return cleaned;
       };
 
+      // Calculate daily compressor RPM and meter totals (both shifts combined)
+      const shift1CompressorRPM = (shift1Data.compressorClosingRPM || 0) - (shift1Data.compressorOpeningRPM || 0);
+      const shift2CompressorRPM = (shift2Data.compressorClosingRPM || 0) - (shift2Data.compressorOpeningRPM || 0);
+      const dailyCompressorRPM = shift1CompressorRPM + shift2CompressorRPM;
+      const dailyMeter = (shift1Data.meter || 0) + (shift2Data.meter || 0);
+
+      // Helper function to prepare drilling tools payload
+      const prepareDrillingToolsPayload = (tools) => {
+        return tools.map(tool => ({
+          itemId: tool.itemId,
+          itemName: tool.itemName,
+          partNumber: tool.partNumber,
+          quantity: tool.quantity || 1,
+          itemServiceId: tool.itemServiceId,
+          action: tool.action || (tool.isExisting ? 'update' : 'fit'),
+          dailyRPM: dailyCompressorRPM,
+          dailyMeter: dailyMeter,
+          startingRPM: tool.startingRPM || 0,
+          currentRPM: tool.currentRPM || 0,
+          addedDate: tool.addedDate || dateStr,
+        }));
+      };
+
       // Save Shift 1
       if (shift1Enabled) {
         const payload1 = cleanPayload({
@@ -507,19 +624,18 @@ const DailyEntry = () => {
           employees: shift1Data.employees
             .filter(e => e.employeeId)
             .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
-          vehicleServiceDone: Boolean(shift1Data.vehicleServiceDone),
-          compressorServiceDone: Boolean(shift1Data.compressorServiceDone),
           notes: "",
-          // Service items using ItemService table
-          machineServiceItems: shift1Data.machineServiceItems || [],
-          compressorServiceItems: shift1Data.compressorServiceItems || [],
-          drillingTools: shift1Data.drillingTools || [],
+          // New spares structure
+          machineSpares: shift1Data.machineSpares || [],
+          compressorSpares: shift1Data.compressorSpares || [],
+          drillingTools: prepareDrillingToolsPayload(shift1Data.drillingTools || []),
         });
         
         await createDailyEntry.mutateAsync(payload1);
       }
 
       // Save Shift 2 (always enabled)
+      // Note: Drilling tools are only sent in Shift 1 payload since daily RPM/meter is calculated from both shifts
       const payload2 = cleanPayload({
         refNo: refNo2,
         date: dateStr,
@@ -539,13 +655,11 @@ const DailyEntry = () => {
         employees: shift2Data.employees
           .filter(e => e.employeeId)
           .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
-        vehicleServiceDone: Boolean(shift2Data.vehicleServiceDone),
-        compressorServiceDone: Boolean(shift2Data.compressorServiceDone),
         notes: "",
-        // Service items using ItemService table
-        machineServiceItems: shift2Data.machineServiceItems || [],
-        compressorServiceItems: shift2Data.compressorServiceItems || [],
-        drillingTools: shift2Data.drillingTools || [],
+        // New spares structure
+        machineSpares: shift2Data.machineSpares || [],
+        compressorSpares: shift2Data.compressorSpares || [],
+        // Drilling tools not sent in Shift 2 - handled in Shift 1 with combined RPM/meter
       });
       
       await createDailyEntry.mutateAsync(payload2);
@@ -554,6 +668,13 @@ const DailyEntry = () => {
       setValidationWarnings([]);
       setSubmitting(false);
       refetchEntries();
+      
+      // Remove tools marked for removal from state after successful submission
+      setShift1Data(prev => ({
+        ...prev,
+        drillingTools: prev.drillingTools.filter(t => t.action !== 'remove')
+      }));
+      
       handleCancel();
       
     } catch (err) {
@@ -583,11 +704,8 @@ const DailyEntry = () => {
       noOfHoles: 0,
       meter: 0,
       employees: [],
-      fittedItems: [],
-      vehicleServiceDone: false,
-      compressorServiceDone: false,
-      machineServiceItems: [],
-      compressorServiceItems: [],
+      machineSpares: [],
+      compressorSpares: [],
       drillingTools: [],
     });
     setShift2Data({
@@ -604,11 +722,8 @@ const DailyEntry = () => {
       noOfHoles: 0,
       meter: 0,
       employees: [],
-      fittedItems: [],
-      vehicleServiceDone: false,
-      compressorServiceDone: false,
-      machineServiceItems: [],
-      compressorServiceItems: [],
+      machineSpares: [],
+      compressorSpares: [],
       drillingTools: [],
     });
     setSelectedShift1Machine(null);
@@ -1117,6 +1232,211 @@ const DailyEntry = () => {
     );
   };
 
+  // Dropdown Selector Components
+  const MachineSparesDropdown = ({ machineNumber, serviceName, onAdd, onClose }) => {
+    const { data: items = [], isLoading } = useItemsByType(machineNumber);
+    const [selectedItemId, setSelectedItemId] = useState(null);
+
+    const selectedItem = items.find(i => i.id === selectedItemId);
+
+    const handleAdd = () => {
+      if (!selectedItem) {
+        message.warning("Please select an item");
+        return;
+      }
+      const currentBalance = selectedItem.balance ?? 0;
+      if (currentBalance <= 0) {
+        message.error("Item out of stock");
+        return;
+      }
+      onAdd(selectedItem, 1); // Always add 1 count
+      setSelectedItemId(null);
+    };
+
+    return (
+      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+        <Col span={18}>
+          <Select
+            size="small"
+            placeholder="Select item"
+            value={selectedItemId}
+            onChange={setSelectedItemId}
+            showSearch
+            style={{ width: '100%', fontSize: '11px' }}
+            loading={isLoading}
+            allowClear
+          >
+            {items.map(item => (
+              <Select.Option 
+                key={item.id} 
+                value={item.id}
+                disabled={(item.balance ?? 0) <= 0}
+              >
+                {item.itemName} ({item.balance})
+              </Select.Option>
+            ))}
+          </Select>
+        </Col>
+        <Col span={6}>
+          <Space>
+            <Button
+              size="small"
+              type="primary"
+              onClick={handleAdd}
+                disabled={!selectedItem || (selectedItem.balance ?? 0) <= 0}
+              style={{ fontSize: '11px' }}
+            >
+              Add
+            </Button>
+            <Button
+              size="small"
+              onClick={onClose}
+              style={{ fontSize: '11px' }}
+            >
+              Cancel
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+    );
+  };
+
+  const CompressorSparesDropdown = ({ compressorName, serviceName, onAdd, onClose }) => {
+    const { data: items = [], isLoading } = useItemsByType(compressorName);
+    const [selectedItemId, setSelectedItemId] = useState(null);
+
+    const selectedItem = items.find(i => i.id === selectedItemId);
+
+    const handleAdd = () => {
+      if (!selectedItem) {
+        message.warning("Please select an item");
+        return;
+      }
+      const currentBalance = selectedItem.balance ?? 0;
+      if (currentBalance <= 0) {
+        message.error("Item out of stock");
+        return;
+      }
+      onAdd(selectedItem, 1); // Always add 1 count
+      setSelectedItemId(null);
+    };
+
+    return (
+      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+        <Col span={18}>
+          <Select
+            size="small"
+            placeholder="Select item"
+            value={selectedItemId}
+            onChange={setSelectedItemId}
+            showSearch
+            style={{ width: '100%', fontSize: '11px' }}
+            loading={isLoading}
+            allowClear
+          >
+            {items.map(item => (
+              <Select.Option 
+                key={item.id} 
+                value={item.id}
+                disabled={(item.balance ?? 0) <= 0}
+              >
+                {item.itemName} ({item.balance})
+              </Select.Option>
+            ))}
+          </Select>
+        </Col>
+        <Col span={6}>
+          <Space>
+            <Button
+              size="small"
+              type="primary"
+              onClick={handleAdd}
+                disabled={!selectedItem || (selectedItem.balance ?? 0) <= 0}
+              style={{ fontSize: '11px' }}
+            >
+              Add
+            </Button>
+            <Button
+              size="small"
+              onClick={onClose}
+              style={{ fontSize: '11px' }}
+            >
+              Cancel
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+    );
+  };
+
+  const DrillingToolsDropdown = ({ onAdd, onClose }) => {
+    const { data: items = [], isLoading } = useItemsByType("Drilling Tools");
+    const [selectedItemId, setSelectedItemId] = useState(null);
+
+    const selectedItem = items.find(i => i.id === selectedItemId);
+
+    const handleAdd = () => {
+      if (!selectedItem) {
+        message.warning("Please select an item");
+        return;
+      }
+      const currentBalance = selectedItem.balance ?? 0;
+      if (currentBalance <= 0) {
+        message.error("Item out of stock");
+        return;
+      }
+      onAdd(selectedItem, 1); // Always add 1 count
+      setSelectedItemId(null);
+    };
+
+    return (
+      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+        <Col span={18}>
+          <Select
+            size="small"
+            placeholder="Select drilling tool"
+            value={selectedItemId}
+            onChange={setSelectedItemId}
+            showSearch
+            style={{ width: '100%', fontSize: '11px' }}
+            loading={isLoading}
+            allowClear
+          >
+            {items.map(item => (
+              <Select.Option 
+                key={item.id} 
+                value={item.id}
+                disabled={(item.balance ?? 0) <= 0}
+              >
+                {item.itemName} ({item.balance})
+              </Select.Option>
+            ))}
+          </Select>
+        </Col>
+        <Col span={6}>
+          <Space>
+            <Button
+              size="small"
+              type="primary"
+              onClick={handleAdd}
+                disabled={!selectedItem || (selectedItem.balance ?? 0) <= 0}
+              style={{ fontSize: '11px' }}
+            >
+              Add
+            </Button>
+            <Button
+              size="small"
+              onClick={onClose}
+              style={{ fontSize: '11px' }}
+            >
+              Cancel
+            </Button>
+          </Space>
+        </Col>
+      </Row>
+    );
+  };
+
   // Table columns
   const columns = [
     { title: "Ref No", dataIndex: "refNo", key: "refNo" },
@@ -1197,9 +1517,9 @@ const DailyEntry = () => {
           bodyStyle={{ padding: '4px' }}
         >
           <div style={{ padding: '0', margin: '0' }}>
-            {/* Top Row: Ref No, Date, Site, Machine Type, Machine No, Compressor No */}
+            {/* Top Row: Ref No, Date, Site, Machine Type, Compressor No */}
             <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-              <Col span={4}>
+              <Col span={5}>
                 <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Ref No:</Text>
                 <Input 
                   size="small" 
@@ -1208,7 +1528,7 @@ const DailyEntry = () => {
                   style={{ fontSize: '11px' }}
                 />
               </Col>
-              <Col span={4}>
+              <Col span={5}>
                 <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Date:</Text>
             <DatePicker
                   size="small"
@@ -1219,7 +1539,7 @@ const DailyEntry = () => {
                   style={{ fontSize: '11px' }}
                 />
               </Col>
-              <Col span={4}>
+              <Col span={5}>
                 <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Site Name:</Text>
                 <Select
                   size="small"
@@ -1241,7 +1561,7 @@ const DailyEntry = () => {
                   ))}
                 </Select>
               </Col>
-              <Col span={4}>
+              <Col span={5}>
                 <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Machine Type:</Text>
                 <Select
                   size="small"
@@ -1259,15 +1579,6 @@ const DailyEntry = () => {
                     </Select.Option>
                   ))}
                 </Select>
-              </Col>
-              <Col span={4}>
-                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Machine No:</Text>
-                <Input 
-                  size="small" 
-                  value={selectedShift1Machine?.vehicleNumber || ''} 
-                  disabled 
-                  style={{ fontSize: '11px' }}
-                />
               </Col>
               <Col span={4}>
                 <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>Compressor No:</Text>
@@ -1656,68 +1967,198 @@ const DailyEntry = () => {
               </Col>
             </Row>
 
-            {/* Fitted Items */}
+            {/* Spares Management Section */}
             <div style={{ marginBottom: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                <Text strong style={{ fontSize: '11px' }}>Fitted Items:</Text>
-                <Button
-                  size="small"
-                  type="dashed"
-                  icon={<PlusOutlined />}
-                  onClick={() => openFitItemModal(1)}
-                  style={{ fontSize: '11px', padding: '0 8px', height: '24px' }}
-                >
-                  Fit Item
-                </Button>
-              </div>
+              <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
+                <Col span={8}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleAddMachineSparesClick}
+                    disabled={!selectedShift1Machine}
+                    block
+                    style={{ fontSize: '11px', height: '28px' }}
+                  >
+                    Add Machine Spares
+                  </Button>
+                </Col>
+                <Col span={8}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={handleAddCompressorSparesClick}
+                    disabled={!selectedShift1Compressor}
+                    block
+                    style={{ fontSize: '11px', height: '28px' }}
+                  >
+                    Add Compressor Spares
+                  </Button>
+                </Col>
+                <Col span={8}>
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<ToolOutlined />}
+                    onClick={handleAddDrillingToolsClick}
+                    disabled={!selectedShift1Compressor}
+                    block
+                    style={{ fontSize: '11px', height: '28px' }}
+                  >
+                    Add Drilling Tools
+                  </Button>
+                </Col>
+              </Row>
+
+              {/* Dropdown Selectors */}
+              {showMachineSparesSelector && selectedShift1Machine && (
+                <MachineSparesDropdown
+                  machineNumber={selectedShift1Machine.vehicleNumber}
+                  serviceName={serviceNameInput}
+                  onAdd={(item, qty) => {
+                    handleAddMachineSpare(item, qty, serviceNameInput);
+                    setShowMachineSparesSelector(false);
+                  }}
+                  onClose={() => setShowMachineSparesSelector(false)}
+                />
+              )}
+              {showCompressorSparesSelector && selectedShift1Compressor && (
+                <CompressorSparesDropdown
+                  compressorName={selectedShift1Compressor.compressorName}
+                  serviceName={serviceNameInput}
+                  onAdd={(item, qty) => {
+                    handleAddCompressorSpare(item, qty, serviceNameInput);
+                    setShowCompressorSparesSelector(false);
+                  }}
+                  onClose={() => setShowCompressorSparesSelector(false)}
+                />
+              )}
+              {showDrillingToolsSelector && selectedShift1Compressor && (
+                <DrillingToolsDropdown
+                  onAdd={(item, qty) => {
+                    handleAddDrillingTool(item, qty);
+                    setShowDrillingToolsSelector(false);
+                  }}
+                  onClose={() => setShowDrillingToolsSelector(false)}
+                />
+              )}
+
+              {/* Single Table with 3 Columns */}
               <Table
                 size="small"
                 pagination={false}
-                dataSource={shift1Data.fittedItems.map((item, idx) => ({ ...item, key: idx }))}
+                dataSource={(() => {
+                  // Combine all items into rows - find max length
+                  const maxRows = Math.max(
+                    shift1Data.machineSpares.length,
+                    shift1Data.compressorSpares.length,
+                    shift1Data.drillingTools.length
+                  );
+                  
+                  const rows = [];
+                  for (let i = 0; i < maxRows; i++) {
+                    rows.push({
+                      key: i,
+                      machineSpare: shift1Data.machineSpares[i] || null,
+                      compressorSpare: shift1Data.compressorSpares[i] || null,
+                      drillingTool: shift1Data.drillingTools[i] || null,
+                    });
+                  }
+                  return rows;
+                })()}
                 columns={[
-                  { title: 'S.No', key: 'sno', width: 40, render: (_, __, index) => index + 1 },
-                  { 
-                    title: 'Item Name', 
-                    key: 'itemName', 
-                    render: (_, record) => record.itemName || record.modelName 
-                  },
-                  { 
-                    title: 'Model Name', 
-                    key: 'modelName',
-                    width: 120,
-                    dataIndex: 'modelName'
-                  },
-                  { 
-                    title: 'Current RPM', 
-                    key: 'currentRPM', 
-                    width: 120,
-                    render: (_, record) => truncateToFixed(record.currentRPM || record.currentCount || 0, 2)
-                  },
-                  { 
-                    title: 'Next Service RPM', 
-                    key: 'nextServiceRPM', 
-                    width: 140,
+                  {
+                    title: 'Machine Spares',
+                    key: 'machineSpares',
+                    width: '33%',
                     render: (_, record) => {
-                      return truncateToFixed(record.nextServiceRPM || 0, 2);
+                      if (!record.machineSpare) return null;
+                      return (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontSize: '11px' }}>
+                            {record.machineSpare.itemName} ({record.machineSpare.quantity})
+                          </Text>
+                          <Button
+                            size="small"
+                            danger
+                            type="link"
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleRemoveMachineSpare(record.machineSpare.id)}
+                            style={{ fontSize: '11px', padding: '0 4px' }}
+                          />
+                        </div>
+                      );
                     }
                   },
                   {
-                    title: 'Actions',
-                    key: 'actions',
-                    width: 80,
-                    render: (_, record) => (
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => removeFittedItem(1, record.id)}
-                        style={{ fontSize: '11px', padding: '0 8px', height: '24px' }}
-                      >
-                        Remove
-                      </Button>
-                    )
+                    title: 'Compressor Spares',
+                    key: 'compressorSpares',
+                    width: '33%',
+                    render: (_, record) => {
+                      if (!record.compressorSpare) return null;
+                      return (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={{ fontSize: '11px' }}>
+                            {record.compressorSpare.itemName} ({record.compressorSpare.quantity})
+                          </Text>
+                          <Button
+                            size="small"
+                            danger
+                            type="link"
+                            icon={<DeleteOutlined />}
+                            onClick={() => handleRemoveCompressorSpare(record.compressorSpare.id)}
+                            style={{ fontSize: '11px', padding: '0 4px' }}
+                          />
+                        </div>
+                      );
+                    }
+                  },
+                  {
+                    title: 'Drilling Tools',
+                    key: 'drillingTools',
+                    width: '34%',
+                    render: (_, record) => {
+                      if (!record.drillingTool) return null;
+                      const isExisting = record.drillingTool.isExisting;
+                      const isRemoved = record.drillingTool.action === 'remove';
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                              <Text style={{ fontSize: '11px', color: isRemoved ? '#999' : '#000' }}>
+                                {record.drillingTool.itemName} - {record.drillingTool.partNumber}
+                              </Text>
+                              {isExisting && !isRemoved && (
+                                <Tag size="small" style={{ marginLeft: '4px', fontSize: '9px' }}>Existing</Tag>
+                              )}
+                              {isRemoved && (
+                                <Tag size="small" color="red" style={{ marginLeft: '4px', fontSize: '9px' }}>Removed</Tag>
+                              )}
+                            </div>
+                            {!isRemoved && (
+                              <Button
+                                size="small"
+                                danger
+                                type="link"
+                                icon={<DeleteOutlined />}
+                                onClick={() => handleRemoveDrillingTool(record.drillingTool.id)}
+                                style={{ fontSize: '11px', padding: '0 4px' }}
+                              />
+                            )}
+                          </div>
+                          {!isRemoved && (
+                            <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
+                              RPM: {truncateToFixed(record.drillingTool.currentRPM || 0, 2)} | 
+                              Meter: {truncateToFixed(record.drillingTool.currentMeter || 0, 2)}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
                   }
                 ]}
-                style={{ fontSize: '11px' }}
+                style={{ fontSize: '11px', marginTop: '4px' }}
               />
             </div>
 
@@ -1768,100 +2209,26 @@ const DailyEntry = () => {
         />
       </Card>
 
-      {/* Fit Item Modal */}
+      {/* Service Name Modal */}
       <Modal
-        title="Fit New Item"
-        open={showFitItemModal}
+        title="Enter Service Name"
+        open={showServiceNameModal}
+        onOk={handleServiceNameConfirm}
         onCancel={() => {
-          setShowFitItemModal(false);
-          setSelectedItemInstances([]);
+          setShowServiceNameModal(false);
+          setServiceNameInput("");
+          setPendingSpareType(null);
         }}
-        onOk={handleFitItems}
-        okText="Fit Items"
+        okText="Continue"
         cancelText="Cancel"
-        width={800}
       >
-        <div>
-          <p>Select items to fit (search by name, part number, or instance number):</p>
-          <Select
-            mode="multiple"
-            className="w-full mb-4"
-            placeholder="Search and select items..."
-            value={selectedItemInstances}
-            onChange={setSelectedItemInstances}
-            showSearch
-            filterOption={(input, option) =>
-              option.label.toLowerCase().includes(input.toLowerCase())
-            }
-            options={availableItems.map(item => ({
-              value: item.id,
-              label: item.displayLabel || `${item.itemName} (${item.partNumber}) - ${item.modelName}`,
-            }))}
-          />
-          <Table
-            dataSource={availableItems.filter(item => selectedItemInstances.includes(item.id))}
-            columns={[
-              { title: "Model Name", dataIndex: "modelName", key: "modelName", width: 120 },
-              { title: "Item Name", dataIndex: "itemName", key: "itemName" },
-              { title: "Part Number", dataIndex: "partNumber", key: "partNumber", width: 150 },
-              { 
-                title: "Current RPM", 
-                key: "currentRPM",
-                width: 120,
-                render: (_, record) => truncateToFixed(record.currentRPM || record.currentCount || 0, 2)
-              },
-              { 
-                title: "Next Service RPM", 
-                key: "nextServiceRPM",
-                width: 150,
-                render: (_, record) => {
-                  return truncateToFixed(record.nextServiceRPM || 0, 2);
-                }
-              },
-            ]}
-            pagination={false}
-            size="small"
-            rowKey="id"
-          />
-        </div>
+        <Input
+          placeholder="Enter service name (e.g., Regular Service, Major Service)"
+          value={serviceNameInput}
+          onChange={(e) => setServiceNameInput(e.target.value)}
+          onPressEnter={handleServiceNameConfirm}
+        />
       </Modal>
-
-      {/* NEW: Service Modals */}
-      <ServiceItemsModal
-        visible={showMachineServiceModal}
-        onClose={() => {
-          setShowMachineServiceModal(false);
-          setCurrentServiceShift(null);
-        }}
-        onSubmit={handleMachineServiceSubmit}
-        serviceType="machine"
-        itemType={currentServiceShift === 1 ? selectedShift1Machine?.vehicleNumber : selectedShift2Machine?.vehicleNumber}
-        title={`Machine Service - ${currentServiceShift === 1 ? selectedShift1Machine?.vehicleNumber : selectedShift2Machine?.vehicleNumber}`}
-      />
-
-      <ServiceItemsModal
-        visible={showCompressorServiceModal}
-        onClose={() => {
-          setShowCompressorServiceModal(false);
-          setCurrentServiceShift(null);
-        }}
-        onSubmit={handleCompressorServiceSubmit}
-        serviceType="compressor"
-        itemType={currentServiceShift === 1 ? selectedShift1Compressor?.compressorName : selectedShift2Compressor?.compressorName}
-        title={`Compressor Service - ${currentServiceShift === 1 ? selectedShift1Compressor?.compressorName : selectedShift2Compressor?.compressorName}`}
-      />
-
-      <DrillingToolsModal
-        visible={showDrillingToolsModal}
-        onClose={() => {
-          setShowDrillingToolsModal(false);
-          setCurrentServiceShift(null);
-        }}
-        onSubmit={handleDrillingToolsSubmit}
-        compressorName={currentServiceShift === 1 ? selectedShift1Compressor?.compressorName : selectedShift2Compressor?.compressorName}
-        currentCompressorRPM={currentServiceShift === 1 ? shift1Data.compressorClosingRPM : shift2Data.compressorClosingRPM}
-        title={`Drilling Tools - ${currentServiceShift === 1 ? selectedShift1Compressor?.compressorName : selectedShift2Compressor?.compressorName}`}
-      />
     </div>
   );
 };

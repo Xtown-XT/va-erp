@@ -158,6 +158,19 @@ export const useItemsByType = (itemType) => {
   });
 };
 
+// Fitted drilling tools for a compressor
+export const useFittedDrillingTools = (compressorId) => {
+  return useQuery({
+    queryKey: ["fittedDrillingTools", compressorId],
+    queryFn: async () => {
+      const res = await api.get(`/api/dailyEntries/fitted-drilling-tools/${compressorId}`);
+      return res.data.data || [];
+    },
+    enabled: !!compressorId,
+    staleTime: 1 * 60 * 1000,
+  });
+};
+
 // Inventory Report
 export const useInventoryReport = (month, year, itemType) => {
   return useQuery({

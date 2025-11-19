@@ -69,7 +69,9 @@ const DailyEntry = () => {
     noOfHoles: 0,
     meter: 0,
     employees: [],
-    fittedItems: [],
+    machineServiceItems: [],
+    compressorServiceItems: [],
+    drillingTools: [],
     vehicleServiceDone: false,
     compressorServiceDone: false,
   });
@@ -89,22 +91,36 @@ const DailyEntry = () => {
     noOfHoles: 0,
     meter: 0,
     employees: [],
-    fittedItems: [],
+    machineServiceItems: [],
+    compressorServiceItems: [],
+    drillingTools: [],
     vehicleServiceDone: false,
     compressorServiceDone: false,
   });
   
   const [selectedDate, setSelectedDate] = useState(dayjs());
-  const [shift1Enabled, setShift1Enabled] = useState(true);
-  const [shift2Enabled, setShift2Enabled] = useState(true);
   const [selectedShift1Machine, setSelectedShift1Machine] = useState(null);
   const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
   const [selectedShift2Compressor, setSelectedShift2Compressor] = useState(null);
-  const [availableItems, setAvailableItems] = useState([]);
-  const [showFitItemModal, setShowFitItemModal] = useState(false);
-  const [currentShiftForModal, setCurrentShiftForModal] = useState(null);
-  const [selectedItemInstances, setSelectedItemInstances] = useState([]);
+  
+  // Service items modals
+  const [showMachineServiceModal, setShowMachineServiceModal] = useState(false);
+  const [showCompressorServiceModal, setShowCompressorServiceModal] = useState(false);
+  const [showDrillingToolsModal, setShowDrillingToolsModal] = useState(false);
+  const [currentShiftForServiceModal, setCurrentShiftForServiceModal] = useState(null);
+  const [currentServiceType, setCurrentServiceType] = useState(null); // 'machine', 'compressor', or 'drilling_tool'
+  
+  // Available items for service
+  const [availableMachineItems, setAvailableMachineItems] = useState([]);
+  const [availableCompressorItems, setAvailableCompressorItems] = useState([]);
+  const [availableDrillingTools, setAvailableDrillingTools] = useState([]);
+  const [selectedServiceItems, setSelectedServiceItems] = useState([]);
+  const [selectedDrillingTools, setSelectedDrillingTools] = useState([]);
+  
+  // Currently fitted items
+  const [fittedMachineItems, setFittedMachineItems] = useState([]);
+  const [fittedCompressorItems, setFittedCompressorItems] = useState([]);
   
   const hasFetchedRef = useRef(false);
 
@@ -163,12 +179,63 @@ const DailyEntry = () => {
     }
   };
 
-  const fetchAvailableItems = async () => {
+  // Fetch available items for machine service
+  const fetchAvailableMachineItems = async (machineType) => {
+    if (!machineType) return;
     try {
-      const res = await api.get("/api/itemInstances/search?status=in_stock&limit=1000");
-      setAvailableItems(res.data.data || []);
+      const res = await api.get(`/api/items/available-for-service?itemType=${encodeURIComponent(machineType)}`);
+      setAvailableMachineItems(res.data.data || []);
     } catch (err) {
-      message.error("Error fetching available items");
+      message.error("Error fetching available machine items");
+    }
+  };
+
+  // Fetch available items for compressor service
+  const fetchAvailableCompressorItems = async (compressorName) => {
+    if (!compressorName) return;
+    try {
+      const res = await api.get(`/api/items/available-for-service?itemType=${encodeURIComponent(compressorName)}`);
+      setAvailableCompressorItems(res.data.data || []);
+    } catch (err) {
+      message.error("Error fetching available compressor items");
+    }
+  };
+
+  // Fetch available drilling tools
+  const fetchAvailableDrillingTools = async () => {
+    try {
+      const res = await api.get(`/api/items/available-for-service?itemType=${encodeURIComponent("Drilling Tools")}`);
+      setAvailableDrillingTools(res.data.data || []);
+    } catch (err) {
+      message.error("Error fetching available drilling tools");
+    }
+  };
+
+  // Fetch currently fitted items for a machine
+  const fetchFittedMachineItems = async (vehicleId) => {
+    if (!vehicleId) {
+      setFittedMachineItems([]);
+      return;
+    }
+    try {
+      const res = await api.get(`/api/itemService/fitted?vehicleId=${vehicleId}&serviceType=machine`);
+      setFittedMachineItems(res.data.data || []);
+    } catch (err) {
+      message.error("Error fetching fitted machine items");
+    }
+  };
+
+  // Fetch currently fitted items for a compressor
+  const fetchFittedCompressorItems = async (compressorId) => {
+    if (!compressorId) {
+      setFittedCompressorItems([]);
+      return;
+    }
+    try {
+      const res = await api.get(`/api/itemService/fitted?compressorId=${compressorId}&serviceType=compressor`);
+      setFittedCompressorItems(res.data.data || []);
+    } catch (err) {
+      message.error("Error fetching fitted compressor items");
     }
   };
 
@@ -181,8 +248,30 @@ const DailyEntry = () => {
     fetchMachines();
     fetchCompressors();
     fetchEmployees();
-    fetchAvailableItems();
   }, []);
+
+  // Fetch fitted items when machine/compressor changes
+  useEffect(() => {
+    if (selectedShift1Machine?.vehicleType) {
+      fetchAvailableMachineItems(selectedShift1Machine.vehicleType);
+      fetchFittedMachineItems(selectedShift1Machine.id);
+    }
+    if (selectedShift1Compressor?.compressorName) {
+      fetchAvailableCompressorItems(selectedShift1Compressor.compressorName);
+      fetchFittedCompressorItems(selectedShift1Compressor.id);
+    }
+  }, [selectedShift1Machine, selectedShift1Compressor]);
+
+  useEffect(() => {
+    if (selectedShift2Machine?.vehicleType) {
+      fetchAvailableMachineItems(selectedShift2Machine.vehicleType);
+      fetchFittedMachineItems(selectedShift2Machine.id);
+    }
+    if (selectedShift2Compressor?.compressorName) {
+      fetchAvailableCompressorItems(selectedShift2Compressor.compressorName);
+      fetchFittedCompressorItems(selectedShift2Compressor.id);
+    }
+  }, [selectedShift2Machine, selectedShift2Compressor]);
 
   // Auto-generate reference number
   const generateRefNo = async () => {
@@ -286,46 +375,208 @@ const DailyEntry = () => {
     }
   };
 
-  // Open fit item modal
-  const openFitItemModal = (shift) => {
-    setCurrentShiftForModal(shift);
-    setShowFitItemModal(true);
-  };
-
-  // Handle fitting items
-  const handleFitItems = () => {
-    const newFittedItems = availableItems.filter(item =>
-      selectedItemInstances.includes(item.id)
-    );
+  // Open service items modal
+  const openServiceItemsModal = (shift, serviceType) => {
+    setCurrentShiftForServiceModal(shift);
+    setCurrentServiceType(serviceType);
+    setSelectedServiceItems([]);
+    setSelectedDrillingTools([]);
     
-    if (currentShiftForModal === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        fittedItems: [...prev.fittedItems, ...newFittedItems],
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        fittedItems: [...prev.fittedItems, ...newFittedItems],
-      }));
+    if (serviceType === 'machine') {
+      const machine = shift === 1 ? selectedShift1Machine : selectedShift2Machine;
+      if (machine?.vehicleType) {
+        fetchAvailableMachineItems(machine.vehicleType);
+        setShowMachineServiceModal(true);
+      } else {
+        message.warning("Please select a machine first");
+      }
+    } else if (serviceType === 'compressor') {
+      const compressor = shift === 1 ? selectedShift1Compressor : selectedShift2Compressor;
+      if (compressor?.compressorName) {
+        fetchAvailableCompressorItems(compressor.compressorName);
+        setShowCompressorServiceModal(true);
+      } else {
+        message.warning("Please select a compressor first");
+      }
+    } else if (serviceType === 'drilling_tool') {
+      const shiftData = shift === 1 ? shift1Data : shift2Data;
+      if (!shiftData.compressorId) {
+        message.warning("Please select a compressor first for drilling tools");
+        return;
+      }
+      fetchAvailableDrillingTools();
+      setShowDrillingToolsModal(true);
     }
-    
-    setSelectedItemInstances([]);
-    setShowFitItemModal(false);
   };
 
-  // Remove fitted item
-  const removeFittedItem = (shift, instanceId) => {
+  // Handle adding service items
+  const handleAddServiceItem = (item) => {
+    if (selectedServiceItems.find(si => si.itemId === item.id)) {
+      message.warning('Item already added');
+      return;
+    }
+    setSelectedServiceItems(prev => [...prev, {
+      itemId: item.id,
+      itemName: item.itemName,
+      partNumber: item.partNumber,
+      balance: item.balance,
+      quantity: 1,
+      action: 'fit'
+    }]);
+  };
+
+  // Handle removing service item from selection
+  const handleRemoveServiceItem = (itemId) => {
+    setSelectedServiceItems(prev => prev.filter(item => item.itemId !== itemId));
+  };
+
+  // Handle quantity change for service item
+  const handleServiceItemQuantityChange = (itemId, quantity) => {
+    setSelectedServiceItems(prev => prev.map(item => 
+      item.itemId === itemId ? { ...item, quantity: Math.max(1, quantity) } : item
+    ));
+  };
+
+  // Submit service items
+  const handleSubmitServiceItems = () => {
+    if (selectedServiceItems.length === 0) {
+      message.warning("Please select at least one item");
+      return;
+    }
+
+    const shift = currentShiftForServiceModal;
+    const serviceType = currentServiceType;
+
+    if (serviceType === 'machine') {
+      if (shift === 1) {
+        setShift1Data(prev => ({
+          ...prev,
+          machineServiceItems: [...prev.machineServiceItems, ...selectedServiceItems],
+        }));
+      } else {
+        setShift2Data(prev => ({
+          ...prev,
+          machineServiceItems: [...prev.machineServiceItems, ...selectedServiceItems],
+        }));
+      }
+      setShowMachineServiceModal(false);
+      message.success(`${selectedServiceItems.length} item(s) added for machine service`);
+    } else if (serviceType === 'compressor') {
+      if (shift === 1) {
+        setShift1Data(prev => ({
+          ...prev,
+          compressorServiceItems: [...prev.compressorServiceItems, ...selectedServiceItems],
+        }));
+      } else {
+        setShift2Data(prev => ({
+          ...prev,
+          compressorServiceItems: [...prev.compressorServiceItems, ...selectedServiceItems],
+        }));
+      }
+      setShowCompressorServiceModal(false);
+      message.success(`${selectedServiceItems.length} item(s) added for compressor service`);
+    }
+
+    setSelectedServiceItems([]);
+  };
+
+  // Handle drilling tools
+  const handleAddDrillingTool = (tool) => {
+    if (selectedDrillingTools.find(t => t.itemId === tool.id)) {
+      message.warning('Tool already added');
+      return;
+    }
+    const shift = currentShiftForServiceModal;
+    const shiftData = shift === 1 ? shift1Data : shift2Data;
+    const currentRPM = shiftData.compressorClosingRPM || shiftData.compressorOpeningRPM || 0;
+    const currentMeter = shiftData.meter || 0;
+    
+    setSelectedDrillingTools(prev => [...prev, {
+      itemId: tool.id,
+      itemName: tool.itemName,
+      partNumber: tool.partNumber,
+      balance: tool.balance,
+      startingRPM: currentRPM,
+      startingMeter: currentMeter,
+      action: 'fit'
+    }]);
+  };
+
+  const handleRemoveDrillingTool = (itemId) => {
+    setSelectedDrillingTools(prev => prev.filter(t => t.itemId !== itemId));
+  };
+
+  const handleDrillingToolRPMChange = (itemId, field, value) => {
+    setSelectedDrillingTools(prev => prev.map(tool => 
+      tool.itemId === itemId ? { ...tool, [field]: value } : tool
+    ));
+  };
+
+  const handleSubmitDrillingTools = () => {
+    if (selectedDrillingTools.length === 0) {
+      message.warning("Please select at least one drilling tool");
+      return;
+    }
+
+    const shift = currentShiftForServiceModal;
     if (shift === 1) {
       setShift1Data(prev => ({
         ...prev,
-        fittedItems: prev.fittedItems.filter(item => item.id !== instanceId),
+        drillingTools: [...prev.drillingTools, ...selectedDrillingTools],
       }));
     } else {
       setShift2Data(prev => ({
         ...prev,
-        fittedItems: prev.fittedItems.filter(item => item.id !== instanceId),
+        drillingTools: [...prev.drillingTools, ...selectedDrillingTools],
       }));
+    }
+
+    setSelectedDrillingTools([]);
+    setShowDrillingToolsModal(false);
+    message.success(`${selectedDrillingTools.length} drilling tool(s) added`);
+  };
+
+  // Remove drilling tool from shift data
+  const removeDrillingTool = (shift, itemId) => {
+    if (shift === 1) {
+      setShift1Data(prev => ({
+        ...prev,
+        drillingTools: prev.drillingTools.filter(tool => tool.itemId !== itemId),
+      }));
+    } else {
+      setShift2Data(prev => ({
+        ...prev,
+        drillingTools: prev.drillingTools.filter(tool => tool.itemId !== itemId),
+      }));
+    }
+  };
+
+  // Remove service item from shift data
+  const removeServiceItem = (shift, serviceType, itemId) => {
+    if (serviceType === 'machine') {
+      if (shift === 1) {
+        setShift1Data(prev => ({
+          ...prev,
+          machineServiceItems: prev.machineServiceItems.filter(item => item.itemId !== itemId),
+        }));
+      } else {
+        setShift2Data(prev => ({
+          ...prev,
+          machineServiceItems: prev.machineServiceItems.filter(item => item.itemId !== itemId),
+        }));
+      }
+    } else if (serviceType === 'compressor') {
+      if (shift === 1) {
+        setShift1Data(prev => ({
+          ...prev,
+          compressorServiceItems: prev.compressorServiceItems.filter(item => item.itemId !== itemId),
+        }));
+      } else {
+        setShift2Data(prev => ({
+          ...prev,
+          compressorServiceItems: prev.compressorServiceItems.filter(item => item.itemId !== itemId),
+        }));
+      }
     }
   };
 
@@ -341,30 +592,23 @@ const DailyEntry = () => {
         const editingShift = editingEntry?.shift || 1;
         
         // Validate the shift being edited
-        if (editingShift === 1 && shift1Enabled) {
-          const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-          if (shift1Operators.length === 0) {
-            message.error("Shift 1 must have at least one operator");
-            return;
-          }
-          if (!shift1Data.siteId || !shift1Data.vehicleId) {
-            message.error("Shift 1 must have site and machine selected");
-            return;
-          }
-        } else if (editingShift === 2 && shift2Enabled) {
-          const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-          if (shift2Operators.length === 0) {
-            message.error("Shift 2 must have at least one operator");
-            return;
-          }
-          if (!shift2Data.siteId || !shift2Data.vehicleId) {
-            message.error("Shift 2 must have site and machine selected");
-            return;
-          }
+        const shiftData = editingShift === 1 ? shift1Data : shift2Data;
+        const shiftOperators = shiftData.employees.filter(e => e.role === 'operator' && e.employeeId);
+        if (shiftOperators.length === 0) {
+          message.error(`Shift ${editingShift} must have at least one operator`);
+          return;
+        }
+        if (!shiftData.siteId || !shiftData.vehicleId) {
+          message.error(`Shift ${editingShift} must have site and machine selected`);
+          return;
         }
 
+        // Get current RPM for service items
+        const currentVehicleRPM = shiftData.vehicleClosingRPM || 0;
+        const currentCompressorRPM = shiftData.compressorClosingRPM || 0;
+        const currentMeter = shiftData.meter || 0;
+
         // Prepare payload based on which shift is being edited
-        const shiftData = editingShift === 1 ? shift1Data : shift2Data;
         const payload = {
           date: dateStr,
           shift: editingShift,
@@ -385,8 +629,22 @@ const DailyEntry = () => {
             .map(e => ({ employeeId: e.employeeId, role: e.role, shift: editingShift })),
           vehicleServiceDone: Boolean(shiftData.vehicleServiceDone),
           compressorServiceDone: Boolean(shiftData.compressorServiceDone),
-          fittedItemInstanceIds: shiftData.fittedItems.map(item => item.id),
-          removedItemInstanceIds: [],
+          machineServiceItems: shiftData.machineServiceItems.map(item => ({
+            itemId: item.itemId,
+            action: item.action || 'fit',
+            quantity: item.quantity || 1
+          })),
+          compressorServiceItems: shiftData.compressorServiceItems.map(item => ({
+            itemId: item.itemId,
+            action: item.action || 'fit',
+            quantity: item.quantity || 1
+          })),
+          drillingTools: shiftData.drillingTools.map(tool => ({
+            itemId: tool.itemId,
+            action: tool.action || 'fit',
+            startingRPM: tool.startingRPM || 0,
+            startingMeter: tool.startingMeter || 0,
+          })),
           notes: editingEntry?.notes || "",
         };
 
@@ -402,98 +660,118 @@ const DailyEntry = () => {
         return;
       }
 
-      // Create new entries (original logic)
+      // Create new entries - always create both shifts
       // Validate Shift 1 (at least one operator required)
-      if (shift1Enabled) {
-        const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-        if (shift1Operators.length === 0) {
-          message.error("Shift 1 must have at least one operator");
-          return;
-        }
-        if (!shift1Data.siteId || !shift1Data.vehicleId) {
-          message.error("Shift 1 must have site and machine selected");
-          return;
-        }
+      const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
+      if (shift1Operators.length === 0) {
+        message.error("Shift 1 must have at least one operator");
+        return;
+      }
+      if (!shift1Data.siteId || !shift1Data.vehicleId) {
+        message.error("Shift 1 must have site and machine selected");
+        return;
       }
       
-      // Validate Shift 2 if enabled
-      if (shift2Enabled) {
-        const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-        if (shift2Operators.length === 0) {
-          message.error("Shift 2 must have at least one operator");
-          return;
-        }
-        if (!shift2Data.siteId || !shift2Data.vehicleId) {
-          message.error("Shift 2 must have site and machine selected");
-          return;
-        }
+      // Validate Shift 2
+      const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
+      if (shift2Operators.length === 0) {
+        message.error("Shift 2 must have at least one operator");
+        return;
+      }
+      if (!shift2Data.siteId || !shift2Data.vehicleId) {
+        message.error("Shift 2 must have site and machine selected");
+        return;
       }
 
       // Save Shift 1
-      if (shift1Enabled) {
-        const refNo1 = await generateRefNo();
-        const payload1 = {
-          refNo: refNo1,
-          date: dateStr,
-          shift: 1,
-          siteId: shift1Data.siteId,
-          vehicleId: shift1Data.vehicleId,
-          compressorId: shift1Data.compressorId,
-          vehicleOpeningRPM: shift1Data.vehicleOpeningRPM || 0,
-          vehicleClosingRPM: shift1Data.vehicleClosingRPM || 0,
-          compressorOpeningRPM: shift1Data.compressorOpeningRPM || 0,
-          compressorClosingRPM: shift1Data.compressorClosingRPM || 0,
-          dieselUsed: shift1Data.dieselUsed || 0,
-          vehicleHSD: shift1Data.vehicleHSD || 0,
-          compressorHSD: shift1Data.compressorHSD || 0,
-          noOfHoles: shift1Data.noOfHoles || 0,
-          meter: shift1Data.meter || 0,
-          employees: shift1Data.employees
-            .filter(e => e.employeeId)
-            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
-          vehicleServiceDone: Boolean(shift1Data.vehicleServiceDone),
-          compressorServiceDone: Boolean(shift1Data.compressorServiceDone),
-          fittedItemInstanceIds: shift1Data.fittedItems.map(item => item.id),
-          removedItemInstanceIds: [],
-          notes: "",
-        };
-        
-        await api.post("/api/dailyEntries", payload1);
-        message.success("Shift 1 entry saved successfully");
-      }
+      const refNo1 = await generateRefNo();
+      const payload1 = {
+        refNo: refNo1,
+        date: dateStr,
+        shift: 1,
+        siteId: shift1Data.siteId,
+        vehicleId: shift1Data.vehicleId,
+        compressorId: shift1Data.compressorId,
+        vehicleOpeningRPM: shift1Data.vehicleOpeningRPM || 0,
+        vehicleClosingRPM: shift1Data.vehicleClosingRPM || 0,
+        compressorOpeningRPM: shift1Data.compressorOpeningRPM || 0,
+        compressorClosingRPM: shift1Data.compressorClosingRPM || 0,
+        dieselUsed: shift1Data.dieselUsed || 0,
+        vehicleHSD: shift1Data.vehicleHSD || 0,
+        compressorHSD: shift1Data.compressorHSD || 0,
+        noOfHoles: shift1Data.noOfHoles || 0,
+        meter: shift1Data.meter || 0,
+        employees: shift1Data.employees
+          .filter(e => e.employeeId)
+          .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
+        vehicleServiceDone: Boolean(shift1Data.vehicleServiceDone),
+        compressorServiceDone: Boolean(shift1Data.compressorServiceDone),
+        machineServiceItems: shift1Data.machineServiceItems.map(item => ({
+          itemId: item.itemId,
+          action: item.action || 'fit',
+          quantity: item.quantity || 1
+        })),
+        compressorServiceItems: shift1Data.compressorServiceItems.map(item => ({
+          itemId: item.itemId,
+          action: item.action || 'fit',
+          quantity: item.quantity || 1
+        })),
+        drillingTools: shift1Data.drillingTools.map(tool => ({
+          itemId: tool.itemId,
+          action: tool.action || 'fit',
+          startingRPM: tool.startingRPM || 0,
+          startingMeter: tool.startingMeter || 0,
+        })),
+        notes: "",
+      };
+      
+      await api.post("/api/dailyEntries", payload1);
+      message.success("Shift 1 entry saved successfully");
 
       // Save Shift 2
-      if (shift2Enabled) {
-        const refNo2 = await generateRefNo();
-        const payload2 = {
-          refNo: refNo2,
-          date: dateStr,
-          shift: 2,
-          siteId: shift2Data.siteId,
-          vehicleId: shift2Data.vehicleId,
-          compressorId: shift2Data.compressorId,
-          vehicleOpeningRPM: shift2Data.vehicleOpeningRPM || 0,
-          vehicleClosingRPM: shift2Data.vehicleClosingRPM || 0,
-          compressorOpeningRPM: shift2Data.compressorOpeningRPM || 0,
-          compressorClosingRPM: shift2Data.compressorClosingRPM || 0,
-          dieselUsed: shift2Data.dieselUsed || 0,
-          vehicleHSD: shift2Data.vehicleHSD || 0,
-          compressorHSD: shift2Data.compressorHSD || 0,
-          noOfHoles: shift2Data.noOfHoles || 0,
-          meter: shift2Data.meter || 0,
-          employees: shift2Data.employees
-            .filter(e => e.employeeId)
-            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
-          vehicleServiceDone: Boolean(shift2Data.vehicleServiceDone),
-          compressorServiceDone: Boolean(shift2Data.compressorServiceDone),
-          fittedItemInstanceIds: shift2Data.fittedItems.map(item => item.id),
-          removedItemInstanceIds: [],
-          notes: "",
-        };
-        
-        await api.post("/api/dailyEntries", payload2);
-        message.success("Shift 2 entry saved successfully");
-      }
+      const refNo2 = await generateRefNo();
+      const payload2 = {
+        refNo: refNo2,
+        date: dateStr,
+        shift: 2,
+        siteId: shift2Data.siteId,
+        vehicleId: shift2Data.vehicleId,
+        compressorId: shift2Data.compressorId,
+        vehicleOpeningRPM: shift2Data.vehicleOpeningRPM || 0,
+        vehicleClosingRPM: shift2Data.vehicleClosingRPM || 0,
+        compressorOpeningRPM: shift2Data.compressorOpeningRPM || 0,
+        compressorClosingRPM: shift2Data.compressorClosingRPM || 0,
+        dieselUsed: shift2Data.dieselUsed || 0,
+        vehicleHSD: shift2Data.vehicleHSD || 0,
+        compressorHSD: shift2Data.compressorHSD || 0,
+        noOfHoles: shift2Data.noOfHoles || 0,
+        meter: shift2Data.meter || 0,
+        employees: shift2Data.employees
+          .filter(e => e.employeeId)
+          .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
+        vehicleServiceDone: Boolean(shift2Data.vehicleServiceDone),
+        compressorServiceDone: Boolean(shift2Data.compressorServiceDone),
+        machineServiceItems: shift2Data.machineServiceItems.map(item => ({
+          itemId: item.itemId,
+          action: item.action || 'fit',
+          quantity: item.quantity || 1
+        })),
+        compressorServiceItems: shift2Data.compressorServiceItems.map(item => ({
+          itemId: item.itemId,
+          action: item.action || 'fit',
+          quantity: item.quantity || 1
+        })),
+        drillingTools: shift2Data.drillingTools.map(tool => ({
+          itemId: tool.itemId,
+          action: tool.action || 'fit',
+          startingRPM: tool.startingRPM || 0,
+          startingMeter: tool.startingMeter || 0,
+        })),
+        notes: "",
+      };
+      
+      await api.post("/api/dailyEntries", payload2);
+      message.success("Shift 2 entry saved successfully");
 
       // Refresh and close form
       message.success("Daily entries saved successfully");
@@ -511,8 +789,6 @@ const DailyEntry = () => {
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
-    setShift1Enabled(true);
-    setShift2Enabled(true);
     setShift1Data({
       siteId: null,
       vehicleId: null,
@@ -527,7 +803,9 @@ const DailyEntry = () => {
       noOfHoles: 0,
       meter: 0,
       employees: [],
-      fittedItems: [],
+      machineServiceItems: [],
+      compressorServiceItems: [],
+      drillingTools: [],
       vehicleServiceDone: false,
       compressorServiceDone: false,
     });
@@ -545,7 +823,9 @@ const DailyEntry = () => {
       noOfHoles: 0,
       meter: 0,
       employees: [],
-      fittedItems: [],
+      machineServiceItems: [],
+      compressorServiceItems: [],
+      drillingTools: [],
       vehicleServiceDone: false,
       compressorServiceDone: false,
     });
@@ -610,22 +890,42 @@ const DailyEntry = () => {
         noOfHoles: entry.noOfHoles || 0,
         meter: entry.meter || 0,
         employees: employeesData,
-        fittedItems: [], // Will need to fetch separately if needed
+        machineServiceItems: [],
+        compressorServiceItems: [],
+        drillingTools: [],
         vehicleServiceDone: entry.vehicleServiceDone || false,
         compressorServiceDone: entry.compressorServiceDone || false,
       };
 
       // Set machine and compressor selections
       if (entryShift === 1) {
-        setShift1Enabled(true);
         setShift1Data(entryData);
-        setSelectedShift1Machine(entry.vehicleId);
-        setSelectedShift1Compressor(entry.compressorId);
+        const machine = machines.find(m => m.id === entry.vehicleId);
+        const compressor = compressors.find(c => c.id === entry.compressorId);
+        setSelectedShift1Machine(machine);
+        setSelectedShift1Compressor(compressor);
+        
+        // Fetch fitted items for this entry
+        if (entry.vehicleId) {
+          fetchFittedMachineItems(entry.vehicleId);
+        }
+        if (entry.compressorId) {
+          fetchFittedCompressorItems(entry.compressorId);
+        }
       } else {
-        setShift2Enabled(true);
         setShift2Data(entryData);
-        setSelectedShift2Machine(entry.vehicleId);
-        setSelectedShift2Compressor(entry.compressorId);
+        const machine = machines.find(m => m.id === entry.vehicleId);
+        const compressor = compressors.find(c => c.id === entry.compressorId);
+        setSelectedShift2Machine(machine);
+        setSelectedShift2Compressor(compressor);
+        
+        // Fetch fitted items for this entry
+        if (entry.vehicleId) {
+          fetchFittedMachineItems(entry.vehicleId);
+        }
+        if (entry.compressorId) {
+          fetchFittedCompressorItems(entry.compressorId);
+        }
       }
 
       // Show form
@@ -653,12 +953,10 @@ const DailyEntry = () => {
 
     return (
       <Card 
-        title={`Shift ${shift}`} 
-        extra={shift === 2 && <Switch checked={shift2Enabled} onChange={setShift2Enabled} />}
+        title={`Shift ${shift}`}
         className="mb-4"
       >
-        {((shift === 1 && shift1Enabled) || (shift === 2 && shift2Enabled)) && (
-          <>
+        <>
             {/* Basic Info */}
             <div className="mb-4">
               <Title level={5}>Basic Information</Title>
@@ -692,7 +990,7 @@ const DailyEntry = () => {
                   >
                     {machines.map(machine => (
                       <Select.Option key={machine.id} value={machine.id}>
-                        {machine.vehicleType} ({machine.vehicleNumber})
+                        {machine.vehicleType}
                       </Select.Option>
                     ))}
                   </Select>
@@ -924,57 +1222,155 @@ const DailyEntry = () => {
               ))}
             </div>
 
-            {/* Fitted Items */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <Title level={5}>Fitted Machine Items (Spares)</Title>
-                <Button
-                  type="dashed"
-                  icon={<PlusOutlined />}
-                  onClick={() => openFitItemModal(shift)}
-                >
-                  Fit Item
-                </Button>
+            {/* Service Items Section */}
+            <div className="mb-4" style={{ border: '1px solid #d9d9d9', padding: '16px', borderRadius: '4px' }}>
+              <Title level={5} style={{ marginBottom: '16px' }}>Service Items</Title>
+              <Row gutter={[8, 8]} style={{ marginBottom: '16px' }}>
+                <Col xs={24} sm={8}>
+                  <Button
+                    type="primary"
+                    block
+                    icon={<PlusOutlined />}
+                    onClick={() => openServiceItemsModal(shift, 'machine')}
+                    size="large"
+                  >
+                    Machine Service
+                  </Button>
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Button
+                    type="primary"
+                    block
+                    icon={<PlusOutlined />}
+                    onClick={() => openServiceItemsModal(shift, 'compressor')}
+                    size="large"
+                  >
+                    Compressor Service
+                  </Button>
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Button
+                    type="primary"
+                    block
+                    icon={<PlusOutlined />}
+                    onClick={() => openServiceItemsModal(shift, 'drilling_tool')}
+                    size="large"
+                  >
+                    Fit Drilling Tools
+                  </Button>
+                </Col>
+              </Row>
+
+              {/* Machine Service Items */}
+              <div className="mb-3">
+                <Text strong>Machine Service Items:</Text>
+                <Table
+                  dataSource={shiftData.machineServiceItems}
+                  columns={[
+                    { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+                    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                    { 
+                      title: "Quantity", 
+                      dataIndex: "quantity",
+                      key: "quantity",
+                      render: (qty) => qty || 1
+                    },
+                    {
+                      title: "Actions",
+                      key: "actions",
+                      render: (_, record) => (
+                        <Button
+                          size="small"
+                          danger
+                          onClick={() => removeServiceItem(shift, 'machine', record.itemId)}
+                        >
+                          Remove
+                        </Button>
+                      )
+                    }
+                  ]}
+                  pagination={false}
+                  size="small"
+                  rowKey="itemId"
+                  locale={{ emptyText: "No machine service items added" }}
+                />
               </div>
-              <Table
-                dataSource={shiftData.fittedItems}
-                columns={[
-                  { title: "Instance Number", dataIndex: "instanceNumber", key: "instanceNumber" },
-                  { title: "Item Name", dataIndex: ["item", "itemName"], key: "itemName" },
-                  { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber" },
-                  { 
-                    title: "Last Used Count (RPM)", 
-                    key: "lastUsedCount",
-                    render: (_, record) => truncateToFixed(record.lastUsedCount || record.currentRPM || 0, 2)
-                  },
-                  { 
-                    title: "Balance", 
-                    key: "balance",
-                    render: (_, record) => record.balance || (record.status === 'in_stock' ? 1 : 0)
-                  },
-                  { 
-                    title: "Current Count (RPM)", 
-                    key: "currentCount",
-                    render: (_, record) => truncateToFixed(record.currentCount || record.currentRPM || 0, 2)
-                  },
-                  {
-                    title: "Actions",
-                    key: "actions",
-                    render: (_, record) => (
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => removeFittedItem(shift, record.id)}
-                      >
-                        Remove
-                      </Button>
-                    )
-                  }
-                ]}
-                pagination={false}
-                size="small"
-                rowKey="id"
-              />
+
+              {/* Compressor Service Items */}
+              <div className="mb-3">
+                <Text strong>Compressor Service Items:</Text>
+                <Table
+                  dataSource={shiftData.compressorServiceItems}
+                  columns={[
+                    { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+                    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                    { 
+                      title: "Quantity", 
+                      dataIndex: "quantity",
+                      key: "quantity",
+                      render: (qty) => qty || 1
+                    },
+                    {
+                      title: "Actions",
+                      key: "actions",
+                      render: (_, record) => (
+                        <Button
+                          size="small"
+                          danger
+                          onClick={() => removeServiceItem(shift, 'compressor', record.itemId)}
+                        >
+                          Remove
+                        </Button>
+                      )
+                    }
+                  ]}
+                  pagination={false}
+                  size="small"
+                  rowKey="itemId"
+                  locale={{ emptyText: "No compressor service items added" }}
+                />
+              </div>
+
+              {/* Drilling Tools */}
+              <div className="mb-3">
+                <Text strong>Drilling Tools:</Text>
+                <Table
+                  dataSource={shiftData.drillingTools}
+                  columns={[
+                    { title: "Tool Name", dataIndex: "itemName", key: "itemName" },
+                    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                    { 
+                      title: "Starting RPM", 
+                      dataIndex: "startingRPM",
+                      key: "startingRPM",
+                      render: (rpm) => truncateToFixed(rpm || 0, 2)
+                    },
+                    { 
+                      title: "Starting Meter", 
+                      dataIndex: "startingMeter",
+                      key: "startingMeter",
+                      render: (meter) => truncateToFixed(meter || 0, 2)
+                    },
+                    {
+                      title: "Actions",
+                      key: "actions",
+                      render: (_, record) => (
+                        <Button
+                          size="small"
+                          danger
+                          onClick={() => removeDrillingTool(shift, record.itemId)}
+                        >
+                          Remove
+                        </Button>
+                      )
+                    }
+                  ]}
+                  pagination={false}
+                  size="small"
+                  rowKey="itemId"
+                  locale={{ emptyText: "No drilling tools added" }}
+                />
+              </div>
             </div>
 
             {/* Service Status */}
@@ -1006,8 +1402,7 @@ const DailyEntry = () => {
                 </Col>
               </Row>
             </div>
-          </>
-        )}
+        </>
       </Card>
     );
   };
@@ -1033,7 +1428,7 @@ const DailyEntry = () => {
       render: (_, record) => {
         const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
         if (!machine) return '-';
-        return `${machine.vehicleType || 'Machine'} (${machine.vehicleNumber || ''})`;
+        return machine.vehicleType || 'Machine';
       }
     },
     {
@@ -1142,62 +1537,323 @@ const DailyEntry = () => {
         />
       </Card>
 
-      {/* Fit Item Modal */}
+      {/* Machine Service Items Modal */}
       <Modal
-        title="Fit New Item"
-        open={showFitItemModal}
+        title="Select Machine Service Items"
+        open={showMachineServiceModal}
         onCancel={() => {
-          setShowFitItemModal(false);
-          setSelectedItemInstances([]);
+          setShowMachineServiceModal(false);
+          setSelectedServiceItems([]);
         }}
-        onOk={handleFitItems}
-        okText="Fit Items"
+        onOk={handleSubmitServiceItems}
+        okText="Add Items"
         cancelText="Cancel"
-        width={800}
+        width={900}
       >
         <div>
-          <p>Select items to fit (search by name, part number, or instance number):</p>
-          <Select
-            mode="multiple"
-            className="w-full mb-4"
-            placeholder="Search and select items..."
-            value={selectedItemInstances}
-            onChange={setSelectedItemInstances}
-            showSearch
-            filterOption={(input, option) =>
-              option.label.toLowerCase().includes(input.toLowerCase())
-            }
-            options={availableItems.map(item => ({
-              value: item.id,
-              label: item.displayLabel || `${item.item?.itemName} (${item.item?.partNumber}) - ${item.instanceNumber}`,
-            }))}
-          />
+          <Text type="secondary" className="mb-4 block">
+            Select items to use for machine service. Items will be deducted from inventory.
+          </Text>
+          {currentShiftForServiceModal === 1 && selectedShift1Machine && (
+            <Text className="mb-2 block">
+              <strong>Selected Machine:</strong> {selectedShift1Machine.vehicleType} ({selectedShift1Machine.vehicleNumber})
+            </Text>
+          )}
+          {currentShiftForServiceModal === 2 && selectedShift2Machine && (
+            <Text className="mb-2 block">
+              <strong>Selected Machine:</strong> {selectedShift2Machine.vehicleType} ({selectedShift2Machine.vehicleNumber})
+            </Text>
+          )}
           <Table
-            dataSource={availableItems.filter(item => selectedItemInstances.includes(item.id))}
+            dataSource={availableMachineItems}
             columns={[
-              { title: "Instance Number", dataIndex: "instanceNumber", key: "instanceNumber" },
-              { title: "Item Name", dataIndex: ["item", "itemName"], key: "itemName" },
-              { title: "Part Number", dataIndex: ["item", "partNumber"], key: "partNumber" },
+              { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+              { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
               { 
-                title: "Last Used Count", 
-                key: "lastUsedCount",
-                render: (_, record) => truncateToFixed(record.lastUsedCount || 0, 2)
-              },
-              { 
-                title: "Balance", 
+                title: "Stock Count", 
+                dataIndex: "balance",
                 key: "balance",
-                render: (_, record) => record.balance || 0
+                render: (balance) => <Text strong>{balance || 0}</Text>
               },
-              { 
-                title: "Current Count", 
-                key: "currentCount",
-                render: (_, record) => truncateToFixed(record.currentCount || 0, 2)
-              },
+              { title: "Units", dataIndex: "units", key: "units" },
+              {
+                title: "Actions",
+                key: "actions",
+                render: (_, record) => (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleAddServiceItem(record)}
+                    disabled={selectedServiceItems.find(si => si.itemId === record.id) !== undefined}
+                  >
+                    Add
+                  </Button>
+                )
+              }
             ]}
             pagination={false}
             size="small"
             rowKey="id"
+            locale={{ emptyText: "No items available for this machine type" }}
           />
+          
+          {selectedServiceItems.length > 0 && (
+            <div className="mt-4">
+              <Title level={5}>Selected Items:</Title>
+              <Table
+                dataSource={selectedServiceItems}
+                columns={[
+                  { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+                  { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                  {
+                    title: "Quantity",
+                    key: "quantity",
+                    render: (_, record) => (
+                      <InputNumber
+                        min={1}
+                        max={record.balance}
+                        value={record.quantity}
+                        onChange={(value) => handleServiceItemQuantityChange(record.itemId, value)}
+                      />
+                    )
+                  },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveServiceItem(record.itemId)}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                pagination={false}
+                size="small"
+                rowKey="itemId"
+              />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Compressor Service Items Modal */}
+      <Modal
+        title="Select Compressor Service Items"
+        open={showCompressorServiceModal}
+        onCancel={() => {
+          setShowCompressorServiceModal(false);
+          setSelectedServiceItems([]);
+        }}
+        onOk={handleSubmitServiceItems}
+        okText="Add Items"
+        cancelText="Cancel"
+        width={900}
+      >
+        <div>
+          <Text type="secondary" className="mb-4 block">
+            Select items to use for compressor service. Items will be deducted from inventory.
+          </Text>
+          {currentShiftForServiceModal === 1 && selectedShift1Compressor && (
+            <Text className="mb-2 block">
+              <strong>Selected Compressor:</strong> {selectedShift1Compressor.compressorName}
+            </Text>
+          )}
+          {currentShiftForServiceModal === 2 && selectedShift2Compressor && (
+            <Text className="mb-2 block">
+              <strong>Selected Compressor:</strong> {selectedShift2Compressor.compressorName}
+            </Text>
+          )}
+          <Table
+            dataSource={availableCompressorItems}
+            columns={[
+              { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+              { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+              { 
+                title: "Stock Count", 
+                dataIndex: "balance",
+                key: "balance",
+                render: (balance) => <Text strong>{balance || 0}</Text>
+              },
+              { title: "Units", dataIndex: "units", key: "units" },
+              {
+                title: "Actions",
+                key: "actions",
+                render: (_, record) => (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleAddServiceItem(record)}
+                    disabled={selectedServiceItems.find(si => si.itemId === record.id) !== undefined}
+                  >
+                    Add
+                  </Button>
+                )
+              }
+            ]}
+            pagination={false}
+            size="small"
+            rowKey="id"
+            locale={{ emptyText: "No items available for this compressor" }}
+          />
+          
+          {selectedServiceItems.length > 0 && (
+            <div className="mt-4">
+              <Title level={5}>Selected Items:</Title>
+              <Table
+                dataSource={selectedServiceItems}
+                columns={[
+                  { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+                  { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                  {
+                    title: "Quantity",
+                    key: "quantity",
+                    render: (_, record) => (
+                      <InputNumber
+                        min={1}
+                        max={record.balance}
+                        value={record.quantity}
+                        onChange={(value) => handleServiceItemQuantityChange(record.itemId, value)}
+                      />
+                    )
+                  },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveServiceItem(record.itemId)}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                pagination={false}
+                size="small"
+                rowKey="itemId"
+              />
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Drilling Tools Modal */}
+      <Modal
+        title="Fit Drilling Tools"
+        open={showDrillingToolsModal}
+        onCancel={() => {
+          setShowDrillingToolsModal(false);
+          setSelectedDrillingTools([]);
+        }}
+        onOk={handleSubmitDrillingTools}
+        okText="Add Tools"
+        cancelText="Cancel"
+        width={1000}
+      >
+        <div>
+          <Text type="secondary" className="mb-4 block">
+            Select drilling tools to fit. All drilling tools are shown below with stock count.
+          </Text>
+          <Table
+            dataSource={availableDrillingTools}
+            columns={[
+              { title: "Tool Name", dataIndex: "itemName", key: "itemName" },
+              { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+              { title: "Model Name", dataIndex: "modelName", key: "modelName" },
+              { 
+                title: "Stock Count", 
+                dataIndex: "balance",
+                key: "balance",
+                render: (balance) => <Text strong>{balance || 0}</Text>
+              },
+              { title: "Units", dataIndex: "units", key: "units" },
+              {
+                title: "Actions",
+                key: "actions",
+                render: (_, record) => (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => handleAddDrillingTool(record)}
+                    disabled={selectedDrillingTools.find(t => t.itemId === record.id) !== undefined || (record.balance || 0) <= 0}
+                  >
+                    Add
+                  </Button>
+                )
+              }
+            ]}
+            pagination={false}
+            size="small"
+            rowKey="id"
+            locale={{ emptyText: "No drilling tools available" }}
+          />
+          
+          {selectedDrillingTools.length > 0 && (
+            <div className="mt-4">
+              <Title level={5}>Selected Drilling Tools:</Title>
+              <Table
+                dataSource={selectedDrillingTools}
+                columns={[
+                  { title: "Tool Name", dataIndex: "itemName", key: "itemName" },
+                  { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                  {
+                    title: "Starting RPM",
+                    key: "startingRPM",
+                    render: (_, record) => (
+                      <InputNumber
+                        min={0}
+                        value={record.startingRPM}
+                        onChange={(value) => handleDrillingToolRPMChange(record.itemId, 'startingRPM', value)}
+                        step={0.1}
+                        precision={2}
+                      />
+                    )
+                  },
+                  {
+                    title: "Starting Meter",
+                    key: "startingMeter",
+                    render: (_, record) => (
+                      <InputNumber
+                        min={0}
+                        value={record.startingMeter}
+                        onChange={(value) => handleDrillingToolRPMChange(record.itemId, 'startingMeter', value)}
+                        step={0.1}
+                        precision={2}
+                      />
+                    )
+                  },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => handleRemoveDrillingTool(record.itemId)}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                pagination={false}
+                size="small"
+                rowKey="itemId"
+              />
+            </div>
+          )}
         </div>
       </Modal>
     </div>

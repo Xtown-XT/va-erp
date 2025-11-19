@@ -84,66 +84,308 @@ class DailyEntryCustomController extends BaseController {
     }
   };
 
-  // Helper: Process service items (fit or remove)
-  processServiceItems = async (serviceItems, dailyEntryId, vehicleId, compressorId, serviceType, currentRPM, currentMeter, date, username, transaction) => {
-    if (!serviceItems || serviceItems.length === 0) return;
+  // Helper: Process machine spares
+  processMachineSpares = async (machineSpares, dailyEntryId, vehicleId, date, username, transaction) => {
+    if (!machineSpares || machineSpares.length === 0) return;
 
-    for (const svcItem of serviceItems) {
-      const { itemId, action, quantity = 1, itemServiceId } = svcItem;
+    for (const spare of machineSpares) {
+      const { itemId, quantity, serviceName } = spare;
+      const item = await Item.findByPk(itemId, { transaction });
+      if (!item) continue;
 
-      if (action === 'fit') {
-        // Fit a new item
-        const item = await Item.findByPk(itemId, { transaction });
-        if (!item) continue;
+      // Verify sufficient balance (handle null/undefined balance)
+      const currentBalance = item.balance ?? 0;
+      if (currentBalance < quantity) {
+        throw new Error(`Insufficient balance for item ${item.itemName}. Available: ${currentBalance}, Required: ${quantity}`);
+      }
 
-        // Verify sufficient balance
-        if (item.balance < quantity) {
-          throw new Error(`Insufficient balance for item ${item.itemName}`);
+      // Create ItemService record
+      await ItemService.create({
+        itemId,
+        dailyEntryId,
+        vehicleId,
+        compressorId: null,
+        serviceType: 'machine',
+        fittedDate: date,
+        fittedRPM: 0, // Not applicable for spares
+        fittedMeter: null,
+        quantity,
+        status: 'fitted',
+        createdBy: username,
+      }, { transaction });
+
+      // Update item inventory (reduce balance, increment outward)
+      await item.update({
+        outward: (item.outward || 0) + quantity,
+        balance: (item.balance || 0) - quantity,
+        updatedBy: username,
+      }, { transaction });
+
+      // Create service history record
+      await Service.create({
+        serviceRPM: 0,
+        serviceType: 'machine',
+        serviceName: serviceName,
+        serviceDate: date,
+        vehicleId,
+        compressorId: null,
+        itemId,
+        createdBy: username,
+      }, { transaction });
+    }
+  };
+
+  // Helper: Process compressor spares
+  processCompressorSpares = async (compressorSpares, dailyEntryId, compressorId, date, username, transaction) => {
+    if (!compressorSpares || compressorSpares.length === 0) return;
+
+    for (const spare of compressorSpares) {
+      const { itemId, quantity, serviceName } = spare;
+      const item = await Item.findByPk(itemId, { transaction });
+      if (!item) continue;
+
+      // Verify sufficient balance (handle null/undefined balance)
+      const currentBalance = item.balance ?? 0;
+      if (currentBalance < quantity) {
+        throw new Error(`Insufficient balance for item ${item.itemName}. Available: ${currentBalance}, Required: ${quantity}`);
+      }
+
+      // Create ItemService record
+      await ItemService.create({
+        itemId,
+        dailyEntryId,
+        vehicleId: null,
+        compressorId,
+        serviceType: 'compressor',
+        fittedDate: date,
+        fittedRPM: 0, // Not applicable for spares
+        fittedMeter: null,
+        quantity,
+        status: 'fitted',
+        createdBy: username,
+      }, { transaction });
+
+      // Update item inventory (reduce balance, increment outward)
+      await item.update({
+        outward: (item.outward || 0) + quantity,
+        balance: (item.balance || 0) - quantity,
+        updatedBy: username,
+      }, { transaction });
+
+      // Create service history record
+      await Service.create({
+        serviceRPM: 0,
+        serviceType: 'compressor',
+        serviceName: serviceName,
+        serviceDate: date,
+        vehicleId: null,
+        compressorId,
+        itemId,
+        createdBy: username,
+      }, { transaction });
+    }
+  };
+
+  // Endpoint: Get fitted drilling tools for a compressor
+  getFittedDrillingTools = async (req, res, next) => {
+    try {
+      const { compressorId } = req.params;
+      if (!compressorId) {
+        return res.status(400).json({ success: false, message: "Compressor ID is required" });
+      }
+
+      // Get all fitted drilling tools for this compressor
+      // We need the latest ItemService record for each item (grouped by itemId)
+      const fittedTools = await ItemService.findAll({
+        where: {
+          compressorId,
+          serviceType: 'drilling_tool',
+          status: 'fitted',
+        },
+        include: [
+          {
+            model: Item,
+            as: 'item',
+            attributes: ['id', 'itemName', 'partNumber', 'itemType'],
+          },
+        ],
+        order: [['fittedDate', 'DESC'], ['createdAt', 'DESC']],
+      });
+
+      // Group by itemId and get the latest one for each item
+      const toolsMap = new Map();
+      fittedTools.forEach(tool => {
+        const itemId = tool.itemId;
+        if (!toolsMap.has(itemId)) {
+          toolsMap.set(itemId, tool);
         }
+      });
 
-        // Create ItemService record
+      const tools = Array.from(toolsMap.values()).map(tool => ({
+        id: tool.id, // ItemService ID
+        itemServiceId: tool.id,
+        itemId: tool.itemId,
+        itemName: tool.item?.itemName || '',
+        partNumber: tool.item?.partNumber || '',
+        quantity: tool.quantity || 1,
+        currentRPM: tool.fittedRPM || 0,
+        currentMeter: tool.fittedMeter || 0,
+        totalRPMRun: tool.totalRPMRun || 0,
+        totalMeterRun: tool.totalMeterRun || 0,
+        fittedDate: tool.fittedDate,
+        isExisting: true,
+      }));
+
+      return res.json({ success: true, data: tools });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Helper: Process drilling tools
+  processDrillingTools = async (drillingTools, dailyEntryId, compressorId, currentCompressorRPM, currentMeter, date, username, transaction) => {
+    if (!drillingTools || drillingTools.length === 0) return;
+
+    for (const tool of drillingTools) {
+      const { itemId, quantity, itemServiceId, action, dailyRPM, dailyMeter } = tool;
+      const item = await Item.findByPk(itemId, { transaction });
+      if (!item) continue;
+
+      // Handle removal
+      if (action === 'remove') {
+        // Find the latest fitted ItemService for this item and compressor
+        const itemService = await ItemService.findOne({
+          where: {
+            itemId,
+            compressorId,
+            serviceType: 'drilling_tool',
+            status: 'fitted',
+          },
+          order: [['fittedDate', 'DESC'], ['createdAt', 'DESC']],
+          transaction,
+        });
+
+        if (!itemService) continue;
+
+        // Calculate final totals including today's RPM/meter
+        const finalRPM = (itemService.fittedRPM || 0) + (dailyRPM || 0);
+        const finalMeter = (itemService.fittedMeter || 0) + (dailyMeter || 0);
+
+        // Update ItemService status to removed
+        await itemService.update({
+          removedDate: date,
+          removedRPM: currentCompressorRPM || 0,
+          removedMeter: currentMeter || 0,
+          totalRPMRun: finalRPM,
+          totalMeterRun: finalMeter,
+          status: 'removed',
+          updatedBy: username,
+        }, { transaction });
+
+        // Restore stock to inventory
+        await item.update({
+          inward: (item.inward || 0) + quantity,
+          balance: (item.balance || 0) + quantity,
+          updatedBy: username,
+        }, { transaction });
+
+        continue;
+      }
+
+      // Handle existing tool update (add daily RPM/meter)
+      if (itemServiceId && action !== 'fit') {
+        // Find the latest fitted ItemService for this item and compressor
+        const itemService = await ItemService.findOne({
+          where: {
+            itemId,
+            compressorId,
+            serviceType: 'drilling_tool',
+            status: 'fitted',
+          },
+          order: [['fittedDate', 'DESC'], ['createdAt', 'DESC']],
+          transaction,
+        });
+
+        if (!itemService) continue;
+
+        // Update RPM and meter by adding daily totals
+        const newRPM = (itemService.fittedRPM || 0) + (dailyRPM || 0);
+        const newMeter = (itemService.fittedMeter || 0) + (dailyMeter || 0);
+
+        // Update the existing ItemService record with new accumulated values
+        await itemService.update({
+          fittedRPM: newRPM,
+          fittedMeter: newMeter,
+          updatedBy: username,
+        }, { transaction });
+
+        // Also create a new ItemService record for this daily entry to track the update
         await ItemService.create({
           itemId,
           dailyEntryId,
-          vehicleId: serviceType === 'machine' ? vehicleId : null,
-          compressorId: serviceType === 'compressor' || serviceType === 'drilling_tool' ? compressorId : null,
-          serviceType,
+          vehicleId: null,
+          compressorId,
+          serviceType: 'drilling_tool',
           fittedDate: date,
-          fittedRPM: currentRPM,
-          fittedMeter: currentMeter,
+          fittedRPM: newRPM,
+          fittedMeter: newMeter,
           quantity,
           status: 'fitted',
           createdBy: username,
         }, { transaction });
 
-        // Update item inventory
-        await item.update({
-          outward: item.outward + quantity,
-          balance: item.balance - quantity,
-          updatedBy: username,
-        }, { transaction });
-      } else if (action === 'remove' && itemServiceId) {
-        // Remove an existing fitted item
-        const itemService = await ItemService.findByPk(itemServiceId, { transaction });
-        if (!itemService || itemService.status !== 'fitted') continue;
-
-        // Calculate totals
-        const totalRPMRun = currentRPM - itemService.fittedRPM;
-        const totalMeterRun = currentMeter && itemService.fittedMeter 
-          ? currentMeter - itemService.fittedMeter 
-          : null;
-
-        // Update ItemService record
-        await itemService.update({
-          removedDate: date,
-          removedRPM: currentRPM,
-          removedMeter: currentMeter,
-          totalRPMRun,
-          totalMeterRun,
-          status: 'removed',
-          updatedBy: username,
-        }, { transaction });
+        continue;
       }
+
+      // Handle new tool (fit new drilling tool)
+      // Check if there's a previously removed tool for this item+compressor to continue from
+      const previousRemovedTool = await ItemService.findOne({
+        where: {
+          itemId,
+          compressorId,
+          serviceType: 'drilling_tool',
+          status: 'removed',
+        },
+        order: [['removedDate', 'DESC'], ['createdAt', 'DESC']],
+        transaction,
+      });
+
+      // If there's a previous removed tool, continue from its totalRPMRun and totalMeterRun
+      // Otherwise, start from the daily RPM/meter values
+      const startingRPM = previousRemovedTool 
+        ? (previousRemovedTool.totalRPMRun || previousRemovedTool.fittedRPM || 0) + (dailyRPM || 0)
+        : (dailyRPM || currentCompressorRPM || 0);
+      const startingMeter = previousRemovedTool
+        ? (previousRemovedTool.totalMeterRun || previousRemovedTool.fittedMeter || 0) + (dailyMeter || 0)
+        : (dailyMeter || currentMeter || 0);
+
+      // Verify sufficient balance (handle null/undefined balance)
+      const currentBalance = item.balance ?? 0;
+      if (currentBalance < quantity) {
+        throw new Error(`Insufficient balance for item ${item.itemName}. Available: ${currentBalance}, Required: ${quantity}`);
+      }
+
+      // Create ItemService record
+      await ItemService.create({
+        itemId,
+        dailyEntryId,
+        vehicleId: null,
+        compressorId,
+        serviceType: 'drilling_tool',
+        fittedDate: date,
+        fittedRPM: startingRPM,
+        fittedMeter: startingMeter,
+        quantity,
+        status: 'fitted',
+        createdBy: username,
+      }, { transaction });
+
+      // Update item inventory (reduce balance, increment outward)
+      await item.update({
+        outward: (item.outward || 0) + quantity,
+        balance: (item.balance || 0) - quantity,
+        updatedBy: username,
+      }, { transaction });
     }
   };
 
@@ -289,33 +531,24 @@ class DailyEntryCustomController extends BaseController {
       );
     }
 
-    // Process service items for machine
-    if (req.body.machineServiceItems && req.body.machineServiceItems.length > 0) {
-      await this.processServiceItems(
-        req.body.machineServiceItems,
+    // Process machine spares
+    if (req.body.machineSpares && req.body.machineSpares.length > 0) {
+      await this.processMachineSpares(
+        req.body.machineSpares,
         entry.id,
         machineId,
-        null,
-        'machine',
-        vehicleClosingRPM || machine?.vehicleRPM || 0,
-        null,
         entry.date,
         req.user.username,
         transaction
       );
     }
 
-    // Process service items for compressor
-    if (req.body.compressorServiceItems && req.body.compressorServiceItems.length > 0 && compressorId) {
-      const compressor = await Compressor.findByPk(compressorId, { transaction });
-      await this.processServiceItems(
-        req.body.compressorServiceItems,
+    // Process compressor spares
+    if (req.body.compressorSpares && req.body.compressorSpares.length > 0 && compressorId) {
+      await this.processCompressorSpares(
+        req.body.compressorSpares,
         entry.id,
-        null,
         compressorId,
-        'compressor',
-        compressorClosingRPM || compressor?.compressorRPM || 0,
-        req.body.meter || 0,
         entry.date,
         req.user.username,
         transaction
@@ -324,65 +557,18 @@ class DailyEntryCustomController extends BaseController {
 
     // Process drilling tools
     if (req.body.drillingTools && req.body.drillingTools.length > 0 && compressorId) {
-      const compressor = await Compressor.findByPk(compressorId, { transaction });
-      const currentCompressorRPM = compressorClosingRPM || compressor?.compressorRPM || 0;
+      const currentCompressorRPM = (compressorClosingRPM || 0) - (compressorOpeningRPM || 0);
       const currentMeter = req.body.meter || 0;
-      
-      for (const tool of req.body.drillingTools) {
-        const { itemId, action, startingRPM, endingRPM, startingMeter, endingMeter, itemServiceId } = tool;
-        
-        if (action === 'fit') {
-          // Fit a new drilling tool
-          const item = await Item.findByPk(itemId, { transaction });
-          if (!item || item.balance < 1) {
-            throw new Error(`Insufficient balance for drilling tool ${item?.itemName || itemId}`);
-          }
-
-          // Create ItemService record for drilling tool
-          await ItemService.create({
-            itemId,
-            dailyEntryId: entry.id,
-            vehicleId: null,
-            compressorId,
-            serviceType: 'drilling_tool',
-            fittedDate: entry.date,
-            fittedRPM: startingRPM || currentCompressorRPM,
-            fittedMeter: startingMeter || currentMeter,
-            quantity: 1,
-            status: 'fitted',
-            createdBy: req.user.username,
-          }, { transaction });
-
-          // Update item inventory
-          await item.update({
-            outward: item.outward + 1,
-            balance: item.balance - 1,
-            updatedBy: req.user.username,
-          }, { transaction });
-        } else if (action === 'remove' && itemServiceId) {
-          // Remove an existing drilling tool
-          const itemService = await ItemService.findByPk(itemServiceId, { transaction });
-          if (!itemService || itemService.status !== 'fitted') continue;
-
-          const endingRPMValue = endingRPM || currentCompressorRPM;
-          const endingMeterValue = endingMeter || currentMeter;
-          const totalRPMRun = endingRPMValue - itemService.fittedRPM;
-          const totalMeterRun = endingMeterValue && itemService.fittedMeter 
-            ? endingMeterValue - itemService.fittedMeter 
-            : null;
-
-          // Update ItemService record
-          await itemService.update({
-            removedDate: entry.date,
-            removedRPM: endingRPMValue,
-            removedMeter: endingMeterValue,
-            totalRPMRun,
-            totalMeterRun,
-            status: 'removed',
-            updatedBy: req.user.username,
-          }, { transaction });
-        }
-      }
+      await this.processDrillingTools(
+        req.body.drillingTools,
+        entry.id,
+        compressorId,
+        currentCompressorRPM,
+        currentMeter,
+        entry.date,
+        req.user.username,
+        transaction
+      );
     }
 
     await transaction.commit();
