@@ -254,13 +254,14 @@ const DailyEntry = () => {
           : prev.compressorOpeningRPM,
       }));
     } else {
+      // Shift 2 machine selection - UI allows changes but save will use Shift 1's machine
       setSelectedShift2Machine(machine);
       // Only auto-fill if Shift 1 closing RPM hasn't been set yet
       const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
       setShift2Data(prev => ({
         ...prev,
-        vehicleId: machineId,
-        vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM, // Auto-fill from machine or keep Shift 1 closing
+        vehicleId: machineId, // UI can change, but save will override with Shift 1's vehicleId
+        vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
         compressorId: machine?.compressorId || null,
       }));
       
@@ -529,6 +530,13 @@ const DailyEntry = () => {
     
     try {
       const dateStr = selectedDate.format("YYYY-MM-DD");
+      
+      // Shift 2 always uses Shift 1's siteId and vehicleId
+      // Only RPM, meter, holes, and employees differ between shifts
+      const shift2SiteId = shift1Data.siteId;
+      const shift2VehicleId = shift1Data.vehicleId;
+      const shift2CompressorId = shift1Data.compressorId; // Compressor also same as Shift 1
+      
       const warnings = [];
       
       // Collect validation warnings (non-blocking)
@@ -546,20 +554,25 @@ const DailyEntry = () => {
       }
       
       // Validate Shift 2 (always enabled)
+      // Shift 2 uses same site and machine as Shift 1, so only validate operator
       const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
       if (shift2Operators.length === 0) {
         warnings.push("Shift 2: No operator selected");
       }
-      if (!shift2Data.siteId) {
-        warnings.push("Shift 2: Site not selected");
+      // Validate that Shift 1 has site and machine (since Shift 2 uses the same)
+      if (!shift1Data.siteId) {
+        warnings.push("Shift 2: Site not selected (uses Shift 1's site)");
       }
-      if (!shift2Data.vehicleId) {
-        warnings.push("Shift 2: Machine not selected");
+      if (!shift1Data.vehicleId) {
+        warnings.push("Shift 2: Machine not selected (uses Shift 1's machine)");
       }
       
-      // Display warnings if any
+      // Display warnings if any and prevent submission
       if (warnings.length > 0) {
         setValidationWarnings(warnings);
+        setSubmitting(false);
+        message.error("Please fix the validation errors before submitting");
+        return;
       }
       
       // Generate ref numbers sequentially upfront to ensure unique sequential numbers
@@ -605,64 +618,78 @@ const DailyEntry = () => {
 
       // Save Shift 1
       if (shift1Enabled) {
-        const payload1 = cleanPayload({
-          refNo: refNo1,
-          date: dateStr,
-          shift: 1,
-          siteId: shift1Data.siteId,
-          vehicleId: shift1Data.vehicleId,
-          compressorId: shift1Data.compressorId,
-          vehicleOpeningRPM: shift1Data.vehicleOpeningRPM ?? 0,
-          vehicleClosingRPM: shift1Data.vehicleClosingRPM ?? 0,
-          compressorOpeningRPM: shift1Data.compressorOpeningRPM ?? 0,
-          compressorClosingRPM: shift1Data.compressorClosingRPM ?? 0,
-          dieselUsed: shift1Data.dieselUsed ?? 0,
-          vehicleHSD: shift1Data.vehicleHSD ?? 0,
-          compressorHSD: shift1Data.compressorHSD ?? 0,
-          noOfHoles: shift1Data.noOfHoles ?? 0,
-          meter: shift1Data.meter ?? 0,
-          employees: shift1Data.employees
-            .filter(e => e.employeeId)
-            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
-          notes: "",
-          // New spares structure
-          machineSpares: shift1Data.machineSpares || [],
-          compressorSpares: shift1Data.compressorSpares || [],
-          drillingTools: prepareDrillingToolsPayload(shift1Data.drillingTools || []),
-        });
-        
-        await createDailyEntry.mutateAsync(payload1);
+        try {
+          const payload1 = cleanPayload({
+            refNo: refNo1,
+            date: dateStr,
+            shift: 1,
+            siteId: shift1Data.siteId,
+            vehicleId: shift1Data.vehicleId,
+            compressorId: shift1Data.compressorId,
+            vehicleOpeningRPM: shift1Data.vehicleOpeningRPM ?? 0,
+            vehicleClosingRPM: shift1Data.vehicleClosingRPM ?? 0,
+            compressorOpeningRPM: shift1Data.compressorOpeningRPM ?? 0,
+            compressorClosingRPM: shift1Data.compressorClosingRPM ?? 0,
+            dieselUsed: shift1Data.dieselUsed ?? 0,
+            vehicleHSD: shift1Data.vehicleHSD ?? 0,
+            compressorHSD: shift1Data.compressorHSD ?? 0,
+            noOfHoles: shift1Data.noOfHoles ?? 0,
+            meter: shift1Data.meter ?? 0,
+            employees: shift1Data.employees
+              .filter(e => e.employeeId)
+              .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
+            notes: "",
+            // New spares structure
+            machineSpares: shift1Data.machineSpares || [],
+            compressorSpares: shift1Data.compressorSpares || [],
+            drillingTools: prepareDrillingToolsPayload(shift1Data.drillingTools || []),
+          });
+          
+          await createDailyEntry.mutateAsync(payload1);
+        } catch (error) {
+          message.error(`Failed to save Shift 1: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
+          setSubmitting(false);
+          return;
+        }
       }
 
       // Save Shift 2 (always enabled)
+      // Shift 2 uses same siteId, vehicleId, and compressorId as Shift 1
+      // Only RPM, meter, holes, and employees differ between shifts
       // Note: Drilling tools are only sent in Shift 1 payload since daily RPM/meter is calculated from both shifts
-      const payload2 = cleanPayload({
-        refNo: refNo2,
-        date: dateStr,
-        shift: 2,
-        siteId: shift2Data.siteId,
-        vehicleId: shift2Data.vehicleId,
-        compressorId: shift2Data.compressorId,
-        vehicleOpeningRPM: shift2Data.vehicleOpeningRPM ?? 0,
-        vehicleClosingRPM: shift2Data.vehicleClosingRPM ?? 0,
-        compressorOpeningRPM: shift2Data.compressorOpeningRPM ?? 0,
-        compressorClosingRPM: shift2Data.compressorClosingRPM ?? 0,
-        dieselUsed: shift2Data.dieselUsed ?? 0,
-        vehicleHSD: shift2Data.vehicleHSD ?? 0,
-        compressorHSD: shift2Data.compressorHSD ?? 0,
-        noOfHoles: shift2Data.noOfHoles ?? 0,
-        meter: shift2Data.meter ?? 0,
-        employees: shift2Data.employees
-          .filter(e => e.employeeId)
-          .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
-        notes: "",
-        // New spares structure
-        machineSpares: shift2Data.machineSpares || [],
-        compressorSpares: shift2Data.compressorSpares || [],
-        // Drilling tools not sent in Shift 2 - handled in Shift 1 with combined RPM/meter
-      });
-      
-      await createDailyEntry.mutateAsync(payload2);
+      try {
+        const payload2 = cleanPayload({
+          refNo: refNo2,
+          date: dateStr,
+          shift: 2,
+          siteId: shift2SiteId, // Always use Shift 1's siteId
+          vehicleId: shift2VehicleId, // Always use Shift 1's vehicleId
+          compressorId: shift2CompressorId, // Always use Shift 1's compressorId
+          vehicleOpeningRPM: shift2Data.vehicleOpeningRPM ?? 0,
+          vehicleClosingRPM: shift2Data.vehicleClosingRPM ?? 0,
+          compressorOpeningRPM: shift2Data.compressorOpeningRPM ?? 0,
+          compressorClosingRPM: shift2Data.compressorClosingRPM ?? 0,
+          dieselUsed: shift2Data.dieselUsed ?? 0,
+          vehicleHSD: shift2Data.vehicleHSD ?? 0,
+          compressorHSD: shift2Data.compressorHSD ?? 0,
+          noOfHoles: shift2Data.noOfHoles ?? 0,
+          meter: shift2Data.meter ?? 0,
+          employees: shift2Data.employees
+            .filter(e => e.employeeId)
+            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
+          notes: "",
+          // New spares structure
+          machineSpares: shift2Data.machineSpares || [],
+          compressorSpares: shift2Data.compressorSpares || [],
+          // Drilling tools not sent in Shift 2 - handled in Shift 1 with combined RPM/meter
+        });
+        
+        await createDailyEntry.mutateAsync(payload2);
+      } catch (error) {
+        message.error(`Failed to save Shift 2: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
+        setSubmitting(false);
+        return;
+      }
 
       // Clear warnings on success (mutations handle success messages)
       setValidationWarnings([]);

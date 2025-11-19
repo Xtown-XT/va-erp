@@ -75,10 +75,8 @@ const ProductionDetail = () => {
 
   const fetchSites = async () => {
     try {
-      const response = await api.get('/api/site');
-      if (response.data.success) {
-        setSites(response.data.data || []);
-      }
+      const res = await api.get('/api/sites?limit=1000');
+      setSites(res.data.data || []);
     } catch (error) {
       console.error('Error fetching sites:', error);
     }
@@ -86,10 +84,8 @@ const ProductionDetail = () => {
 
   const fetchMachines = async () => {
     try {
-      const response = await api.get('/api/vehicle');
-      if (response.data.success) {
-        setMachines(response.data.data || []);
-      }
+      const res = await api.get('/api/vehicles?limit=1000');
+      setMachines(res.data.data || []);
     } catch (error) {
       console.error('Error fetching machines:', error);
     }
@@ -97,10 +93,8 @@ const ProductionDetail = () => {
 
   const fetchCompressors = async () => {
     try {
-      const response = await api.get('/api/compressor');
-      if (response.data.success) {
-        setCompressors(response.data.data || []);
-      }
+      const res = await api.get('/api/compressors?limit=1000');
+      setCompressors(res.data.data || []);
     } catch (error) {
       console.error('Error fetching compressors:', error);
     }

@@ -429,15 +429,15 @@ class DailyEntryCustomController extends BaseController {
         dailyEntryId: null, // Will be set after entry creation
         employeeId: emp.employeeId,
         role: emp.role || 'operator',
-        shift: emp.shift || 1
+        shift: emp.shift || shift // Use entry's shift if not specified
       }));
       
-      // Find first shift 1 operator for backward compatibility
-      const shift1Operator = employees.find(e => e.shift === 1 && e.role === 'operator');
-      primaryEmployeeId = shift1Operator ? shift1Operator.employeeId : employees[0]?.employeeId;
+      // Find first operator for the entry's shift (for backward compatibility)
+      const entryShiftOperator = employees.find(e => (e.shift || shift) === shift && e.role === 'operator');
+      primaryEmployeeId = entryShiftOperator ? entryShiftOperator.employeeId : employees[0]?.employeeId;
     } else if (employeeId) {
       // Legacy support: convert old format to new format
-      processedEmployees = [{ dailyEntryId: null, employeeId, role: 'operator', shift: 1 }];
+      processedEmployees = [{ dailyEntryId: null, employeeId, role: 'operator', shift: shift }];
       primaryEmployeeId = employeeId;
       
       // Add additional employees with shift 2
@@ -452,13 +452,14 @@ class DailyEntryCustomController extends BaseController {
         });
       }
     } else {
-      return res.status(400).json({ success: false, message: "At least one employee (Shift 1 Operator) is required" });
+      return res.status(400).json({ success: false, message: `At least one employee (Shift ${shift} Operator) is required` });
     }
 
-    // Validate: At least one shift 1 operator is required
-    const hasShift1Operator = processedEmployees.some(e => e.shift === 1 && e.role === 'operator');
-    if (!hasShift1Operator) {
-      return res.status(400).json({ success: false, message: "At least one Shift 1 Operator is required" });
+    // Validate: At least one operator for the entry's shift is required
+    const entryShift = parseInt(shift);
+    const hasEntryShiftOperator = processedEmployees.some(e => e.shift === entryShift && e.role === 'operator');
+    if (!hasEntryShiftOperator) {
+      return res.status(400).json({ success: false, message: `At least one Shift ${entryShift} Operator is required` });
     }
 
     // Create entry first
