@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Button,
   Input,
@@ -142,56 +142,99 @@ const DailyEntry = () => {
 
   // Fetch existing fitted drilling tools when compressor is selected
   const { data: existingDrillingTools = [] } = useFittedDrillingTools(selectedShift1Compressor?.id || null);
+  
+  // Create a stable reference for tool IDs to prevent infinite loops
+  const existingToolIdsKey = useMemo(() => {
+    return existingDrillingTools.map(t => t.itemServiceId || t.id).sort().join(',');
+  }, [existingDrillingTools]);
+  
+  // Ref to track processed compressor and tools to prevent infinite loops
+  const processedCompressorRef = useRef(null);
+  const processedToolIdsRef = useRef(new Set());
 
   // Update pagination when entries data changes
   useEffect(() => {
-    setPagination(prev => ({
-      ...prev,
-      current: entriesData.page || prev.current,
-      total: entriesData.total || 0,
-      pageSize: entriesData.limit || prev.pageSize,
-    }));
-  }, [entriesData]);
+    setPagination(prev => {
+      const newPage = entriesData.page || prev.current;
+      const newTotal = entriesData.total || 0;
+      const newPageSize = entriesData.limit || prev.pageSize;
+      
+      // Only update if values actually changed to prevent infinite loops
+      if (newPage === prev.current && newTotal === prev.total && newPageSize === prev.pageSize) {
+        return prev;
+      }
+      
+      return {
+        ...prev,
+        current: newPage,
+        total: newTotal,
+        pageSize: newPageSize,
+      };
+    });
+  }, [entriesData.page, entriesData.total, entriesData.limit]);
 
   // Auto-populate existing drilling tools when compressor is selected
   useEffect(() => {
+    const compressorId = selectedShift1Compressor?.id;
+    
+    // Reset tracking if compressor changed
+    if (compressorId !== processedCompressorRef.current) {
+      processedCompressorRef.current = compressorId;
+      processedToolIdsRef.current = new Set();
+    }
+    
     if (existingDrillingTools.length > 0 && selectedShift1Compressor) {
-      setShift1Data(prev => {
-        // Check which existing tools are not yet in the state
-        const existingToolIds = new Set(prev.drillingTools.filter(t => t.isExisting).map(t => t.itemServiceId));
-        const newTools = existingDrillingTools
-          .filter(tool => !existingToolIds.has(tool.itemServiceId || tool.id))
-          .map(tool => ({
-            id: tool.itemServiceId || tool.id,
-            itemServiceId: tool.itemServiceId || tool.id,
-            itemId: tool.itemId,
-            itemName: tool.itemName,
-            partNumber: tool.partNumber,
-            quantity: tool.quantity || 1,
-            currentRPM: tool.currentRPM || 0,
-            currentMeter: tool.currentMeter || 0,
-            startingRPM: tool.currentRPM || 0,
-            addedDate: tool.fittedDate || selectedDate.format("YYYY-MM-DD"),
-            isExisting: true,
-            action: 'update', // Default action for existing tools
-          }));
-        
-        if (newTools.length > 0) {
-          return {
-            ...prev,
-            drillingTools: [...prev.drillingTools, ...newTools]
-          };
-        }
-        return prev;
-      });
+      // Create a stable key from processed tool IDs to detect changes
+      const processedToolIdsKey = Array.from(processedToolIdsRef.current).sort().join(',');
+      
+      // Only process if tools have actually changed
+      if (existingToolIdsKey !== processedToolIdsKey && existingToolIdsKey) {
+        setShift1Data(prev => {
+          // Check which existing tools are not yet in the state
+          const existingToolIds = new Set(prev.drillingTools.filter(t => t.isExisting).map(t => t.itemServiceId));
+          const newTools = existingDrillingTools
+            .filter(tool => {
+              const toolId = tool.itemServiceId || tool.id;
+              return !existingToolIds.has(toolId) && !processedToolIdsRef.current.has(toolId);
+            })
+            .map(tool => {
+              const toolId = tool.itemServiceId || tool.id;
+              processedToolIdsRef.current.add(toolId);
+              return {
+                id: toolId,
+                itemServiceId: toolId,
+                itemId: tool.itemId,
+                itemName: tool.itemName,
+                partNumber: tool.partNumber,
+                quantity: tool.quantity || 1,
+                currentRPM: tool.currentRPM || 0,
+                currentMeter: tool.currentMeter || 0,
+                startingRPM: tool.currentRPM || 0,
+                addedDate: tool.fittedDate || selectedDate.format("YYYY-MM-DD"),
+                isExisting: true,
+                action: 'update', // Default action for existing tools
+              };
+            });
+          
+          if (newTools.length > 0) {
+            return {
+              ...prev,
+              drillingTools: [...prev.drillingTools, ...newTools]
+            };
+          }
+          return prev;
+        });
+      }
     } else if (!selectedShift1Compressor) {
       // Clear existing drilling tools if compressor is deselected
+      processedCompressorRef.current = null;
+      processedToolIdsRef.current = new Set();
       setShift1Data(prev => ({
         ...prev,
         drillingTools: prev.drillingTools.filter(t => !t.isExisting)
       }));
     }
-  }, [existingDrillingTools, selectedShift1Compressor?.id]);
+  }, [existingToolIdsKey, selectedShift1Compressor?.id, selectedDate]);
 
   // Auto-generate reference number helper
   const generateRefNoHelper = async () => {
