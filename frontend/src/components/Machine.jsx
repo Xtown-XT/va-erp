@@ -495,7 +495,7 @@ const Machine = () => {
                 <Select placeholder="Select compressor" allowClear showSearch optionFilterProp="children">
                   {compressors.map((compressor) => (
                     <Select.Option key={compressor.id} value={compressor.id}>
-                      {compressor.compressorName}
+                      {compressor.compressorName} ({compressor.serialNumber})
                     </Select.Option>
                   ))}
                 </Select>
