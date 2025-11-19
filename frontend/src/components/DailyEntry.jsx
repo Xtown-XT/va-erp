@@ -41,7 +41,7 @@ import {
   useDailyEntries,
   useFittedDrillingTools
 } from "../hooks/useQueries";
-import { useCreateDailyEntry, useDeleteDailyEntry } from "../hooks/useMutations";
+import { useCreateDailyEntry, useUpdateDailyEntry, useDeleteDailyEntry } from "../hooks/useMutations";
 import { useItemsByType } from "../hooks/useQueries";
 
 const { Title, Text } = Typography;
@@ -53,6 +53,8 @@ const DailyEntry = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [editingShift1Id, setEditingShift1Id] = useState(null);
+  const [editingShift2Id, setEditingShift2Id] = useState(null);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -73,6 +75,7 @@ const DailyEntry = () => {
   
   // Mutations
   const createDailyEntry = useCreateDailyEntry();
+  const updateDailyEntry = useUpdateDailyEntry();
   const deleteDailyEntry = useDeleteDailyEntry();
   
   const entries = entriesData.data || [];
@@ -137,6 +140,7 @@ const DailyEntry = () => {
   const [showCompressorSparesSelector, setShowCompressorSparesSelector] = useState(false);
   const [showDrillingToolsSelector, setShowDrillingToolsSelector] = useState(false);
   const [serviceNameInput, setServiceNameInput] = useState("");
+  const [serviceNameDraft, setServiceNameDraft] = useState("");
   const [showServiceNameModal, setShowServiceNameModal] = useState(false);
   const [pendingSpareType, setPendingSpareType] = useState(null); // 'machine' or 'compressor'
 
@@ -377,14 +381,24 @@ const DailyEntry = () => {
     }
   };
 
+  const openServiceNameModal = (spareType = null) => {
+    setPendingSpareType(spareType);
+    setServiceNameDraft(serviceNameInput);
+    setShowServiceNameModal(true);
+  };
+
   // Handle Add Machine Spares button click - prompt for service name first
   const handleAddMachineSparesClick = () => {
     if (!selectedShift1Machine?.vehicleNumber) {
       message.warning("Please select a machine first");
       return;
     }
+    if (!serviceNameInput.trim()) {
+      openServiceNameModal('machine');
+      return;
+    }
     setPendingSpareType('machine');
-    setShowServiceNameModal(true);
+    setShowMachineSparesSelector(true);
   };
 
   // Handle Add Compressor Spares button click - prompt for service name first
@@ -393,8 +407,12 @@ const DailyEntry = () => {
       message.warning("Please select a compressor first");
       return;
     }
+    if (!serviceNameInput.trim()) {
+      openServiceNameModal('compressor');
+      return;
+    }
     setPendingSpareType('compressor');
-    setShowServiceNameModal(true);
+    setShowCompressorSparesSelector(true);
   };
 
   // Handle Add Drilling Tools button click - no service name needed
@@ -408,17 +426,30 @@ const DailyEntry = () => {
 
   // Confirm service name and show item selector
   const handleServiceNameConfirm = () => {
-    if (!serviceNameInput.trim()) {
+    if (!serviceNameDraft.trim()) {
       message.warning("Please enter a service name");
       return;
     }
+    const normalizedName = serviceNameDraft.trim();
+    setServiceNameInput(normalizedName);
+    setServiceNameDraft(normalizedName);
     setShowServiceNameModal(false);
-    if (pendingSpareType === 'machine') {
+
+    // Ensure all existing spares share the latest service name
+    setShift1Data(prev => ({
+      ...prev,
+      machineSpares: prev.machineSpares.map(spare => ({ ...spare, serviceName: normalizedName })),
+      compressorSpares: prev.compressorSpares.map(spare => ({ ...spare, serviceName: normalizedName })),
+    }));
+
+    const nextAction = pendingSpareType;
+    setPendingSpareType(null);
+
+    if (nextAction === 'machine') {
       setShowMachineSparesSelector(true);
-    } else if (pendingSpareType === 'compressor') {
+    } else if (nextAction === 'compressor') {
       setShowCompressorSparesSelector(true);
     }
-    // Don't clear serviceNameInput - keep it for adding multiple items
   };
 
   // Add machine spare item
@@ -584,10 +615,6 @@ const DailyEntry = () => {
       
       // Collect validation warnings (non-blocking)
       if (shift1Enabled) {
-        const shift1Operators = shift1Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-        if (shift1Operators.length === 0) {
-          warnings.push("Shift 1: No operator selected");
-        }
         if (!shift1Data.siteId) {
           warnings.push("Shift 1: Site not selected");
         }
@@ -596,13 +623,7 @@ const DailyEntry = () => {
         }
       }
       
-      // Validate Shift 2 (always enabled)
-      // Shift 2 uses same site and machine as Shift 1, so only validate operator
-      const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
-      if (shift2Operators.length === 0) {
-        warnings.push("Shift 2: No operator selected");
-      }
-      // Validate that Shift 1 has site and machine (since Shift 2 uses the same)
+      // Validate that Shift 1 has site and machine (since Shift 2 shares them)
       if (!shift1Data.siteId) {
         warnings.push("Shift 2: Site not selected (uses Shift 1's site)");
       }
@@ -618,13 +639,46 @@ const DailyEntry = () => {
         return;
       }
       
-      // Generate ref numbers sequentially upfront to ensure unique sequential numbers
+      // Check if we're in edit mode
+      const isEditMode = editingShift1Id || editingShift2Id;
+      
+      // Get existing refNos if editing, otherwise generate new ones
       let refNo1 = null;
       let refNo2 = null;
-      if (shift1Enabled) {
-        refNo1 = await generateRefNoHelper();
+      
+      if (isEditMode) {
+        // Fetch existing entries to get their refNos
+        if (editingShift1Id) {
+          try {
+            const res = await api.get(`/api/dailyEntries/${editingShift1Id}`);
+            refNo1 = res.data.data?.refNo;
+          } catch (err) {
+            console.error("Error fetching Shift 1 entry:", err);
+          }
+        }
+        if (editingShift2Id) {
+          try {
+            const res = await api.get(`/api/dailyEntries/${editingShift2Id}`);
+            refNo2 = res.data.data?.refNo;
+          } catch (err) {
+            console.error("Error fetching Shift 2 entry:", err);
+          }
+        }
+        
+        // Generate new refNos for shifts that don't exist yet
+        if (!refNo1 && shift1Enabled) {
+          refNo1 = await generateRefNoHelper();
+        }
+        if (!refNo2) {
+          refNo2 = await generateRefNoHelper();
+        }
+      } else {
+        // Create mode - generate new refNos
+        if (shift1Enabled) {
+          refNo1 = await generateRefNoHelper();
+        }
+        refNo2 = await generateRefNoHelper(); // Always generate for Shift 2
       }
-      refNo2 = await generateRefNoHelper(); // Always generate for Shift 2
 
       // Helper function to clean null values from payload (convert to undefined)
       const cleanPayload = (payload) => {
@@ -688,7 +742,12 @@ const DailyEntry = () => {
             drillingTools: prepareDrillingToolsPayload(shift1Data.drillingTools || []),
           });
           
-          await createDailyEntry.mutateAsync(payload1);
+          // Use update if editing, create if new
+          if (editingShift1Id) {
+            await updateDailyEntry.mutateAsync({ id: editingShift1Id, ...payload1 });
+          } else {
+            await createDailyEntry.mutateAsync(payload1);
+          }
         } catch (error) {
           message.error(`Failed to save Shift 1: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
           setSubmitting(false);
@@ -727,7 +786,12 @@ const DailyEntry = () => {
           // Drilling tools not sent in Shift 2 - handled in Shift 1 with combined RPM/meter
         });
         
-        await createDailyEntry.mutateAsync(payload2);
+        // Use update if editing, create if new
+        if (editingShift2Id) {
+          await updateDailyEntry.mutateAsync({ id: editingShift2Id, ...payload2 });
+        } else {
+          await createDailyEntry.mutateAsync(payload2);
+        }
       } catch (error) {
         message.error(`Failed to save Shift 2: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
         setSubmitting(false);
@@ -745,6 +809,10 @@ const DailyEntry = () => {
         drillingTools: prev.drillingTools.filter(t => t.action !== 'remove')
       }));
       
+      // Clear edit mode state
+      setEditingShift1Id(null);
+      setEditingShift2Id(null);
+      
       handleCancel();
       
     } catch (err) {
@@ -757,6 +825,10 @@ const DailyEntry = () => {
   const handleCancel = () => {
     setShowForm(false);
     setEditingId(null);
+    setEditingShift1Id(null);
+    setEditingShift2Id(null);
+    setServiceNameInput("");
+    setServiceNameDraft("");
     setValidationWarnings([]); // Clear warnings on cancel
     setShift1Enabled(true);
     setShift2Enabled(false);
@@ -800,6 +872,183 @@ const DailyEntry = () => {
     setSelectedShift2Machine(null);
     setSelectedShift1Compressor(null);
     setSelectedShift2Compressor(null);
+  };
+
+  // Handle edit - load both Shift 1 and Shift 2 entries
+  const handleEdit = async (record) => {
+    try {
+      // Loading is handled by the query hook, no need to set it here
+      
+      // Fetch the clicked entry details
+      const res = await api.get(`/api/dailyEntries/${record.id}`);
+      const clickedEntry = res.data.data;
+      
+      if (!clickedEntry) {
+        message.error("Entry not found");
+        return;
+      }
+      
+      const clickedShift = clickedEntry.shift || 1;
+      const otherShift = clickedShift === 1 ? 2 : 1;
+      
+      // Find the corresponding shift entry from the entries list
+      // Match by date, siteId, and vehicleId
+      const matchingEntry = entries.find(e => 
+        e.id !== clickedEntry.id &&
+        e.date === clickedEntry.date &&
+        e.siteId === clickedEntry.siteId &&
+        e.vehicleId === clickedEntry.vehicleId &&
+        e.shift === otherShift
+      );
+      
+      // Fetch the other shift entry if found
+      let otherShiftEntry = null;
+      if (matchingEntry) {
+        try {
+          const otherRes = await api.get(`/api/dailyEntries/${matchingEntry.id}`);
+          otherShiftEntry = otherRes.data.data;
+        } catch (err) {
+          console.warn("Could not fetch other shift entry:", err);
+        }
+      }
+      
+      // Determine which entry is Shift 1 and which is Shift 2
+      const shift1Entry = clickedShift === 1 ? clickedEntry : otherShiftEntry;
+      const shift2Entry = clickedShift === 2 ? clickedEntry : otherShiftEntry;
+      
+      // Set editing IDs
+      setEditingShift1Id(shift1Entry?.id || null);
+      setEditingShift2Id(shift2Entry?.id || null);
+      
+      // Set date
+      setSelectedDate(clickedEntry.date ? dayjs(clickedEntry.date) : dayjs());
+      
+      // Set machine and compressor for Shift 1
+      if (shift1Entry) {
+        const machine = machines.find(m => m.id === shift1Entry.vehicleId);
+        const compressor = compressors.find(c => c.id === shift1Entry.compressorId);
+        
+        setSelectedShift1Machine(machine);
+        setSelectedShift1Compressor(compressor);
+        
+        // Prepare employees for Shift 1
+        const shift1Employees = (shift1Entry.employees || [])
+          .filter(emp => (emp.shift || emp.DailyEntryEmployee?.shift || 1) === 1)
+          .map((emp, index) => ({
+            id: Date.now() + index,
+            employeeId: emp.id,
+            role: emp.role || emp.DailyEntryEmployee?.role || 'operator',
+          }));
+        
+        // If no employees, add empty slots
+        if (shift1Employees.length === 0) {
+          shift1Employees.push(
+            { id: Date.now(), role: 'operator', employeeId: null },
+            { id: Date.now() + 1, role: 'helper', employeeId: null }
+          );
+        }
+        
+        // Populate Shift 1 data
+        setShift1Data({
+          siteId: shift1Entry.siteId,
+          vehicleId: shift1Entry.vehicleId,
+          compressorId: shift1Entry.compressorId || null,
+          vehicleOpeningRPM: shift1Entry.vehicleOpeningRPM ?? null,
+          vehicleClosingRPM: shift1Entry.vehicleClosingRPM ?? null,
+          compressorOpeningRPM: shift1Entry.compressorOpeningRPM ?? null,
+          compressorClosingRPM: shift1Entry.compressorClosingRPM ?? null,
+          vehicleHSD: shift1Entry.vehicleHSD ?? null,
+          compressorHSD: shift1Entry.compressorHSD ?? null,
+          dieselUsed: shift1Entry.dieselUsed ?? null,
+          noOfHoles: shift1Entry.noOfHoles ?? null,
+          meter: shift1Entry.meter ?? null,
+          employees: shift1Employees,
+          machineSpares: [], // TODO: Fetch spares if needed
+          compressorSpares: [], // TODO: Fetch spares if needed
+          drillingTools: [], // TODO: Fetch drilling tools if needed
+        });
+        
+        setShift1Enabled(true);
+      } else {
+        setShift1Enabled(false);
+      }
+      
+      // Set machine and compressor for Shift 2 (same as Shift 1)
+      if (shift2Entry) {
+        setSelectedShift2Machine(machines.find(m => m.id === shift2Entry.vehicleId));
+        setSelectedShift2Compressor(compressors.find(c => c.id === shift2Entry.compressorId));
+        
+        // Prepare employees for Shift 2
+        const shift2Employees = (shift2Entry.employees || [])
+          .filter(emp => (emp.shift || emp.DailyEntryEmployee?.shift || 2) === 2)
+          .map((emp, index) => ({
+            id: Date.now() + 1000 + index,
+            employeeId: emp.id,
+            role: emp.role || emp.DailyEntryEmployee?.role || 'operator',
+          }));
+        
+        // If no employees, add empty slots
+        if (shift2Employees.length === 0) {
+          shift2Employees.push(
+            { id: Date.now() + 1000, role: 'operator', employeeId: null },
+            { id: Date.now() + 1001, role: 'helper', employeeId: null }
+          );
+        }
+        
+        // Populate Shift 2 data
+        setShift2Data({
+          siteId: shift2Entry.siteId || shift1Entry?.siteId || null,
+          vehicleId: shift2Entry.vehicleId || shift1Entry?.vehicleId || null,
+          compressorId: shift2Entry.compressorId || shift1Entry?.compressorId || null,
+          vehicleOpeningRPM: shift2Entry.vehicleOpeningRPM ?? null,
+          vehicleClosingRPM: shift2Entry.vehicleClosingRPM ?? null,
+          compressorOpeningRPM: shift2Entry.compressorOpeningRPM ?? null,
+          compressorClosingRPM: shift2Entry.compressorClosingRPM ?? null,
+          vehicleHSD: shift2Entry.vehicleHSD ?? null,
+          compressorHSD: shift2Entry.compressorHSD ?? null,
+          dieselUsed: shift2Entry.dieselUsed ?? null,
+          noOfHoles: shift2Entry.noOfHoles ?? null,
+          meter: shift2Entry.meter ?? null,
+          employees: shift2Employees,
+          machineSpares: [],
+          compressorSpares: [],
+          drillingTools: [],
+        });
+        
+        setShift2Enabled(true);
+      } else {
+        // If Shift 2 doesn't exist, initialize with empty data but same site/machine as Shift 1
+        setShift2Data({
+          siteId: shift1Entry?.siteId || null,
+          vehicleId: shift1Entry?.vehicleId || null,
+          compressorId: shift1Entry?.compressorId || null,
+          vehicleOpeningRPM: null,
+          vehicleClosingRPM: null,
+          compressorOpeningRPM: null,
+          compressorClosingRPM: null,
+          vehicleHSD: null,
+          compressorHSD: null,
+          dieselUsed: null,
+          noOfHoles: null,
+          meter: null,
+          employees: [
+            { id: Date.now() + 1000, role: 'operator', employeeId: null },
+            { id: Date.now() + 1001, role: 'helper', employeeId: null }
+          ],
+          machineSpares: [],
+          compressorSpares: [],
+          drillingTools: [],
+        });
+        setShift2Enabled(true);
+      }
+      
+      // Show the form
+      setShowForm(true);
+      message.success("Entry loaded for editing");
+    } catch (error) {
+      console.error("Error loading entry for edit:", error);
+      message.error("Failed to load entry for editing");
+    }
   };
 
   // Handle delete
@@ -1324,50 +1573,57 @@ const DailyEntry = () => {
     };
 
     return (
-      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-        <Col span={18}>
-          <Select
-            size="small"
-            placeholder="Select item"
-            value={selectedItemId}
-            onChange={setSelectedItemId}
-            showSearch
-            style={{ width: '100%', fontSize: '11px' }}
-            loading={isLoading}
-            allowClear
-          >
-            {items.map(item => (
-              <Select.Option 
-                key={item.id} 
-                value={item.id}
-                disabled={(item.balance ?? 0) <= 0}
-              >
-                {item.itemName} ({item.balance})
-              </Select.Option>
-            ))}
-          </Select>
-        </Col>
-        <Col span={6}>
-          <Space>
-            <Button
+      <div style={{ marginBottom: '4px' }}>
+        {serviceName && (
+          <Text style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>
+            Service: {serviceName}
+          </Text>
+        )}
+        <Row gutter={[4, 4]}>
+          <Col span={18}>
+            <Select
               size="small"
-              type="primary"
-              onClick={handleAdd}
+              placeholder="Select item"
+              value={selectedItemId}
+              onChange={setSelectedItemId}
+              showSearch
+              style={{ width: '100%', fontSize: '11px' }}
+              loading={isLoading}
+              allowClear
+            >
+              {items.map(item => (
+                <Select.Option 
+                  key={item.id} 
+                  value={item.id}
+                  disabled={(item.balance ?? 0) <= 0}
+                >
+                  {item.itemName} ({item.balance})
+                </Select.Option>
+              ))}
+            </Select>
+          </Col>
+          <Col span={6}>
+            <Space>
+              <Button
+                size="small"
+                type="primary"
+                onClick={handleAdd}
                 disabled={!selectedItem || (selectedItem.balance ?? 0) <= 0}
-              style={{ fontSize: '11px' }}
-            >
-              Add
-            </Button>
-            <Button
-              size="small"
-              onClick={onClose}
-              style={{ fontSize: '11px' }}
-            >
-              Cancel
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+                style={{ fontSize: '11px' }}
+              >
+                Add
+              </Button>
+              <Button
+                size="small"
+                onClick={onClose}
+                style={{ fontSize: '11px' }}
+              >
+                Cancel
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </div>
     );
   };
 
@@ -1392,50 +1648,57 @@ const DailyEntry = () => {
     };
 
     return (
-      <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-        <Col span={18}>
-          <Select
-            size="small"
-            placeholder="Select item"
-            value={selectedItemId}
-            onChange={setSelectedItemId}
-            showSearch
-            style={{ width: '100%', fontSize: '11px' }}
-            loading={isLoading}
-            allowClear
-          >
-            {items.map(item => (
-              <Select.Option 
-                key={item.id} 
-                value={item.id}
-                disabled={(item.balance ?? 0) <= 0}
-              >
-                {item.itemName} ({item.balance})
-              </Select.Option>
-            ))}
-          </Select>
-        </Col>
-        <Col span={6}>
-          <Space>
-            <Button
+      <div style={{ marginBottom: '4px' }}>
+        {serviceName && (
+          <Text style={{ fontSize: '11px', display: 'block', marginBottom: '2px' }}>
+            Service: {serviceName}
+          </Text>
+        )}
+        <Row gutter={[4, 4]}>
+          <Col span={18}>
+            <Select
               size="small"
-              type="primary"
-              onClick={handleAdd}
+              placeholder="Select item"
+              value={selectedItemId}
+              onChange={setSelectedItemId}
+              showSearch
+              style={{ width: '100%', fontSize: '11px' }}
+              loading={isLoading}
+              allowClear
+            >
+              {items.map(item => (
+                <Select.Option 
+                  key={item.id} 
+                  value={item.id}
+                  disabled={(item.balance ?? 0) <= 0}
+                >
+                  {item.itemName} ({item.balance})
+                </Select.Option>
+              ))}
+            </Select>
+          </Col>
+          <Col span={6}>
+            <Space>
+              <Button
+                size="small"
+                type="primary"
+                onClick={handleAdd}
                 disabled={!selectedItem || (selectedItem.balance ?? 0) <= 0}
-              style={{ fontSize: '11px' }}
-            >
-              Add
-            </Button>
-            <Button
-              size="small"
-              onClick={onClose}
-              style={{ fontSize: '11px' }}
-            >
-              Cancel
-            </Button>
-          </Space>
-        </Col>
-      </Row>
+                style={{ fontSize: '11px' }}
+              >
+                Add
+              </Button>
+              <Button
+                size="small"
+                onClick={onClose}
+                style={{ fontSize: '11px' }}
+              >
+                Cancel
+              </Button>
+            </Space>
+          </Col>
+        </Row>
+      </div>
     );
   };
 
@@ -1544,6 +1807,12 @@ const DailyEntry = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
+          {canEdit() && (
+            <Button 
+              icon={<EditOutlined />} 
+              onClick={() => handleEdit(record)}
+            />
+          )}
           {canDelete() && (
             <Popconfirm
               title="Are you sure you want to delete this entry?"
@@ -2039,6 +2308,25 @@ const DailyEntry = () => {
 
             {/* Spares Management Section */}
             <div style={{ marginBottom: '4px' }}>
+              <Row align="middle" justify="space-between" style={{ marginBottom: '6px' }}>
+                <Col>
+                  <Text strong>Service Name: </Text>
+                  <Text type={serviceNameInput ? undefined : 'secondary'}>
+                    {serviceNameInput || 'Not set'}
+                  </Text>
+                </Col>
+                <Col>
+                  <Button
+                    size="small"
+                    type="link"
+                    onClick={() => openServiceNameModal(null)}
+                    style={{ padding: 0 }}
+                  >
+                    {serviceNameInput ? "Change Service Name" : "Set Service Name"}
+                  </Button>
+                </Col>
+              </Row>
+
               <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
                 <Col span={8}>
                   <Button
@@ -2286,16 +2574,16 @@ const DailyEntry = () => {
         onOk={handleServiceNameConfirm}
         onCancel={() => {
           setShowServiceNameModal(false);
-          setServiceNameInput("");
           setPendingSpareType(null);
+          setServiceNameDraft(serviceNameInput);
         }}
         okText="Continue"
         cancelText="Cancel"
       >
         <Input
           placeholder="Enter service name (e.g., Regular Service, Major Service)"
-          value={serviceNameInput}
-          onChange={(e) => setServiceNameInput(e.target.value)}
+          value={serviceNameDraft}
+          onChange={(e) => setServiceNameDraft(e.target.value)}
           onPressEnter={handleServiceNameConfirm}
         />
       </Modal>

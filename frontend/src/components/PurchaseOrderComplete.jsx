@@ -34,7 +34,6 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 const PurchaseOrderComplete = () => {
-  const [form] = Form.useForm();
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [addresses, setAddresses] = useState([]);
@@ -164,7 +163,6 @@ const PurchaseOrderComplete = () => {
       setShowCreateForm(false);
       setEditingId(null);
       setPoItems([]);
-      form.resetFields();
       createForm.resetFields();
       fetchData();
     } catch (err) {
@@ -846,7 +844,7 @@ const PurchaseOrderComplete = () => {
       </div>
 
       {/* Filters */}
-      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
+      <Card className="mb-2" styles={{ body: { padding: '8px' } }}>
         <Row gutter={8} align="middle">
           <Col xs={24} sm={6} md={4}>
             <DatePicker.RangePicker
@@ -908,7 +906,11 @@ const PurchaseOrderComplete = () => {
 
       {/* Create PO Form */}
       {showCreateForm && (
-        <Card className="mb-2" title="Create New Purchase Order" bodyStyle={{ padding: '12px' }}>
+        <Card
+          className="mb-2"
+          title="Create New Purchase Order"
+          styles={{ body: { padding: '12px' } }}
+        >
           <Form layout="vertical" form={createForm} onFinish={handleSubmit}>
             <Row gutter={16}>
               <Col xs={24} sm={8}>
@@ -957,19 +959,19 @@ const PurchaseOrderComplete = () => {
                   <Select
                     placeholder="Select billing address"
                     showSearch
-                    optionFilterProp="children"
-                    filterOption={(input, option) =>
-                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                    }
-                    dropdownStyle={{ minWidth: 400 }}
+                    optionFilterProp="label"
+                    styles={{ popup: { minWidth: 400 } }}
                   >
-                    {addresses.map((address) => (
-                      <Select.Option key={address.id} value={address.id}>
-                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '350px' }}>
-                          <strong>Billing:</strong> {address.addressBill} | <strong>Phone:</strong> {address.phone} | <strong>Email:</strong> {address.email}
-                        </div>
-                      </Select.Option>
-                    ))}
+                    {addresses.map((address) => {
+                      const billingLabel = `Billing: ${address.addressBill || ''} | Phone: ${address.phone || ''} | Email: ${address.email || ''}`;
+                      return (
+                        <Select.Option key={address.id} value={address.id} label={billingLabel}>
+                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '350px' }}>
+                            <strong>Billing:</strong> {address.addressBill} | <strong>Phone:</strong> {address.phone} | <strong>Email:</strong> {address.email}
+                          </div>
+                        </Select.Option>
+                      );
+                    })}
                   </Select>
                 </Form.Item>
               </Col>
@@ -982,19 +984,19 @@ const PurchaseOrderComplete = () => {
                   <Select
                     placeholder="Select shipping address"
                     showSearch
-                    optionFilterProp="children"
-                    filterOption={(input, option) =>
-                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                    }
-                    dropdownStyle={{ minWidth: 400 }}
+                    optionFilterProp="label"
+                    styles={{ popup: { minWidth: 400 } }}
                   >
-                    {addresses.map((address) => (
-                      <Select.Option key={address.id} value={address.id}>
-                        <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '350px' }}>
-                          <strong>Shipping:</strong> {address.addressShip} | <strong>Phone:</strong> {address.phone} | <strong>Email:</strong> {address.email}
-                        </div>
-                      </Select.Option>
-                    ))}
+                    {addresses.map((address) => {
+                      const shippingLabel = `Shipping: ${address.addressShip || ''} | Phone: ${address.phone || ''} | Email: ${address.email || ''}`;
+                      return (
+                        <Select.Option key={address.id} value={address.id} label={shippingLabel}>
+                          <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '350px' }}>
+                            <strong>Shipping:</strong> {address.addressShip} | <strong>Phone:</strong> {address.phone} | <strong>Email:</strong> {address.email}
+                          </div>
+                        </Select.Option>
+                      );
+                    })}
                   </Select>
                 </Form.Item>
               </Col>

@@ -452,14 +452,8 @@ class DailyEntryCustomController extends BaseController {
         });
       }
     } else {
-      return res.status(400).json({ success: false, message: `At least one employee (Shift ${shift} Operator) is required` });
-    }
-
-    // Validate: At least one operator for the entry's shift is required
-    const entryShift = parseInt(shift);
-    const hasEntryShiftOperator = processedEmployees.some(e => e.shift === entryShift && e.role === 'operator');
-    if (!hasEntryShiftOperator) {
-      return res.status(400).json({ success: false, message: `At least one Shift ${entryShift} Operator is required` });
+      processedEmployees = [];
+      primaryEmployeeId = null;
     }
 
     // Create entry first
