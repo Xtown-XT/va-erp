@@ -177,6 +177,59 @@ const DailyEntry = () => {
     });
   }, [entriesData.page, entriesData.total, entriesData.limit]);
 
+  // Fetch compressor fresh when machine changes (safety net for any direct machine changes)
+  useEffect(() => {
+    const fetchCompressorForMachine = async () => {
+      if (selectedShift1Machine?.compressorId) {
+        try {
+          const res = await api.get(`/api/compressors/${selectedShift1Machine.compressorId}`);
+          const compressor = res.data.data;
+          
+          if (compressor && compressor.id !== selectedShift1Compressor?.id) {
+            // Only update if compressor actually changed to prevent loops
+            setSelectedShift1Compressor(compressor);
+            setSelectedShift2Compressor(compressor);
+            
+            // Update RPM if it's null/undefined (don't overwrite user-entered values)
+            setShift1Data(prev => {
+              if (prev.compressorOpeningRPM === null || prev.compressorOpeningRPM === undefined) {
+                return {
+                  ...prev,
+                  compressorOpeningRPM: compressor?.compressorRPM || null,
+                };
+              }
+              return prev;
+            });
+            
+            setShift2Data(prev => {
+              if (prev.compressorOpeningRPM === null || prev.compressorOpeningRPM === undefined) {
+                return {
+                  ...prev,
+                  compressorOpeningRPM: compressor?.compressorRPM || null,
+                };
+              }
+              return prev;
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching compressor in useEffect:", error);
+          // Silently fail - handleMachineChange will handle it
+        }
+      } else if (selectedShift1Machine && !selectedShift1Machine.compressorId) {
+        // Machine has no compressor - clear compressor state
+        if (selectedShift1Compressor) {
+          setSelectedShift1Compressor(null);
+          setSelectedShift2Compressor(null);
+        }
+      }
+    };
+    
+    // Only fetch if machine is set and we're not in the middle of handleMachineChange
+    if (selectedShift1Machine) {
+      fetchCompressorForMachine();
+    }
+  }, [selectedShift1Machine?.id, selectedShift1Machine?.compressorId]); // Only depend on machine ID and compressorId
+
   // Auto-populate existing drilling tools when compressor is selected
   useEffect(() => {
     const compressorId = selectedShift1Compressor?.id;
@@ -252,73 +305,139 @@ const DailyEntry = () => {
   };
 
   // Handle machine selection for shifts - auto-fill opening RPM from machine/compressor
-  const handleMachineChange = (machineId, shift) => {
+  const handleMachineChange = async (machineId, shift) => {
     const machine = machines.find(m => m.id === machineId);
     
     if (shift === 1) {
+      // Clear compressor state first to prevent stale data
+      setSelectedShift1Compressor(null);
+      setSelectedShift2Compressor(null);
+      
       setSelectedShift1Machine(machine);
       setShift1Data(prev => ({
         ...prev,
         vehicleId: machineId,
         vehicleOpeningRPM: machine?.vehicleRPM || null, // Auto-fill from machine current RPM
         compressorId: machine?.compressorId || null,
+        compressorOpeningRPM: null, // Clear first, will be set after fetch
       }));
       
+      // Sync machine to Shift 2
+      setSelectedShift2Machine(machine);
+      
+      // Fetch compressor fresh from API if machine has compressorId
       if (machine?.compressorId) {
-        const compressor = compressors.find(c => c.id === machine.compressorId);
-        setSelectedShift1Compressor(compressor);
-        setShift1Data(prev => ({
-          ...prev,
-          compressorOpeningRPM: compressor?.compressorRPM || null, // Auto-fill from compressor current RPM
-        }));
+        try {
+          const res = await api.get(`/api/compressors/${machine.compressorId}`);
+          const compressor = res.data.data;
+          
+          if (compressor) {
+            // Update Shift 1 compressor
+            setSelectedShift1Compressor(compressor);
+            setShift1Data(prev => ({
+              ...prev,
+              compressorOpeningRPM: compressor?.compressorRPM || null, // Auto-fill from fresh compressor RPM
+            }));
+            
+            // Update Shift 2 compressor
+            setSelectedShift2Compressor(compressor);
+            
+            // Sync Shift 2 data - use Shift 1's closing RPM if set, otherwise use machine's current RPM
+            const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
+            setShift2Data(prev => ({
+              ...prev,
+              vehicleId: machineId,
+              compressorId: machine.compressorId,
+              siteId: shift1Data.siteId || prev.siteId, // Sync site from Shift 1
+              vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
+              compressorOpeningRPM: shouldAutoFill ? (compressor?.compressorRPM || null) : prev.compressorOpeningRPM,
+            }));
+          }
+        } catch (error) {
+          console.error("Error fetching compressor:", error);
+          message.warning("Could not fetch compressor details. Using cached data.");
+          // Fallback to cached data if API call fails
+          const compressor = compressors.find(c => c.id === machine.compressorId);
+          if (compressor) {
+            setSelectedShift1Compressor(compressor);
+            setSelectedShift2Compressor(compressor);
+            setShift1Data(prev => ({
+              ...prev,
+              compressorOpeningRPM: compressor?.compressorRPM || null,
+            }));
+            const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
+            setShift2Data(prev => ({
+              ...prev,
+              vehicleId: machineId,
+              compressorId: machine.compressorId,
+              siteId: shift1Data.siteId || prev.siteId,
+              vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
+              compressorOpeningRPM: shouldAutoFill ? (compressor?.compressorRPM || null) : prev.compressorOpeningRPM,
+            }));
+          }
+        }
       } else {
+        // No compressor - clear all compressor fields
         setSelectedShift1Compressor(null);
+        setSelectedShift2Compressor(null);
         setShift1Data(prev => ({
           ...prev,
           compressorOpeningRPM: null,
         }));
+        
+        // Sync Shift 2 data without compressor
+        const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
+        setShift2Data(prev => ({
+          ...prev,
+          vehicleId: machineId,
+          compressorId: null,
+          siteId: shift1Data.siteId || prev.siteId,
+          vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
+          compressorOpeningRPM: null,
+        }));
       }
-      
-      // Sync machine, compressor, and site from Shift 1 to Shift 2
-      setSelectedShift2Machine(machine);
-      if (machine?.compressorId) {
-        const compressor = compressors.find(c => c.id === machine.compressorId);
-        setSelectedShift2Compressor(compressor);
-      } else {
-        setSelectedShift2Compressor(null);
-      }
-      
-      // Sync Shift 2 data - use Shift 1's closing RPM if set, otherwise use machine's current RPM
-      const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
-      setShift2Data(prev => ({
-        ...prev,
-        vehicleId: machineId,
-        compressorId: machine?.compressorId || null,
-        siteId: shift1Data.siteId || prev.siteId, // Sync site from Shift 1
-        vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
-        compressorOpeningRPM: shouldAutoFill 
-          ? (machine?.compressorId ? compressors.find(c => c.id === machine.compressorId)?.compressorRPM || null : null)
-          : prev.compressorOpeningRPM,
-      }));
     } else {
       // Shift 2 machine selection - UI allows changes but save will use Shift 1's machine
       setSelectedShift2Machine(machine);
       // Only auto-fill if Shift 1 closing RPM hasn't been set yet
       const shouldAutoFill = shift1Data.vehicleClosingRPM === null;
+      
+      // Clear compressor first
+      setSelectedShift2Compressor(null);
+      
       setShift2Data(prev => ({
         ...prev,
         vehicleId: machineId, // UI can change, but save will override with Shift 1's vehicleId
         vehicleOpeningRPM: shouldAutoFill ? (machine?.vehicleRPM || null) : prev.vehicleOpeningRPM,
         compressorId: machine?.compressorId || null,
+        compressorOpeningRPM: null, // Clear first, will be set after fetch
       }));
       
       if (machine?.compressorId) {
-        const compressor = compressors.find(c => c.id === machine.compressorId);
-        setSelectedShift2Compressor(compressor);
-        setShift2Data(prev => ({
-          ...prev,
-          compressorOpeningRPM: shouldAutoFill ? (compressor?.compressorRPM || null) : prev.compressorOpeningRPM, // Auto-fill from compressor or keep Shift 1 closing
-        }));
+        try {
+          // Fetch compressor fresh from API
+          const res = await api.get(`/api/compressors/${machine.compressorId}`);
+          const compressor = res.data.data;
+          
+          if (compressor) {
+            setSelectedShift2Compressor(compressor);
+            setShift2Data(prev => ({
+              ...prev,
+              compressorOpeningRPM: shouldAutoFill ? (compressor?.compressorRPM || null) : prev.compressorOpeningRPM,
+            }));
+          }
+        } catch (error) {
+          console.error("Error fetching compressor:", error);
+          // Fallback to cached data
+          const compressor = compressors.find(c => c.id === machine.compressorId);
+          if (compressor) {
+            setSelectedShift2Compressor(compressor);
+            setShift2Data(prev => ({
+              ...prev,
+              compressorOpeningRPM: shouldAutoFill ? (compressor?.compressorRPM || null) : prev.compressorOpeningRPM,
+            }));
+          }
+        }
       } else {
         setSelectedShift2Compressor(null);
         setShift2Data(prev => ({
@@ -926,10 +1045,24 @@ const DailyEntry = () => {
       // Set machine and compressor for Shift 1
       if (shift1Entry) {
         const machine = machines.find(m => m.id === shift1Entry.vehicleId);
-        const compressor = compressors.find(c => c.id === shift1Entry.compressorId);
         
         setSelectedShift1Machine(machine);
-        setSelectedShift1Compressor(compressor);
+        
+        // Fetch compressor fresh from API if it exists
+        if (shift1Entry.compressorId) {
+          try {
+            const compressorRes = await api.get(`/api/compressors/${shift1Entry.compressorId}`);
+            const compressor = compressorRes.data.data;
+            setSelectedShift1Compressor(compressor);
+          } catch (error) {
+            console.error("Error fetching compressor for edit:", error);
+            // Fallback to cached data
+            const compressor = compressors.find(c => c.id === shift1Entry.compressorId);
+            setSelectedShift1Compressor(compressor);
+          }
+        } else {
+          setSelectedShift1Compressor(null);
+        }
         
         // Prepare employees for Shift 1
         const shift1Employees = (shift1Entry.employees || [])
@@ -976,7 +1109,23 @@ const DailyEntry = () => {
       // Set machine and compressor for Shift 2 (same as Shift 1)
       if (shift2Entry) {
         setSelectedShift2Machine(machines.find(m => m.id === shift2Entry.vehicleId));
-        setSelectedShift2Compressor(compressors.find(c => c.id === shift2Entry.compressorId));
+        
+        // Fetch compressor fresh from API if it exists
+        const compressorId = shift2Entry.compressorId || shift1Entry?.compressorId;
+        if (compressorId) {
+          try {
+            const compressorRes = await api.get(`/api/compressors/${compressorId}`);
+            const compressor = compressorRes.data.data;
+            setSelectedShift2Compressor(compressor);
+          } catch (error) {
+            console.error("Error fetching compressor for edit:", error);
+            // Fallback to cached data
+            const compressor = compressors.find(c => c.id === compressorId);
+            setSelectedShift2Compressor(compressor);
+          }
+        } else {
+          setSelectedShift2Compressor(null);
+        }
         
         // Prepare employees for Shift 2
         const shift2Employees = (shift2Entry.employees || [])
