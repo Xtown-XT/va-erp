@@ -87,13 +87,15 @@ const EmployeeList = () => {
       const payload = {
         empId: values.empId,
         name: values.name,
-        designation: values.designation,
-        phone: values.phone,
+        designation: values.designation || null,
+        phone: values.phone || null,
         joiningDate: values.joiningDate
           ? values.joiningDate.format("YYYY-MM-DD")
           : null,
         status: values.status,
-        advancedAmount: values.advancedAmount ? Number(values.advancedAmount) : 0,
+        advancedAmount: (values.advancedAmount !== undefined && values.advancedAmount !== null && values.advancedAmount !== '')
+          ? Number(values.advancedAmount)
+          : null,
       };
 
       if (editingId) {
@@ -425,17 +427,32 @@ const EmployeeList = () => {
               <Form.Item
                 name="advancedAmount"
                 label="Advanced Amount (₹)"
-                rules={[{ type: 'number', min: 0 }]}
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      if (value === undefined || value === null || value === '') {
+                        return Promise.resolve();
+                      }
+                      const numValue = Number(value);
+                      if (isNaN(numValue)) {
+                        return Promise.reject(new Error("Please enter a valid number"));
+                      }
+                      if (numValue < 0) {
+                        return Promise.reject(new Error("Advanced amount cannot be negative"));
+                      }
+                      return Promise.resolve();
+                    }
+                  }
+                ]}
               >
                 <InputNumber
                   className="w-full"
                   min={0}
                   step={0.01}
                   precision={2}
-                  formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value.replace(/₹\s?|(,*)/g, '')}
-                  placeholder="Enter advanced amount"
-
+                  formatter={value => value ? `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                  parser={value => value ? value.replace(/₹\s?|(,*)/g, '') : ''}
+                  placeholder="Enter advanced amount (optional)"
                 />
               </Form.Item>
             </div>

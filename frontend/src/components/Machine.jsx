@@ -132,12 +132,26 @@ const Machine = () => {
         payload.nextServiceRPM = Number(values.nextServiceRPM);
       }
 
-      if (values.compressorId) {
-        payload.compressorId = values.compressorId;
+      // Always include compressorId - send null if cleared (for updates)
+      if (editingId) {
+        // For updates, explicitly set to null if cleared, or to the value if selected
+        payload.compressorId = values.compressorId || null;
+      } else {
+        // For creates, only include if a value is selected
+        if (values.compressorId) {
+          payload.compressorId = values.compressorId;
+        }
       }
 
-      if (values.siteId) {
-        payload.siteId = values.siteId;
+      // Always include siteId - send null if cleared (for updates)
+      if (editingId) {
+        // For updates, explicitly set to null if cleared, or to the value if selected
+        payload.siteId = values.siteId || null;
+      } else {
+        // For creates, only include if a value is selected
+        if (values.siteId) {
+          payload.siteId = values.siteId;
+        }
       }
 
       if (editingId) {

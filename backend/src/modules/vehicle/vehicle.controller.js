@@ -1,8 +1,7 @@
 import Machine from "./vehicle.model.js";
-import Item from "../item/item.model.js";
+import ItemService from "../itemService/itemService.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
-import { Sequelize } from "sequelize";
 
 // 1. Create CRUD service from model
 const MachineCrud = new BaseCrud(Machine);
@@ -17,27 +16,39 @@ class MachineController extends BaseController {
   softDelete = async (req, res, next) => {
     try {
       const { id } = req.params;
+      const username = req.user?.username || 'system';
       
-      // Unfit all items fitted to this machine
-      await Item.update(
+      // Mark all fitted items for this machine as removed in ItemService
+      await ItemService.update(
         { 
-          status: 'in_stock',
-          fittedToVehicleId: null,
-          fittedDate: null,
+          status: 'removed',
           removedDate: new Date().toISOString().split('T')[0],
-          updatedBy: req.user?.username || 'system'
+          updatedBy: username
         },
         { 
           where: { 
-            fittedToVehicleId: id,
-            status: 'fitted',
-            canBeFitted: true
+            vehicleId: id,
+            status: 'fitted'
           } 
         }
       );
 
-      // Continue with normal soft delete
-      return super.softDelete(req, res, next);
+      // Continue with normal soft delete - call service directly
+      const userData = {
+        deletedBy: username,
+      };
+      
+      const item = await this.service.softDelete(id, userData);
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: `${this.entityName} not found`,
+        });
+      }
+      return res.json({
+        success: true,
+        message: `${this.entityName} soft deleted successfully`,
+      });
     } catch (error) {
       next(error);
     }
@@ -47,27 +58,35 @@ class MachineController extends BaseController {
   hardDelete = async (req, res, next) => {
     try {
       const { id } = req.params;
+      const username = req.user?.username || 'system';
       
-      // Unfit all items fitted to this machine
-      await Item.update(
+      // Mark all fitted items for this machine as removed in ItemService
+      await ItemService.update(
         { 
-          status: 'in_stock',
-          fittedToVehicleId: null,
-          fittedDate: null,
+          status: 'removed',
           removedDate: new Date().toISOString().split('T')[0],
-          updatedBy: req.user?.username || 'system'
+          updatedBy: username
         },
         { 
           where: { 
-            fittedToVehicleId: id,
-            status: 'fitted',
-            canBeFitted: true
+            vehicleId: id,
+            status: 'fitted'
           } 
         }
       );
 
-      // Continue with normal hard delete
-      return super.hardDelete(req, res, next);
+      // Continue with normal hard delete - call service directly
+      const item = await this.service.hardDelete(id);
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: `${this.entityName} not found`,
+        });
+      }
+      return res.json({
+        success: true,
+        message: `${this.entityName} permanently deleted`,
+      });
     } catch (error) {
       next(error);
     }
@@ -79,30 +98,45 @@ class MachineController extends BaseController {
       const { page = 1, limit = 10 } = req.query;
       const { limit: l, offset, page: safePage } = BaseCrud.paginate(page, limit);
 
-      // Extract numeric part from vehicleNumber (e.g., "VA-1" -> 1, "VA-10" -> 10)
-      // For MySQL: Get part after hyphen and cast to integer, fallback to 999999 if no number found
-      const numericSort = Sequelize.literal(`
-        CAST(
-          CASE 
-            WHEN SUBSTRING_INDEX(vehicleNumber, '-', -1) REGEXP '^[0-9]+$'
-            THEN CAST(SUBSTRING_INDEX(vehicleNumber, '-', -1) AS UNSIGNED)
-            ELSE 999999
-          END AS UNSIGNED
-        )
-      `);
+      // Fetch all records (no limit/offset for sorting)
+      const { rows: allRows, count } = await Machine.findAndCountAll();
 
-      const { rows, count } = await Machine.findAndCountAll({
-        limit: l,
-        offset,
-        order: [
-          [numericSort, 'ASC'],
-          ['vehicleNumber', 'ASC']
-        ],
+      // Helper function to extract numeric part from vehicleNumber (e.g., "VA-1" -> 1, "VA-10" -> 10)
+      const extractNumber = (vehicleNumber) => {
+        if (!vehicleNumber) return 999999;
+        const vehicleNumStr = String(vehicleNumber);
+        // Extract number after hyphen (e.g., "VA-1" -> "1", "VA-10" -> "10")
+        const match = vehicleNumStr.match(/-(\d+)$/);
+        if (match) {
+          return parseInt(match[1], 10);
+        }
+        // Fallback: extract all digits
+        const digits = vehicleNumStr.replace(/\D/g, '');
+        return digits ? parseInt(digits, 10) : 999999;
+      };
+
+      // Sort by numeric part, then by vehicleNumber as fallback
+      // Convert to array and sort
+      const rowsArray = Array.from(allRows);
+      const sortedRows = rowsArray.sort((a, b) => {
+        const numA = extractNumber(a.vehicleNumber);
+        const numB = extractNumber(b.vehicleNumber);
+        
+        if (numA !== numB) {
+          return numA - numB;
+        }
+        // If numbers are equal, sort alphabetically by vehicleNumber
+        const vehicleNumA = String(a.vehicleNumber || '');
+        const vehicleNumB = String(b.vehicleNumber || '');
+        return vehicleNumA.localeCompare(vehicleNumB);
       });
+
+      // Apply pagination to sorted array
+      const paginatedRows = sortedRows.slice(offset, offset + l);
 
       return res.json({
         success: true,
-        data: rows,
+        data: paginatedRows,
         total: count,
         page: safePage,
         limit: l,

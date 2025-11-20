@@ -5,10 +5,16 @@ export const createMachineSchema = z.object({
   vehicleNumber: z.string().min(1).max(255).transform(val => val.toUpperCase()), // DB column name kept
   status: z.enum(["active", "inactive"]).optional(),
   brandId: z.string().uuid("Invalid brand ID format"),
-  vehicleRPM: z.number().min(0, "Starting RPM must be non-negative").optional(), // DB column name kept
-  nextServiceRPM: z.number().min(0, "Next service RPM must be non-negative").optional(),
-  compressorId: z.string().uuid("Invalid compressor ID format").optional(),
-  siteId: z.string().uuid("Invalid site ID format").optional(),
+  vehicleRPM: z.number().min(0, "Starting RPM must be non-negative").nullable().optional(),
+  nextServiceRPM: z.number().min(0, "Next service RPM must be non-negative").nullable().optional(),
+  compressorId: z.union([
+    z.string().uuid("Invalid compressor ID format"),
+    z.null()
+  ]).optional(),
+  siteId: z.union([
+    z.string().uuid("Invalid site ID format"),
+    z.null()
+  ]).optional(),
 });
 
 export const updateMachineSchema = createMachineSchema.partial();

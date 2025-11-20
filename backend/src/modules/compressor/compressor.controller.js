@@ -1,7 +1,6 @@
 import Compressor from "./compressor.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
-import { Sequelize } from "sequelize";
 
 // 1. Create CRUD service from model
 const CompressorCrud = new BaseCrud(Compressor);
@@ -18,30 +17,45 @@ class CompressorCustomController extends BaseController {
       const { page = 1, limit = 10 } = req.query;
       const { limit: l, offset, page: safePage } = BaseCrud.paginate(page, limit);
 
-      // Extract numeric part from serialNumber (e.g., "VA-19" -> 19, "VA-40" -> 40)
-      // For MySQL: Get part after hyphen and cast to integer, fallback to 999999 if no number found
-      const numericSort = Sequelize.literal(`
-        CAST(
-          CASE 
-            WHEN SUBSTRING_INDEX(serialNumber, '-', -1) REGEXP '^[0-9]+$'
-            THEN CAST(SUBSTRING_INDEX(serialNumber, '-', -1) AS UNSIGNED)
-            ELSE 999999
-          END AS UNSIGNED
-        )
-      `);
+      // Fetch all records (no limit/offset for sorting)
+      const { rows: allRows, count } = await Compressor.findAndCountAll();
 
-      const { rows, count } = await Compressor.findAndCountAll({
-        limit: l,
-        offset,
-        order: [
-          [numericSort, 'ASC'],
-          ['serialNumber', 'ASC']
-        ],
+      // Helper function to extract numeric part from serialNumber (e.g., "VA-19" -> 19, "VA-40" -> 40)
+      const extractNumber = (serialNumber) => {
+        if (!serialNumber) return 999999;
+        const serialNumStr = String(serialNumber);
+        // Extract number after hyphen (e.g., "VA-19" -> "19", "VA-40" -> "40")
+        const match = serialNumStr.match(/-(\d+)$/);
+        if (match) {
+          return parseInt(match[1], 10);
+        }
+        // Fallback: extract all digits
+        const digits = serialNumStr.replace(/\D/g, '');
+        return digits ? parseInt(digits, 10) : 999999;
+      };
+
+      // Sort by numeric part, then by serialNumber as fallback
+      // Convert to array and sort
+      const rowsArray = Array.from(allRows);
+      const sortedRows = rowsArray.sort((a, b) => {
+        const numA = extractNumber(a.serialNumber);
+        const numB = extractNumber(b.serialNumber);
+        
+        if (numA !== numB) {
+          return numA - numB;
+        }
+        // If numbers are equal, sort alphabetically by serialNumber
+        const serialNumA = String(a.serialNumber || '');
+        const serialNumB = String(b.serialNumber || '');
+        return serialNumA.localeCompare(serialNumB);
       });
+
+      // Apply pagination to sorted array
+      const paginatedRows = sortedRows.slice(offset, offset + l);
 
       return res.json({
         success: true,
-        data: rows,
+        data: paginatedRows,
         total: count,
         page: safePage,
         limit: l,
