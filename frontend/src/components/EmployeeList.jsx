@@ -378,11 +378,20 @@ const EmployeeList = () => {
                 name="phone"
                 label="Phone"
                 rules={[
-                  { required: true, message: "Phone number is required" },
-                  { pattern: /^\d{10,11}$/, message: "Phone number must be exactly 10 digits" }
+                  {
+                    validator: (_, value) => {
+                      if (!value) {
+                        return Promise.resolve();
+                      }
+                      if (!/^\d{10}$/.test(value)) {
+                        return Promise.reject(new Error("Phone number must be exactly 10 digits"));
+                      }
+                      return Promise.resolve();
+                    }
+                  }
                 ]}
               >
-                <Input placeholder="Enter 10-digit phone number"
+                <Input placeholder="Enter 10-digit phone number (optional)"
 
                   maxLength={11} 
                   onKeyPress={(e) => {

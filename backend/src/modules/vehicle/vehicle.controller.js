@@ -2,6 +2,7 @@ import Machine from "./vehicle.model.js";
 import Item from "../item/item.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
+import { Sequelize } from "sequelize";
 
 // 1. Create CRUD service from model
 const MachineCrud = new BaseCrud(Machine);
@@ -67,6 +68,46 @@ class MachineController extends BaseController {
 
       // Continue with normal hard delete
       return super.hardDelete(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Override getAll to sort by vehicleNumber using natural numeric sort
+  getAll = async (req, res, next) => {
+    try {
+      const { page = 1, limit = 10 } = req.query;
+      const { limit: l, offset, page: safePage } = BaseCrud.paginate(page, limit);
+
+      // Extract numeric part from vehicleNumber (e.g., "VA-1" -> 1, "VA-10" -> 10)
+      // For MySQL: Get part after hyphen and cast to integer, fallback to 999999 if no number found
+      const numericSort = Sequelize.literal(`
+        CAST(
+          CASE 
+            WHEN SUBSTRING_INDEX(vehicleNumber, '-', -1) REGEXP '^[0-9]+$'
+            THEN CAST(SUBSTRING_INDEX(vehicleNumber, '-', -1) AS UNSIGNED)
+            ELSE 999999
+          END AS UNSIGNED
+        )
+      `);
+
+      const { rows, count } = await Machine.findAndCountAll({
+        limit: l,
+        offset,
+        order: [
+          [numericSort, 'ASC'],
+          ['vehicleNumber', 'ASC']
+        ],
+      });
+
+      return res.json({
+        success: true,
+        data: rows,
+        total: count,
+        page: safePage,
+        limit: l,
+        totalPages: Math.ceil(count / l),
+      });
     } catch (error) {
       next(error);
     }
