@@ -259,7 +259,7 @@ const ProductionReport = () => {
       const compressorHSD = parseFloat(entry.compressorHSD) || 0;
 
 
-      const machineTypeSrc = (entry.vehicle?.vehicleType) || (machines.find(m => m.id === entry.vehicleId)?.vehicleType) || '';
+      const machineTypeSrc = (entry.machine?.vehicleType) || (entry.vehicle?.vehicleType) || (machines.find(m => m.id === entry.vehicleId)?.vehicleType) || '';
       const machineType = machineTypeSrc.toString().trim().toLowerCase();
       const isCrawler = machineType === 'crawler' || machineType.includes('crawler');
       const isCamper = machineType === 'camper' || machineType.includes('camper') || machineType.includes('truck');
@@ -437,7 +437,7 @@ const ProductionReport = () => {
       title: "Crawler HSD/Crawler RPM",
       dataIndex: "crawlerHsdPerRpm",
       key: "crawlerHsdPerRpm",
-      render: (value) => value > 0 ? truncateToFixed(value, 2) : '-',
+      render: (value, record) => record.isCrawler && value > 0 ? truncateToFixed(value, 2) : '-',
     },
     {
       title: "Comp HSD/Comp RPM",
