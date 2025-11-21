@@ -315,9 +315,9 @@ const ProductionReport = () => {
         holes,
         depthAvg,
         // Display-only values
-        crawlerHSDDisplay: isCrawler ? crawlerHSD : '',
-        camperHSDDisplay: isCamper ? camperHSD : '',
-        crawlerRPMDisplay: isCrawler ? crawlerRPM : '',
+        crawlerHSDDisplay: isCrawler ? crawlerHSD : '-',
+        camperHSDDisplay: isCamper ? camperHSD : '-',
+        crawlerRPMDisplay: isCrawler ? crawlerRPM : '-',
         // Preserve services array if it exists
         services: entry.services || [],
       };
@@ -389,7 +389,7 @@ const ProductionReport = () => {
       title: "Crawler HSD",
       dataIndex: "crawlerHSDDisplay",
       key: "crawlerHSD",
-      render: (value, record) => record.isCrawler ? Math.round(value || 0) : '',
+      render: (value, record) => record.isCrawler ? Math.round(value || 0) : '-',
     },
     {
       title: "Comp HSD",
@@ -401,7 +401,7 @@ const ProductionReport = () => {
       title: "Camper HSD",
       dataIndex: "camperHSDDisplay",
       key: "camperHSD",
-      render: (value, record) => record.isCamper ? Math.round(value || 0) : '',
+      render: (value, record) => record.isCamper ? Math.round(value || 0) : '-',
     },
     {
       title: "Total HSD",
@@ -413,7 +413,7 @@ const ProductionReport = () => {
       title: "Crawler RPM",
       dataIndex: "crawlerRPMDisplay",
       key: "crawlerRPM",
-      render: (value, record) => record.isCrawler ? Number(value || 0).toFixed(2) : '',
+      render: (value, record) => record.isCrawler ? Number(value || 0).toFixed(2) : '-',
     },
     {
       title: "Comp RPM",

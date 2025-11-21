@@ -51,6 +51,7 @@ const DailyEntry = () => {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dateRange, setDateRange] = useState([null, null]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingShift1Id, setEditingShift1Id] = useState(null);
@@ -64,10 +65,18 @@ const DailyEntry = () => {
   });
   
   // React Query hooks - use pagination state directly
-  const { data: entriesData = { data: [], total: 0, page: 1, limit: 10 }, isLoading: loading, refetch: refetchEntries } = useDailyEntries({ 
+  const queryParams = {
     page: pagination.current, 
-    limit: pagination.pageSize 
-  });
+    limit: pagination.pageSize
+  };
+  
+  // Add date range to query params if both dates are selected
+  if (dateRange[0] && dateRange[1]) {
+    queryParams.startDate = dateRange[0].format('YYYY-MM-DD');
+    queryParams.endDate = dateRange[1].format('YYYY-MM-DD');
+  }
+  
+  const { data: entriesData = { data: [], total: 0, page: 1, limit: 10 }, isLoading: loading, refetch: refetchEntries } = useDailyEntries(queryParams);
   const { data: sites = [] } = useSites();
   const { data: machines = [] } = useVehicles();
   const { data: compressors = [] } = useCompressors();
@@ -128,12 +137,20 @@ const DailyEntry = () => {
   
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [shift1Enabled, setShift1Enabled] = useState(true);
-  const [shift2Enabled, setShift2Enabled] = useState(true); // Always enabled
+  const [shift2Enabled, setShift2Enabled] = useState(false); // Toggle to enable/disable Shift 2
   const [selectedShift1Machine, setSelectedShift1Machine] = useState(null);
   const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
   const [selectedShift2Compressor, setSelectedShift2Compressor] = useState(null);
   const [validationWarnings, setValidationWarnings] = useState([]);
+
+  // Filter machines based on selected site
+  const filteredMachines = useMemo(() => {
+    if (!shift1Data.siteId) {
+      return []; // Show no machines if no site is selected
+    }
+    return machines.filter(machine => machine.siteId === shift1Data.siteId);
+  }, [machines, shift1Data.siteId]);
   
   // Inline item selection state
   const [showMachineSparesSelector, setShowMachineSparesSelector] = useState(false);
@@ -448,7 +465,31 @@ const DailyEntry = () => {
     }
   };
   
-  // Auto-fill Shift 2 opening when Shift 1 closing changes (removed - now handled directly in onChange)
+  // Auto-fill Shift 2 opening RPM when Shift 2 is enabled or Shift 1 closing RPM changes
+  useEffect(() => {
+    if (shift2Enabled && shift1Data.vehicleClosingRPM !== null && shift1Data.vehicleClosingRPM !== undefined) {
+      setShift2Data(prev => {
+        // Only auto-fill if Shift 2 opening RPM is not already set
+        if (prev.vehicleOpeningRPM === null || prev.vehicleOpeningRPM === undefined || prev.vehicleOpeningRPM === 0) {
+          return { ...prev, vehicleOpeningRPM: shift1Data.vehicleClosingRPM };
+        }
+        return prev;
+      });
+    }
+  }, [shift2Enabled, shift1Data.vehicleClosingRPM]);
+
+  // Auto-fill Shift 2 opening compressor RPM when Shift 2 is enabled or Shift 1 closing RPM changes
+  useEffect(() => {
+    if (shift2Enabled && shift1Data.compressorClosingRPM !== null && shift1Data.compressorClosingRPM !== undefined) {
+      setShift2Data(prev => {
+        // Only auto-fill if Shift 2 opening RPM is not already set
+        if (prev.compressorOpeningRPM === null || prev.compressorOpeningRPM === undefined || prev.compressorOpeningRPM === 0) {
+          return { ...prev, compressorOpeningRPM: shift1Data.compressorClosingRPM };
+        }
+        return prev;
+      });
+    }
+  }, [shift2Enabled, shift1Data.compressorClosingRPM]);
 
   // Add employee to shift
   const addEmployeeToShift = (shift) => {
@@ -874,11 +915,12 @@ const DailyEntry = () => {
         }
       }
 
-      // Save Shift 2 (always enabled)
-      // Shift 2 uses same siteId, vehicleId, and compressorId as Shift 1
-      // Only RPM, meter, holes, and employees differ between shifts
-      // Note: Drilling tools are only sent in Shift 1 payload since daily RPM/meter is calculated from both shifts
-      try {
+      // Save Shift 2 (only if enabled)
+      if (shift2Enabled) {
+        // Shift 2 uses same siteId, vehicleId, and compressorId as Shift 1
+        // Only RPM, meter, holes, and employees differ between shifts
+        // Note: Drilling tools are only sent in Shift 1 payload since daily RPM/meter is calculated from both shifts
+        try {
         const payload2 = cleanPayload({
           refNo: refNo2,
           date: dateStr,
@@ -911,10 +953,11 @@ const DailyEntry = () => {
         } else {
           await createDailyEntry.mutateAsync(payload2);
         }
-      } catch (error) {
-        message.error(`Failed to save Shift 2: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
-        setSubmitting(false);
-        return;
+        } catch (error) {
+          message.error(`Failed to save Shift 2: ${error?.response?.data?.message || error?.message || 'Unknown error'}`);
+          setSubmitting(false);
+          return;
+        }
       }
 
       // Clear warnings on success (mutations handle success messages)
@@ -1235,7 +1278,26 @@ const DailyEntry = () => {
                     className="w-full mt-1"
                     placeholder="Select site"
                     value={shiftData.siteId}
-                    onChange={(value) => updateShiftData('siteId', value)}
+                    onChange={(value) => {
+                      // Check if currently selected machine belongs to new site
+                      const currentMachine = machines.find(m => m.id === shiftData.vehicleId);
+                      const shouldClearMachine = currentMachine && currentMachine.siteId !== value;
+                      
+                      if (shift === 1) {
+                        setShift1Data(prev => ({
+                          ...prev,
+                          siteId: value,
+                          vehicleId: shouldClearMachine ? null : prev.vehicleId,
+                        }));
+                        setShift2Data(prev => ({ ...prev, siteId: value })); // Sync to Shift 2
+                        if (shouldClearMachine) {
+                          setSelectedShift1Machine(null);
+                          setSelectedShift2Machine(null);
+                        }
+                      } else {
+                        updateShiftData('siteId', value);
+                      }
+                    }}
                     showSearch
                     optionFilterProp="children"
                   >
@@ -1256,9 +1318,7 @@ const DailyEntry = () => {
                     showSearch
                     optionFilterProp="children"
                   >
-                    {machines
-                      .filter(machine => !shiftData.siteId || machine.siteId === shiftData.siteId)
-                      .map(machine => (
+                    {filteredMachines.map(machine => (
                         <Select.Option key={machine.id} value={machine.id}>
                           {machine.vehicleType} ({machine.vehicleNumber})
                         </Select.Option>
@@ -1333,8 +1393,8 @@ const DailyEntry = () => {
                           value={shiftData.vehicleClosingRPM}
                           onChange={(value) => {
                             updateShiftData('vehicleClosingRPM', value);
-                            // Auto-fill Shift 2 opening when Shift 1 closing is typed
-                            if (shift === 1) {
+                            // Auto-fill Shift 2 opening when Shift 1 closing is typed (only if Shift 2 is enabled)
+                            if (shift === 1 && shift2Enabled) {
                               setShift2Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
                             }
                           }}
@@ -1372,8 +1432,8 @@ const DailyEntry = () => {
                           value={shiftData.compressorClosingRPM}
                           onChange={(value) => {
                             updateShiftData('compressorClosingRPM', value);
-                            // Auto-fill Shift 2 opening when Shift 1 closing is typed
-                            if (shift === 1) {
+                            // Auto-fill Shift 2 opening when Shift 1 closing is typed (only if Shift 2 is enabled)
+                            if (shift === 1 && shift2Enabled) {
                               setShift2Data(prev => ({ ...prev, compressorOpeningRPM: value }));
                             }
                           }}
@@ -2035,8 +2095,26 @@ const DailyEntry = () => {
                   placeholder="Select site"
                   value={shift1Data.siteId}
                   onChange={(value) => {
-                    setShift1Data(prev => ({ ...prev, siteId: value }));
+                    setShift1Data(prev => {
+                      const newSiteId = value;
+                      // Check if currently selected machine belongs to new site
+                      const currentMachine = machines.find(m => m.id === prev.vehicleId);
+                      const shouldClearMachine = currentMachine && currentMachine.siteId !== newSiteId;
+                      
+                      return {
+                        ...prev,
+                        siteId: newSiteId,
+                        vehicleId: shouldClearMachine ? null : prev.vehicleId, // Clear machine if it doesn't belong to new site
+                      };
+                    });
                     setShift2Data(prev => ({ ...prev, siteId: value })); // Always sync to Shift 2
+                    
+                    // Also clear selected machine references if machine was cleared
+                    const currentMachine = machines.find(m => m.id === shift1Data.vehicleId);
+                    if (currentMachine && currentMachine.siteId !== value) {
+                      setSelectedShift1Machine(null);
+                      setSelectedShift2Machine(null);
+                    }
                   }}
                   showSearch
                   optionFilterProp="children"
@@ -2061,7 +2139,7 @@ const DailyEntry = () => {
                   optionFilterProp="children"
                   style={{ fontSize: '11px' }}
                 >
-                  {machines.map(machine => (
+                  {filteredMachines.map(machine => (
                     <Select.Option key={machine.id} value={machine.id}>
                       {machine.vehicleType} ({machine.vehicleNumber})
                     </Select.Option>
@@ -2079,6 +2157,30 @@ const DailyEntry = () => {
               </Col>
             </Row>
 
+            {/* Shift 2 Toggle */}
+            <Row gutter={[4, 4]} style={{ marginBottom: '4px', marginTop: '4px' }}>
+              <Col span={24}>
+                <Space>
+                  <Text strong style={{ fontSize: '11px' }}>Enable Shift 2:</Text>
+                  <Switch
+                    checked={shift2Enabled}
+                    onChange={(checked) => {
+                      setShift2Enabled(checked);
+                      // Auto-fill Shift 2 opening RPM when toggled on
+                      if (checked && shift1Data.vehicleClosingRPM) {
+                        setShift2Data(prev => ({
+                          ...prev,
+                          vehicleOpeningRPM: shift1Data.vehicleClosingRPM,
+                          compressorOpeningRPM: shift1Data.compressorClosingRPM || prev.compressorOpeningRPM,
+                        }));
+                      }
+                    }}
+                    size="small"
+                  />
+                </Space>
+              </Col>
+            </Row>
+
             {/* Shift Data Table - Compact Table Format */}
             <Table
               size="small"
@@ -2088,14 +2190,14 @@ const DailyEntry = () => {
                   key: 'shift1', 
                   shift: 'Shift 1', 
                   data: shift1Data,
-                  enabled: true // Always enabled
+                  enabled: shift1Enabled // Always enabled
                 },
-                { 
+                ...(shift2Enabled ? [{
                   key: 'shift2', 
                   shift: 'Shift 2', 
                   data: shift2Data,
-                  enabled: true // Always enabled
-                }
+                  enabled: shift2Enabled // Controlled by toggle
+                }] : [])
               ]}
               columns={[
                 {
@@ -2148,8 +2250,10 @@ const DailyEntry = () => {
                           onChange={(value) => {
                             if (record.key === 'shift1') {
                               setShift1Data(prev => ({ ...prev, vehicleClosingRPM: value }));
-                              // Auto-fill Shift 2 opening when Shift 1 closing is typed
-                              setShift2Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
+                              // Auto-fill Shift 2 opening when Shift 1 closing is typed (only if Shift 2 is enabled)
+                              if (shift2Enabled) {
+                                setShift2Data(prev => ({ ...prev, vehicleOpeningRPM: value }));
+                              }
                             } else {
                               setShift2Data(prev => ({ ...prev, vehicleClosingRPM: value }));
                             }
@@ -2203,8 +2307,10 @@ const DailyEntry = () => {
                           onChange={(value) => {
                             if (record.key === 'shift1') {
                               setShift1Data(prev => ({ ...prev, compressorClosingRPM: value }));
-                              // Auto-fill Shift 2 opening when Shift 1 closing is typed
-                              setShift2Data(prev => ({ ...prev, compressorOpeningRPM: value }));
+                              // Auto-fill Shift 2 opening when Shift 1 closing is typed (only if Shift 2 is enabled)
+                              if (shift2Enabled) {
+                                setShift2Data(prev => ({ ...prev, compressorOpeningRPM: value }));
+                              }
                             } else {
                               setShift2Data(prev => ({ ...prev, compressorClosingRPM: value }));
                             }
@@ -2341,7 +2447,7 @@ const DailyEntry = () => {
 
             {/* Employee Section - Compact Grid Layout */}
             <Row gutter={[4, 4]} style={{ marginBottom: '4px' }}>
-              <Col span={12}>
+              <Col span={shift2Enabled ? 12 : 24}>
                 <Text strong style={{ fontSize: '11px' }}>Shift 1 Employees:</Text>
                 {shift1Data.employees.map((emp, idx) => (
                   <Row key={emp.id} gutter={[4, 4]} style={{ marginTop: '2px', marginBottom: '2px' }}>
@@ -2397,62 +2503,64 @@ const DailyEntry = () => {
                   Add
                 </Button>
               </Col>
-              <Col span={12}>
-                <Text strong style={{ fontSize: '11px' }}>Shift 2 Employees:</Text>
-                {shift2Data.employees.map((emp) => (
-                  <Row key={emp.id} gutter={[4, 4]} style={{ marginTop: '2px', marginBottom: '2px' }}>
-                    <Col span={8}>
-                      <Select
-                        size="small"
-                        placeholder="Role"
-                        value={emp.role}
-                        onChange={(value) => updateEmployeeInShift(2, emp.id, 'role', value)}
-                        style={{ width: '100%', fontSize: '11px' }}
-                        dropdownMatchSelectWidth={false}
-                      >
-                        <Select.Option value="operator">Operator</Select.Option>
-                        <Select.Option value="helper">Helper</Select.Option>
-                      </Select>
-                    </Col>
-                    <Col span={14}>
-                      <Select
-                        size="small"
-                        placeholder="Employee"
-                        value={emp.employeeId}
-                        onChange={(value) => updateEmployeeInShift(2, emp.id, 'employeeId', value)}
-                        showSearch
-                        optionFilterProp="children"
-                        style={{ width: '100%', fontSize: '11px' }}
-                        dropdownMatchSelectWidth={false}
-                      >
-                        {employees.map(employee => (
-                          <Select.Option key={employee.id} value={employee.id}>
-                            {employee.name} ({employee.empId}){employee.designation ? ` - ${employee.designation}` : ''}
-                          </Select.Option>
-                        ))}
-                      </Select>
-                    </Col>
-                    <Col span={2}>
-                      <Button 
-                        size="small" 
-                        danger 
-                        icon={<DeleteOutlined />}
-                        onClick={() => removeEmployeeFromShift(2, emp.id)}
-                        style={{ padding: '0', height: '24px', width: '24px' }}
-                      />
-                    </Col>
-                  </Row>
-                ))}
-                <Button 
-                  size="small" 
-                  type="dashed" 
-                  icon={<PlusOutlined />}
-                  onClick={() => addEmployeeToShift(2)}
-                  style={{ fontSize: '11px', marginTop: '2px', height: '24px', padding: '0 8px' }}
-                >
-                  Add
-                </Button>
-              </Col>
+              {shift2Enabled && (
+                <Col span={12}>
+                  <Text strong style={{ fontSize: '11px' }}>Shift 2 Employees:</Text>
+                  {shift2Data.employees.map((emp) => (
+                    <Row key={emp.id} gutter={[4, 4]} style={{ marginTop: '2px', marginBottom: '2px' }}>
+                      <Col span={8}>
+                        <Select
+                          size="small"
+                          placeholder="Role"
+                          value={emp.role}
+                          onChange={(value) => updateEmployeeInShift(2, emp.id, 'role', value)}
+                          style={{ width: '100%', fontSize: '11px' }}
+                          dropdownMatchSelectWidth={false}
+                        >
+                          <Select.Option value="operator">Operator</Select.Option>
+                          <Select.Option value="helper">Helper</Select.Option>
+                        </Select>
+                      </Col>
+                      <Col span={14}>
+                        <Select
+                          size="small"
+                          placeholder="Employee"
+                          value={emp.employeeId}
+                          onChange={(value) => updateEmployeeInShift(2, emp.id, 'employeeId', value)}
+                          showSearch
+                          optionFilterProp="children"
+                          style={{ width: '100%', fontSize: '11px' }}
+                          dropdownMatchSelectWidth={false}
+                        >
+                          {employees.map(employee => (
+                            <Select.Option key={employee.id} value={employee.id}>
+                              {employee.name} ({employee.empId}){employee.designation ? ` - ${employee.designation}` : ''}
+                            </Select.Option>
+                          ))}
+                        </Select>
+                      </Col>
+                      <Col span={2}>
+                        <Button 
+                          size="small" 
+                          danger 
+                          icon={<DeleteOutlined />}
+                          onClick={() => removeEmployeeFromShift(2, emp.id)}
+                          style={{ padding: '0', height: '24px', width: '24px' }}
+                        />
+                      </Col>
+                    </Row>
+                  ))}
+                  <Button 
+                    size="small" 
+                    type="dashed" 
+                    icon={<PlusOutlined />}
+                    onClick={() => addEmployeeToShift(2)}
+                    style={{ fontSize: '11px', marginTop: '2px', height: '24px', padding: '0 8px' }}
+                  >
+                    Add
+                  </Button>
+                </Col>
+              )}
             </Row>
 
             {/* Spares Management Section */}
@@ -2701,6 +2809,34 @@ const DailyEntry = () => {
 
       {/* Daily Entries Table */}
       <Card>
+        <Row gutter={16} style={{ marginBottom: 16 }}>
+          <Col>
+            <Space>
+              <Text strong>Filter by Date Range:</Text>
+              <DatePicker.RangePicker
+                value={dateRange}
+                onChange={(dates) => {
+                  setDateRange(dates || [null, null]);
+                  // Reset pagination to page 1 when date range changes
+                  setPagination(prev => ({ ...prev, current: 1 }));
+                }}
+                format="DD/MM/YYYY"
+                allowClear
+              />
+              {dateRange[0] && dateRange[1] && (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setDateRange([null, null]);
+                    setPagination(prev => ({ ...prev, current: 1 }));
+                  }}
+                >
+                  Clear Filter
+                </Button>
+              )}
+            </Space>
+          </Col>
+        </Row>
         <Table
           columns={columns}
           dataSource={entries}
