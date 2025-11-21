@@ -19,14 +19,11 @@ import {
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
-  ToolOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
-import { useNavigate } from "react-router-dom";
 
 const Machine = () => {
-  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -176,18 +173,27 @@ const Machine = () => {
 
   // Handle edit
   const handleEdit = (record) => {
+    console.log('handleEdit called with record:', record);
     setEditingId(record.id);
     setShowForm(true);
-    form.setFieldsValue({
-      vehicleType: record.vehicleType || undefined,
-      vehicleNumber: record.vehicleNumber || undefined,
-      status: record.status || undefined,
-      brandId: record.brandId || record.brand?.id || undefined,
-      vehicleRPM: record.vehicleRPM ?? undefined,
-      nextServiceRPM: record.nextServiceRPM ?? undefined,
-      compressorId: record.compressorId || record.compressor?.id || undefined,
-      siteId: record.siteId || record.site?.id || undefined,
-    });
+    // Use setTimeout to ensure form is mounted before setting values
+    setTimeout(() => {
+      form.setFieldsValue({
+        vehicleType: record.vehicleType || undefined,
+        vehicleNumber: record.vehicleNumber || undefined,
+        status: record.status || undefined,
+        brandId: record.brandId || record.brand?.id || undefined,
+        vehicleRPM: record.vehicleRPM ?? undefined,
+        nextServiceRPM: record.nextServiceRPM ?? undefined,
+        compressorId: record.compressorId || record.compressor?.id || undefined,
+        siteId: record.siteId || record.site?.id || undefined,
+      });
+      // Scroll to form after it's rendered
+      const formCard = document.querySelector('.machine-edit-form');
+      if (formCard) {
+        formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   // Handle hard delete
@@ -359,13 +365,15 @@ const Machine = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button
-            icon={<ToolOutlined />}
-            onClick={() => navigate(`/reports/machine-service/${record.id}`)} // Changed route
-            title="View Service History"
-          />
           {canEdit() && (
-            <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+            <Button 
+              type="button"
+              icon={<EditOutlined />} 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEdit(record);
+              }} 
+            />
           )}
           {canDelete() && (
             <Popconfirm
@@ -453,7 +461,7 @@ const Machine = () => {
 
       {/* Add/Edit Form */}
       {showForm && (
-        <Card className="mb-1" bodyStyle={{ padding: '8px' }}>
+        <Card className="mb-1 machine-edit-form" bodyStyle={{ padding: '8px' }}>
           <Form layout="vertical" form={form} onFinish={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
