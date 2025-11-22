@@ -43,6 +43,87 @@ class DailyEntryCustomController extends BaseController {
     }
   };
 
+  // Helper: Get last entry's closing RPM for machine/compressor
+  // Returns the higher of shift 2 closing RPM or shift 1 closing RPM
+  // excludeEntryId: optional entry ID to exclude from search (for updates)
+  getLastEntryClosingRPM = async (machineId, compressorId, excludeEntryId = null, transaction = null) => {
+    try {
+      const where = {
+        vehicleId: machineId,
+        deletedAt: null
+      };
+
+      if (excludeEntryId) {
+        where.id = { [Op.ne]: excludeEntryId };
+      }
+
+      // Find the most recent entry (by date DESC, then createdAt DESC)
+      const lastEntry = await DailyEntry.findOne({
+        where,
+        order: [['date', 'DESC'], ['createdAt', 'DESC']],
+        transaction
+      });
+
+      if (!lastEntry) {
+        return { machineClosingRPM: null, compressorClosingRPM: null };
+      }
+
+      // Check if there's a shift 2 entry for the same date, machine, and compressor
+      const sameDateEntries = await DailyEntry.findAll({
+        where: {
+          ...where,
+          date: lastEntry.date,
+          vehicleId: machineId
+        },
+        order: [['shift', 'ASC']],
+        transaction
+      });
+
+      let machineClosingRPM = null;
+      let compressorClosingRPM = null;
+
+      // Find shift 2 entry first (preferred)
+      const shift2Entry = sameDateEntries.find(e => e.shift === 2);
+      const shift1Entry = sameDateEntries.find(e => e.shift === 1);
+
+      if (shift2Entry) {
+        // Use shift 2 closing RPM (preferred)
+        machineClosingRPM = shift2Entry.vehicleClosingRPM;
+        if (compressorId && shift2Entry.compressorId === compressorId) {
+          compressorClosingRPM = shift2Entry.compressorClosingRPM;
+        }
+      } else if (shift1Entry) {
+        // Fallback to shift 1 closing RPM
+        machineClosingRPM = shift1Entry.vehicleClosingRPM;
+        if (compressorId && shift1Entry.compressorId === compressorId) {
+          compressorClosingRPM = shift1Entry.compressorClosingRPM;
+        }
+      }
+
+      // If we have both shift 1 and shift 2, use the higher closing RPM
+      if (shift1Entry && shift2Entry) {
+        machineClosingRPM = Math.max(
+          shift1Entry.vehicleClosingRPM || 0,
+          shift2Entry.vehicleClosingRPM || 0
+        );
+        if (compressorId) {
+          compressorClosingRPM = Math.max(
+            shift1Entry.compressorClosingRPM || 0,
+            shift2Entry.compressorClosingRPM || 0
+          );
+        }
+      }
+
+      return {
+        machineClosingRPM: machineClosingRPM || null,
+        compressorClosingRPM: compressorClosingRPM || null
+      };
+    } catch (error) {
+      console.error("Error getting last entry closing RPM:", error);
+      return { machineClosingRPM: null, compressorClosingRPM: null };
+    }
+  };
+
   // Helper: Upsert attendance for employees in daily entry
   upsertEmployeeAttendance = async (employees, siteId, machineId, date, username, transaction) => {
     try {
@@ -478,27 +559,72 @@ class DailyEntryCustomController extends BaseController {
       await DailyEntryEmployee.bulkCreate(rows, { transaction });
     }
 
-    // Update machine RPM totals
+    // Update machine RPM - use closing RPM from this entry (or higher if both shifts exist for same date)
+    // Only update if closing RPM is higher than current RPM (prevents old entries from overwriting newer values)
     const machine = await Machine.findByPk(machineId, { transaction });
     if (machine) {
-      const machineRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
-      await machine.update({
-        vehicleRPM: (machine.vehicleRPM || 0) + Math.max(0, machineRPMDiff) // DB column kept
-      }, { transaction });
+      // Check if there's another shift entry for the same date
+      const sameDateEntries = await DailyEntry.findAll({
+        where: {
+          date: entry.date,
+          vehicleId: machineId,
+          deletedAt: null
+        },
+        transaction
+      });
+
+      // Find the highest closing RPM among all shifts for this date
+      let maxClosingRPM = vehicleClosingRPM || 0;
+      for (const e of sameDateEntries) {
+        if (e.vehicleClosingRPM && e.vehicleClosingRPM > maxClosingRPM) {
+          maxClosingRPM = e.vehicleClosingRPM;
+        }
+      }
+
+      // Only update if closing RPM is higher than current RPM
+      const currentRPM = machine.vehicleRPM || 0;
+      if (maxClosingRPM > currentRPM) {
+        await machine.update({
+          vehicleRPM: maxClosingRPM
+        }, { transaction });
+      }
 
       const serviceCreates = [];
       if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: machine.vehicleRPM, serviceType: "machine", serviceName: vehicleServiceName || null, vehicleId: machineId, compressorId: machine.compressorId, createdBy: req.user.username }, { transaction }));
       if (serviceCreates.length) await Promise.all(serviceCreates);
     }
 
-    // Update compressor RPM totals
+    // Update compressor RPM - use closing RPM from this entry (or higher if both shifts exist for same date)
+    // Only update if closing RPM is higher than current RPM (prevents old entries from overwriting newer values)
     if (compressorId) {
       const compressor = await Compressor.findByPk(compressorId, { transaction });
       if (compressor) {
-        const compressorRPMDiff = (compressorClosingRPM || 0) - (compressorOpeningRPM || 0);
-        await compressor.update({
-          compressorRPM: (compressor.compressorRPM || 0) + Math.max(0, compressorRPMDiff)
-        }, { transaction });
+        // Check if there's another shift entry for the same date and compressor
+        const sameDateEntries = await DailyEntry.findAll({
+          where: {
+            date: entry.date,
+            vehicleId: machineId,
+            compressorId: compressorId,
+            deletedAt: null
+          },
+          transaction
+        });
+
+        // Find the highest closing RPM among all shifts for this date
+        let maxClosingRPM = compressorClosingRPM || 0;
+        for (const e of sameDateEntries) {
+          if (e.compressorClosingRPM && e.compressorClosingRPM > maxClosingRPM) {
+            maxClosingRPM = e.compressorClosingRPM;
+          }
+        }
+
+        // Only update if closing RPM is higher than current RPM
+        const currentRPM = compressor.compressorRPM || 0;
+        if (maxClosingRPM > currentRPM) {
+          await compressor.update({
+            compressorRPM: maxClosingRPM
+          }, { transaction });
+        }
 
         if (compressorServiceDone) {
           await Service.create({
@@ -615,6 +741,7 @@ update = async (req, res, next) => {
       return res.status(404).json({ success: false, message: "DailyEntry not found" });
     }
     const machineId = vehicleId || existingEntry.vehicleId; // Alias for clarity
+    const effectiveCompressorId = compressorId || existingEntry.compressorId;
 
     // Handle employees array - new structure with roles and shifts
     let processedEmployees = [];
@@ -650,13 +777,7 @@ update = async (req, res, next) => {
       }
     }
 
-    // Validate: At least one shift 1 operator is required if employees are being updated
-    if (req.body.hasOwnProperty('employees') || req.body.hasOwnProperty('employeeId')) {
-      const hasShift1Operator = processedEmployees.some(e => e.shift === 1 && e.role === 'operator');
-      if (!hasShift1Operator && processedEmployees.length > 0) {
-        return res.status(400).json({ success: false, message: "At least one Shift 1 Operator is required" });
-      }
-    }
+    // Employee validation removed - employees are now optional
 
     // Update the main entry
     const updatePayload = { 
@@ -685,14 +806,35 @@ update = async (req, res, next) => {
       }
     }
 
-    // Update machine RPM totals
+    // Update machine RPM - use closing RPM from this entry (or higher if both shifts exist for same date)
     if (machineId) {
       const machine = await Machine.findByPk(machineId, { transaction });
       if (machine) {
-        const machineRPMDiff = (vehicleClosingRPM || 0) - (vehicleOpeningRPM || 0);
-        await machine.update({
-          vehicleRPM: (machine.vehicleRPM || 0) + Math.max(0, machineRPMDiff) // DB column kept
-        }, { transaction });
+        // Check if there's another shift entry for the same date
+        const sameDateEntries = await DailyEntry.findAll({
+          where: {
+            date: date || existingEntry.date,
+            vehicleId: machineId,
+            deletedAt: null
+          },
+          transaction
+        });
+
+        // Find the highest closing RPM among all shifts for this date
+        let maxClosingRPM = vehicleClosingRPM || 0;
+        for (const e of sameDateEntries) {
+          if (e.vehicleClosingRPM && e.vehicleClosingRPM > maxClosingRPM) {
+            maxClosingRPM = e.vehicleClosingRPM;
+          }
+        }
+
+        // Only update if closing RPM is higher than current RPM (prevents old entries from overwriting newer values)
+        const currentRPM = machine.vehicleRPM || 0;
+        if (maxClosingRPM > currentRPM) {
+          await machine.update({
+            vehicleRPM: maxClosingRPM
+          }, { transaction });
+        }
 
         const serviceCreates = [];
         if (vehicleServiceDone) serviceCreates.push(Service.create({ serviceRPM: machine.vehicleRPM, serviceType: "machine", serviceName: vehicleServiceName || null, vehicleId: machineId, compressorId: machine.compressorId, createdBy: req.user.username }, { transaction }));
@@ -700,14 +842,36 @@ update = async (req, res, next) => {
       }
     }
 
-    // Update compressor RPM totals
-    if (compressorId) {
-      const compressor = await Compressor.findByPk(compressorId, { transaction });
+    // Update compressor RPM - use closing RPM from this entry (or higher if both shifts exist for same date)
+    if (effectiveCompressorId) {
+      const compressor = await Compressor.findByPk(effectiveCompressorId, { transaction });
       if (compressor) {
-        const compressorRPMDiff = (compressorClosingRPM || 0) - (compressorOpeningRPM || 0);
-        await compressor.update({
-          compressorRPM: (compressor.compressorRPM || 0) + Math.max(0, compressorRPMDiff)
-        }, { transaction });
+        // Check if there's another shift entry for the same date and compressor
+        const sameDateEntries = await DailyEntry.findAll({
+          where: {
+            date: date || existingEntry.date,
+            vehicleId: machineId,
+            compressorId: effectiveCompressorId,
+            deletedAt: null
+          },
+          transaction
+        });
+
+        // Find the highest closing RPM among all shifts for this date
+        let maxClosingRPM = compressorClosingRPM || 0;
+        for (const e of sameDateEntries) {
+          if (e.compressorClosingRPM && e.compressorClosingRPM > maxClosingRPM) {
+            maxClosingRPM = e.compressorClosingRPM;
+          }
+        }
+
+        // Only update if closing RPM is higher than current RPM (prevents old entries from overwriting newer values)
+        const currentRPM = compressor.compressorRPM || 0;
+        if (maxClosingRPM > currentRPM) {
+          await compressor.update({
+            compressorRPM: maxClosingRPM
+          }, { transaction });
+        }
 
         if (compressorServiceDone) {
           await Service.create({
@@ -715,7 +879,7 @@ update = async (req, res, next) => {
             serviceType: "compressor",
             serviceName: compressorServiceName || null,
             vehicleId: machineId, // DB column kept
-            compressorId,
+            compressorId: effectiveCompressorId,
             createdBy: req.user.username
           }, { transaction });
         }
@@ -754,7 +918,6 @@ update = async (req, res, next) => {
     }
 
     // Process service items for compressor
-    const effectiveCompressorId = compressorId || existingEntry.compressorId;
     if (req.body.compressorServiceItems && req.body.compressorServiceItems.length > 0 && effectiveCompressorId) {
       const compressor = await Compressor.findByPk(effectiveCompressorId, { transaction });
       await this.processServiceItems(
@@ -861,7 +1024,11 @@ update = async (req, res, next) => {
   getAll = async (req, res, next) => {
     try {
       const { page = 1, limit = 10, startDate, endDate, date, siteId, vehicleId, machineId, empId, employeeId, compressorId, shift } = req.query;
+      
+      // Build where clause - all conditions use AND logic (Sequelize default)
       const where = {};
+      
+      // Date filtering
       if (date) {
         where.date = date;
       } else if (startDate && endDate) {
@@ -871,22 +1038,31 @@ update = async (req, res, next) => {
       } else if (endDate) {
         where.date = { [Op.lte]: endDate };
       }
+      
+      // Site filter - works with other filters (AND logic)
       if (siteId) {
         where.siteId = siteId;
       }
+      
+      // Machine filter - works with other filters (AND logic)
       // Support both vehicleId (legacy) and machineId (new)
       const effectiveMachineId = machineId || vehicleId;
       if (effectiveMachineId) {
         where.vehicleId = effectiveMachineId; // DB column kept as vehicleId
       }
+      
+      // Compressor filter
       if (compressorId) {
         where.compressorId = compressorId;
       }
+      
+      // Shift filter
       if (shift) {
         where.shift = parseInt(shift);
       }
 
       // Build include with optional employee filter
+      // Employee filter works with other filters (AND logic via required: true)
       const employeeInclude = {
         model: EmployeeList, 
         as: "employees", 
@@ -895,6 +1071,7 @@ update = async (req, res, next) => {
       };
       
       // Filter by employee code or ID if provided
+      // required: true ensures only entries with matching employees are returned
       if (empId) {
         employeeInclude.where = { empId: { [Op.like]: `%${empId}%` } };
         employeeInclude.required = true; // Only return entries with matching employees

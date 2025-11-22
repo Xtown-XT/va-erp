@@ -19,9 +19,11 @@ import {
 } from "antd";
 import {
   FilePdfOutlined,
+  FileExcelOutlined,
   ReloadOutlined,
   EyeOutlined,
 } from "@ant-design/icons";
+import * as XLSX from "xlsx";
 import api from "../service/api";
 import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
@@ -46,21 +48,40 @@ const ProductionReport = () => {
   const navigate = useNavigate();
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState(null);
+  const [servicesLoaded, setServicesLoaded] = useState(false);
+  const [loadingServices, setLoadingServices] = useState(false);
 
-  // Fetch production data
+  // Fetch production data - filters work together (AND logic) and individually
   const fetchProductionData = async () => {
     setLoading(true);
     try {
-      const startDate = dateRange[0].format('YYYY-MM-DD');
-      const endDate = dateRange[1].format('YYYY-MM-DD');
+      // Always include date range
+      const startDate = dateRange[0]?.format('YYYY-MM-DD');
+      const endDate = dateRange[1]?.format('YYYY-MM-DD');
 
-      let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
+      // Build URL with all selected filters (AND logic - all filters must match)
+      let url = `/api/dailyEntries?limit=10000`;
+      
+      // Date range is always required
+      if (startDate && endDate) {
+        url += `&startDate=${startDate}&endDate=${endDate}`;
+      } else if (startDate) {
+        url += `&startDate=${startDate}`;
+      } else if (endDate) {
+        url += `&endDate=${endDate}`;
+      }
+      
+      // Add site filter if selected
       if (selectedSite) {
         url += `&siteId=${selectedSite}`;
       }
+      
+      // Add machine filter if selected
       if (selectedMachine) {
         url += `&vehicleId=${selectedMachine}`;
       }
+      
+      // Add employee filter if selected
       if (selectedEmployee) {
         url += `&employeeId=${selectedEmployee}`;
       }
@@ -68,78 +89,18 @@ const ProductionReport = () => {
       const res = await api.get(url);
       let entries = res.data.data || [];
 
-      // Fetch services for the date range to match with entries
-      
-      // Collect unique vehicle and compressor IDs from entries
-      const vehicleIds = [...new Set(entries.map(e => e.vehicleId).filter(Boolean))];
-      const compressorIds = [...new Set(entries.map(e => e.compressorId).filter(Boolean))];
-      
-      // Fetch services - need to fetch by vehicleId and compressorId separately
-      // or fetch all and filter client-side
-      let allServices = [];
-      
-      try {
-        // Fetch services for vehicles
-        for (const vehicleId of vehicleIds) {
-          try {
-            const vehicleServicesRes = await api.get(`/api/services?vehicleId=${vehicleId}&limit=1000`);
-            const vehicleServices = vehicleServicesRes.data.data || [];
-            allServices = [...allServices, ...vehicleServices];
-          } catch (err) {
-            console.warn(`Could not fetch services for vehicle ${vehicleId}:`, err);
-          }
-        }
-        
-        // Fetch services for compressors
-        for (const compressorId of compressorIds) {
-          try {
-            const compressorServicesRes = await api.get(`/api/services?compressorId=${compressorId}&limit=1000`);
-            const compressorServices = compressorServicesRes.data.data || [];
-            allServices = [...allServices, ...compressorServices];
-          } catch (err) {
-            console.warn(`Could not fetch services for compressor ${compressorId}:`, err);
-          }
-        }
-        
-        // Filter services by date range
-        allServices = allServices.filter(service => {
-          if (!service.serviceDate) return false;
-          const serviceDate = dayjs(service.serviceDate).format('YYYY-MM-DD');
-          return serviceDate >= startDate && serviceDate <= endDate;
-        });
-        
-        // Match services to entries by date, vehicleId, and compressorId
-        entries = entries.map(entry => {
-          const entryDate = entry.date;
-          const matchedServices = allServices.filter(service => {
-            const serviceDate = service.serviceDate ? dayjs(service.serviceDate).format('YYYY-MM-DD') : null;
-            
-            // Match if service date matches entry date AND
-            // (vehicleId matches OR compressorId matches)
-            if (serviceDate === entryDate) {
-              const vehicleMatch = service.vehicleId && entry.vehicleId && service.vehicleId === entry.vehicleId;
-              const compressorMatch = service.compressorId && entry.compressorId && service.compressorId === entry.compressorId;
-              return vehicleMatch || compressorMatch;
-            }
-            return false;
-          });
-          
-          return {
-            ...entry,
-            services: matchedServices // Add services array to each entry
-          };
-        });
-      } catch (servicesErr) {
-        console.warn("Could not fetch services:", servicesErr);
-        // Continue without services if API call fails
-        entries = entries.map(entry => ({ ...entry, services: [] }));
-      }
+      // Services are now fetched on-demand (lazy-loaded) to improve page load performance
+      // Initialize entries with empty services array
+      entries = entries.map(entry => ({ ...entry, services: [] }));
 
 
       // Calculate production metrics
       const calculations = calculateProductionMetrics(entries);
       setProductionData(calculations.dailyData);
       setTotals(calculations.totals);
+      
+      // Reset services loaded state when data changes
+      setServicesLoaded(false);
     } catch (err) {
       console.error("Error fetching production data", err);
       message.error("Error fetching production data");
@@ -477,6 +438,82 @@ const ProductionReport = () => {
     },
   ];
 
+  // Fetch services on-demand (lazy-loaded) to improve performance
+  const fetchServicesForEntries = async () => {
+    if (servicesLoaded || loadingServices) return;
+    
+    setLoadingServices(true);
+    try {
+      const startDate = dateRange[0]?.format('YYYY-MM-DD');
+      const endDate = dateRange[1]?.format('YYYY-MM-DD');
+      
+      // Collect unique vehicle and compressor IDs from current production data
+      const vehicleIds = [...new Set(productionData.map(e => e.vehicleId).filter(Boolean))];
+      const compressorIds = [...new Set(productionData.map(e => e.compressorId).filter(Boolean))];
+      
+      let allServices = [];
+      
+      // Fetch services for vehicles
+      for (const vehicleId of vehicleIds) {
+        try {
+          const vehicleServicesRes = await api.get(`/api/services?vehicleId=${vehicleId}&limit=1000`);
+          const vehicleServices = vehicleServicesRes.data.data || [];
+          allServices = [...allServices, ...vehicleServices];
+        } catch (err) {
+          console.warn(`Could not fetch services for vehicle ${vehicleId}:`, err);
+        }
+      }
+      
+      // Fetch services for compressors
+      for (const compressorId of compressorIds) {
+        try {
+          const compressorServicesRes = await api.get(`/api/services?compressorId=${compressorId}&limit=1000`);
+          const compressorServices = compressorServicesRes.data.data || [];
+          allServices = [...allServices, ...compressorServices];
+        } catch (err) {
+          console.warn(`Could not fetch services for compressor ${compressorId}:`, err);
+        }
+      }
+      
+      // Filter services by date range
+      allServices = allServices.filter(service => {
+        if (!service.serviceDate) return false;
+        const serviceDate = dayjs(service.serviceDate).format('YYYY-MM-DD');
+        return serviceDate >= startDate && serviceDate <= endDate;
+      });
+      
+      // Match services to entries by date, vehicleId, and compressorId
+      const updatedProductionData = productionData.map(entry => {
+        const entryDate = entry.date ? dayjs(entry.date).format('YYYY-MM-DD') : null;
+        const matchedServices = allServices.filter(service => {
+          const serviceDate = service.serviceDate ? dayjs(service.serviceDate).format('YYYY-MM-DD') : null;
+          
+          // Match if service date matches entry date AND
+          // (vehicleId matches OR compressorId matches)
+          if (serviceDate === entryDate) {
+            const vehicleMatch = service.vehicleId && entry.vehicleId && service.vehicleId === entry.vehicleId;
+            const compressorMatch = service.compressorId && entry.compressorId && service.compressorId === entry.compressorId;
+            return vehicleMatch || compressorMatch;
+          }
+          return false;
+        });
+        
+        return {
+          ...entry,
+          services: matchedServices
+        };
+      });
+      
+      setProductionData(updatedProductionData);
+      setServicesLoaded(true);
+    } catch (err) {
+      console.error("Error fetching services:", err);
+      message.warning("Could not load services data");
+    } finally {
+      setLoadingServices(false);
+    }
+  };
+
   // Export to PDF
   const exportToPDF = async () => {
     setLoading(true);
@@ -709,6 +746,181 @@ const ProductionReport = () => {
     }
   };
 
+  const exportToExcel = async () => {
+    setLoading(true);
+    
+    try {
+      const startDate = dateRange[0].format('YYYY-MM-DD');
+      const endDate = dateRange[1].format('YYYY-MM-DD');
+      let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
+      if (selectedSite) url += `&siteId=${selectedSite}`;
+      if (selectedMachine) url += `&vehicleId=${selectedMachine}`;
+      if (selectedEmployee) url += `&employeeId=${selectedEmployee}`;
+
+      const res = await api.get(url);
+      let entries = res.data.data || [];
+      
+      // Fetch machines, compressors, and sites for Excel (if not already available)
+      let excelMachines = machines;
+      let excelCompressors = compressors;
+      let excelSites = sites;
+      
+      if (machines.length === 0) {
+        try {
+          const machinesRes = await api.get('/api/vehicles?limit=1000');
+          excelMachines = machinesRes.data.data || [];
+        } catch (err) {
+          console.warn('Could not fetch machines for Excel:', err);
+        }
+      }
+      
+      if (compressors.length === 0) {
+        try {
+          const compressorsRes = await api.get('/api/compressors?limit=1000');
+          excelCompressors = compressorsRes.data.data || [];
+        } catch (err) {
+          console.warn('Could not fetch compressors for Excel:', err);
+        }
+      }
+      
+      if (sites.length === 0) {
+        try {
+          const sitesRes = await api.get('/api/sites?limit=1000');
+          excelSites = sitesRes.data.data || [];
+        } catch (err) {
+          console.warn('Could not fetch sites for Excel:', err);
+        }
+      }
+
+      const { dailyData, totals } = calculateProductionMetrics(entries);
+
+      // Prepare Excel data
+      const periodStart = dateRange[0].format("DD/MM/YYYY");
+      const periodEnd = dateRange[1].format("DD/MM/YYYY");
+      const siteName = selectedSiteName || 'All Sites';
+      const generatedDate = new Date().toLocaleDateString();
+
+      // Create worksheet data
+      const worksheetData = [
+        ['Daily Production Report'],
+        [`Period: ${periodStart} to ${periodEnd}`],
+        [`Site: ${siteName}`],
+        [`Generated on: ${generatedDate}`],
+        [], // Empty row
+        [
+          'Date',
+          'Shift',
+          'Site',
+          'Meter',
+          'Crawler HSD',
+          'Comp HSD',
+          'Camper HSD',
+          'Total HSD',
+          'Crawler RPM',
+          'Comp RPM',
+          'HSD/MTR',
+          'MTR/RPM',
+          'Crawler HSD/Crawler RPM',
+          'Comp HSD/Comp RPM',
+          'Number of Holes',
+          'Depth Avg'
+        ],
+      ];
+
+      // Add data rows
+      dailyData.forEach((entry) => {
+        // Get site name
+        let entrySiteName = entry.site?.siteName;
+        if (!entrySiteName && entry.siteId) {
+          const site = excelSites.find(s => s.id === entry.siteId);
+          entrySiteName = site?.siteName;
+        }
+        entrySiteName = entrySiteName || '-';
+
+        worksheetData.push([
+          dayjs(entry.date).format("DD/MM/YYYY"),
+          entry.shift || 1,
+          entrySiteName,
+          truncateToFixed(entry.meter || 0, 2),
+          Math.round(entry.crawlerHSD || 0),
+          Math.round(entry.compressorHSD || 0),
+          Math.round(entry.camperHSD || 0),
+          Math.round(entry.totalHSD || 0),
+          truncateToFixed(entry.crawlerRPM || 0, 2),
+          truncateToFixed(entry.compressorRPM || 0, 2),
+          truncateToFixed(entry.hsdMtr || 0, 2),
+          truncateToFixed(entry.mtrRPM || 0, 2),
+          entry.crawlerHsdPerRpm > 0 ? truncateToFixed(entry.crawlerHsdPerRpm, 2) : '-',
+          entry.compHsdPerRpm > 0 ? truncateToFixed(entry.compHsdPerRpm, 2) : '-',
+          entry.holes || 0,
+          truncateToFixed(entry.depthAvg || 0, 2),
+        ]);
+      });
+
+      // Add totals row
+      worksheetData.push([]); // Empty row
+      worksheetData.push([
+        'Total',
+        '',
+        '',
+        truncateToFixed(totals.totalMeter || 0, 2),
+        Math.round(totals.totalCrawlerHSD || 0),
+        Math.round(totals.totalCompressorHSD || 0),
+        Math.round(totals.totalCamperHSD || 0),
+        Math.round(totals.totalTotalHSD || 0),
+        truncateToFixed(totals.totalCrawlerRPM || 0, 2),
+        truncateToFixed(totals.totalCompressorRPM || 0, 2),
+        truncateToFixed(totals.totalHsdMtr || 0, 2),
+        truncateToFixed(totals.totalMtrRPM || 0, 2),
+        totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-',
+        totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-',
+        totals.totalHoles || 0,
+        truncateToFixed(totals.totalDepthAvg || 0, 2),
+      ]);
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 12 }, // Date
+        { wch: 8 },  // Shift
+        { wch: 20 }, // Site
+        { wch: 10 }, // Meter
+        { wch: 12 }, // Crawler HSD
+        { wch: 12 }, // Comp HSD
+        { wch: 12 }, // Camper HSD
+        { wch: 12 }, // Total HSD
+        { wch: 12 }, // Crawler RPM
+        { wch: 12 }, // Comp RPM
+        { wch: 12 }, // HSD/MTR
+        { wch: 12 }, // MTR/RPM
+        { wch: 20 }, // Crawler HSD/Crawler RPM
+        { wch: 20 }, // Comp HSD/Comp RPM
+        { wch: 15 }, // Number of Holes
+        { wch: 12 }, // Depth Avg
+      ];
+      ws['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Production Report");
+
+      // Generate filename
+      const filename = `Production_Report_${periodStart.replace(/\//g, '-')}_${periodEnd.replace(/\//g, '-')}.xlsx`;
+
+      // Write file
+      XLSX.writeFile(wb, filename);
+      
+      message.success("Excel file exported successfully");
+    } catch (err) {
+      console.error("Error exporting to Excel", err);
+      message.error("Error exporting to Excel");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Fetch sites and vehicles
   const fetchSites = async () => {
     try {
@@ -851,6 +1063,17 @@ const ProductionReport = () => {
           </Col>
           <Col xs={24} sm={6} md={2}>
             <Button
+              icon={<FileExcelOutlined />}
+              onClick={exportToExcel}
+              type="default"
+              size="small"
+              className="w-full"
+            >
+              Excel
+            </Button>
+          </Col>
+          <Col xs={24} sm={6} md={2}>
+            <Button
               icon={<FilePdfOutlined />}
               onClick={exportToPDF}
               type="primary"
@@ -969,10 +1192,23 @@ const ProductionReport = () => {
       </Card>
 
       {/* Services Section - Display outside table */}
-      {productionData.some(entry => entry.services && entry.services.length > 0) && (
-        <Card>
-          <Title level={4}>Services Performed</Title>
-          <Table
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Title level={4} style={{ margin: 0 }}>Services Performed</Title>
+          {!servicesLoaded && (
+            <Button
+              onClick={fetchServicesForEntries}
+              loading={loadingServices}
+              size="small"
+              type="default"
+            >
+              Load Services
+            </Button>
+          )}
+        </div>
+        {servicesLoaded ? (
+          productionData.some(entry => entry.services && entry.services.length > 0) ? (
+            <Table
             dataSource={productionData.filter(entry => entry.services && entry.services.length > 0)}
             rowKey="id"
             pagination={false}
@@ -1075,10 +1311,15 @@ const ProductionReport = () => {
                   return compressor?.nextServiceRPM ? truncateToFixed(compressor.nextServiceRPM, 2) + ' RPM' : '-';
                 }
               },
-            ]}
-          />
-        </Card>
-      )}
+              ]}
+            />
+          ) : (
+            <Text type="secondary">No services found for the selected period.</Text>
+          )
+        ) : (
+          <Text type="secondary">Click "Load Services" to view services performed during this period.</Text>
+        )}
+      </Card>
 
       {/* Detail Modal - Show Employees */}
       <Modal

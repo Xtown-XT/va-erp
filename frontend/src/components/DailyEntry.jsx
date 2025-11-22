@@ -43,6 +43,7 @@ import {
 } from "../hooks/useQueries";
 import { useCreateDailyEntry, useUpdateDailyEntry, useDeleteDailyEntry } from "../hooks/useMutations";
 import { useItemsByType } from "../hooks/useQueries";
+import EditDailyEntry from "./EditDailyEntry";
 
 const { Title, Text } = Typography;
 const { Panel } = Collapse;
@@ -56,6 +57,7 @@ const DailyEntry = () => {
   const [editingId, setEditingId] = useState(null);
   const [editingShift1Id, setEditingShift1Id] = useState(null);
   const [editingShift2Id, setEditingShift2Id] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -1036,11 +1038,9 @@ const DailyEntry = () => {
     setSelectedShift2Compressor(null);
   };
 
-  // Handle edit - load both Shift 1 and Shift 2 entries
+  // Handle edit - open EditDailyEntry modal (only for the clicked shift)
   const handleEdit = async (record) => {
     try {
-      // Loading is handled by the query hook, no need to set it here
-      
       // Fetch the clicked entry details
       const res = await api.get(`/api/dailyEntries/${record.id}`);
       const clickedEntry = res.data.data;
@@ -1051,192 +1051,17 @@ const DailyEntry = () => {
       }
       
       const clickedShift = clickedEntry.shift || 1;
-      const otherShift = clickedShift === 1 ? 2 : 1;
       
-      // Find the corresponding shift entry from the entries list
-      // Match by date, siteId, and vehicleId
-      const matchingEntry = entries.find(e => 
-        e.id !== clickedEntry.id &&
-        e.date === clickedEntry.date &&
-        e.siteId === clickedEntry.siteId &&
-        e.vehicleId === clickedEntry.vehicleId &&
-        e.shift === otherShift
-      );
-      
-      // Fetch the other shift entry if found
-      let otherShiftEntry = null;
-      if (matchingEntry) {
-        try {
-          const otherRes = await api.get(`/api/dailyEntries/${matchingEntry.id}`);
-          otherShiftEntry = otherRes.data.data;
-        } catch (err) {
-          console.warn("Could not fetch other shift entry:", err);
-        }
-      }
-      
-      // Determine which entry is Shift 1 and which is Shift 2
-      const shift1Entry = clickedShift === 1 ? clickedEntry : otherShiftEntry;
-      const shift2Entry = clickedShift === 2 ? clickedEntry : otherShiftEntry;
-      
-      // Set editing IDs
-      setEditingShift1Id(shift1Entry?.id || null);
-      setEditingShift2Id(shift2Entry?.id || null);
-      
-      // Set date
-      setSelectedDate(clickedEntry.date ? dayjs(clickedEntry.date) : dayjs());
-      
-      // Set machine and compressor for Shift 1
-      if (shift1Entry) {
-        const machine = machines.find(m => m.id === shift1Entry.vehicleId);
-        
-        setSelectedShift1Machine(machine);
-        
-        // Fetch compressor fresh from API if it exists
-        if (shift1Entry.compressorId) {
-          try {
-            const compressorRes = await api.get(`/api/compressors/${shift1Entry.compressorId}`);
-            const compressor = compressorRes.data.data;
-            setSelectedShift1Compressor(compressor);
-          } catch (error) {
-            console.error("Error fetching compressor for edit:", error);
-            // Fallback to cached data
-            const compressor = compressors.find(c => c.id === shift1Entry.compressorId);
-            setSelectedShift1Compressor(compressor);
-          }
-        } else {
-          setSelectedShift1Compressor(null);
-        }
-        
-        // Prepare employees for Shift 1
-        const shift1Employees = (shift1Entry.employees || [])
-          .filter(emp => (emp.shift || emp.DailyEntryEmployee?.shift || 1) === 1)
-          .map((emp, index) => ({
-            id: Date.now() + index,
-            employeeId: emp.id,
-            role: emp.role || emp.DailyEntryEmployee?.role || 'operator',
-          }));
-        
-        // If no employees, add empty slots
-        if (shift1Employees.length === 0) {
-          shift1Employees.push(
-            { id: Date.now(), role: 'operator', employeeId: null },
-            { id: Date.now() + 1, role: 'helper', employeeId: null }
-          );
-        }
-        
-        // Populate Shift 1 data
-        setShift1Data({
-          siteId: shift1Entry.siteId,
-          vehicleId: shift1Entry.vehicleId,
-          compressorId: shift1Entry.compressorId || null,
-          vehicleOpeningRPM: shift1Entry.vehicleOpeningRPM ?? null,
-          vehicleClosingRPM: shift1Entry.vehicleClosingRPM ?? null,
-          compressorOpeningRPM: shift1Entry.compressorOpeningRPM ?? null,
-          compressorClosingRPM: shift1Entry.compressorClosingRPM ?? null,
-          vehicleHSD: shift1Entry.vehicleHSD ?? null,
-          compressorHSD: shift1Entry.compressorHSD ?? null,
-          dieselUsed: shift1Entry.dieselUsed ?? null,
-          noOfHoles: shift1Entry.noOfHoles ?? null,
-          meter: shift1Entry.meter ?? null,
-          employees: shift1Employees,
-          machineSpares: [], // TODO: Fetch spares if needed
-          compressorSpares: [], // TODO: Fetch spares if needed
-          drillingTools: [], // TODO: Fetch drilling tools if needed
-        });
-        
-        setShift1Enabled(true);
+      // Only set the ID for the clicked shift, not the other shift
+      if (clickedShift === 1) {
+        setEditingShift1Id(clickedEntry.id);
+        setEditingShift2Id(null);
       } else {
-        setShift1Enabled(false);
+        setEditingShift1Id(null);
+        setEditingShift2Id(clickedEntry.id);
       }
       
-      // Set machine and compressor for Shift 2 (same as Shift 1)
-      if (shift2Entry) {
-        setSelectedShift2Machine(machines.find(m => m.id === shift2Entry.vehicleId));
-        
-        // Fetch compressor fresh from API if it exists
-        const compressorId = shift2Entry.compressorId || shift1Entry?.compressorId;
-        if (compressorId) {
-          try {
-            const compressorRes = await api.get(`/api/compressors/${compressorId}`);
-            const compressor = compressorRes.data.data;
-            setSelectedShift2Compressor(compressor);
-          } catch (error) {
-            console.error("Error fetching compressor for edit:", error);
-            // Fallback to cached data
-            const compressor = compressors.find(c => c.id === compressorId);
-            setSelectedShift2Compressor(compressor);
-          }
-        } else {
-          setSelectedShift2Compressor(null);
-        }
-        
-        // Prepare employees for Shift 2
-        const shift2Employees = (shift2Entry.employees || [])
-          .filter(emp => (emp.shift || emp.DailyEntryEmployee?.shift || 2) === 2)
-          .map((emp, index) => ({
-            id: Date.now() + 1000 + index,
-            employeeId: emp.id,
-            role: emp.role || emp.DailyEntryEmployee?.role || 'operator',
-          }));
-        
-        // If no employees, add empty slots
-        if (shift2Employees.length === 0) {
-          shift2Employees.push(
-            { id: Date.now() + 1000, role: 'operator', employeeId: null },
-            { id: Date.now() + 1001, role: 'helper', employeeId: null }
-          );
-        }
-        
-        // Populate Shift 2 data
-        setShift2Data({
-          siteId: shift2Entry.siteId || shift1Entry?.siteId || null,
-          vehicleId: shift2Entry.vehicleId || shift1Entry?.vehicleId || null,
-          compressorId: shift2Entry.compressorId || shift1Entry?.compressorId || null,
-          vehicleOpeningRPM: shift2Entry.vehicleOpeningRPM ?? null,
-          vehicleClosingRPM: shift2Entry.vehicleClosingRPM ?? null,
-          compressorOpeningRPM: shift2Entry.compressorOpeningRPM ?? null,
-          compressorClosingRPM: shift2Entry.compressorClosingRPM ?? null,
-          vehicleHSD: shift2Entry.vehicleHSD ?? null,
-          compressorHSD: shift2Entry.compressorHSD ?? null,
-          dieselUsed: shift2Entry.dieselUsed ?? null,
-          noOfHoles: shift2Entry.noOfHoles ?? null,
-          meter: shift2Entry.meter ?? null,
-          employees: shift2Employees,
-          machineSpares: [],
-          compressorSpares: [],
-          drillingTools: [],
-        });
-        
-        setShift2Enabled(true);
-      } else {
-        // If Shift 2 doesn't exist, initialize with empty data but same site/machine as Shift 1
-        setShift2Data({
-          siteId: shift1Entry?.siteId || null,
-          vehicleId: shift1Entry?.vehicleId || null,
-          compressorId: shift1Entry?.compressorId || null,
-          vehicleOpeningRPM: null,
-          vehicleClosingRPM: null,
-          compressorOpeningRPM: null,
-          compressorClosingRPM: null,
-          vehicleHSD: null,
-          compressorHSD: null,
-          dieselUsed: null,
-          noOfHoles: null,
-          meter: null,
-          employees: [
-            { id: Date.now() + 1000, role: 'operator', employeeId: null },
-            { id: Date.now() + 1001, role: 'helper', employeeId: null }
-          ],
-          machineSpares: [],
-          compressorSpares: [],
-          drillingTools: [],
-        });
-        setShift2Enabled(true);
-      }
-      
-      // Show the form
-      setShowForm(true);
-      message.success("Entry loaded for editing");
+      setShowEditModal(true);
     } catch (error) {
       console.error("Error loading entry for edit:", error);
       message.error("Failed to load entry for editing");
@@ -2790,9 +2615,6 @@ const DailyEntry = () => {
 
             {/* Buttons */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '4px' }}>
-              <Button onClick={handleCancel} size="small" style={{ height: '28px', fontSize: '11px' }}>
-                Cancel
-              </Button>
               <Button 
                 type="primary" 
                 onClick={handleSubmit} 
@@ -2802,6 +2624,9 @@ const DailyEntry = () => {
               >
               Save Daily Entries
             </Button>
+              <Button onClick={handleCancel} size="small" style={{ height: '28px', fontSize: '11px' }}>
+                Cancel
+              </Button>
             </div>
           </div>
         </Card>
@@ -2872,6 +2697,22 @@ const DailyEntry = () => {
           onPressEnter={handleServiceNameConfirm}
         />
       </Modal>
+
+      {/* Edit Daily Entry Modal */}
+      <EditDailyEntry
+        visible={showEditModal}
+        onCancel={() => {
+          setShowEditModal(false);
+          setEditingShift1Id(null);
+          setEditingShift2Id(null);
+        }}
+        onSuccess={() => {
+          refetchEntries();
+        }}
+        shift1EntryId={editingShift1Id}
+        shift2EntryId={editingShift2Id}
+        entries={entries}
+      />
     </div>
   );
 };
