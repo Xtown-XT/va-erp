@@ -96,7 +96,15 @@ const ProductionReport = () => {
 
       // Calculate production metrics
       const calculations = calculateProductionMetrics(entries);
-      setProductionData(calculations.dailyData);
+      
+      // Sort dailyData by date in ascending order
+      const sortedDailyData = [...calculations.dailyData].sort((a, b) => {
+        const dateA = dayjs(a.date);
+        const dateB = dayjs(b.date);
+        return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0;
+      });
+      
+      setProductionData(sortedDailyData);
       setTotals(calculations.totals);
       
       // Reset services loaded state when data changes
@@ -623,6 +631,13 @@ const ProductionReport = () => {
       }
 
     const { dailyData, totals } = calculateProductionMetrics(entries);
+    
+    // Sort dailyData by date in ascending order
+    const sortedDailyData = [...dailyData].sort((a, b) => {
+      const dateA = dayjs(a.date);
+      const dateB = dayjs(b.date);
+      return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0;
+    });
 
     const printWindow = window.open("", "_blank");
     const reportTitle = selectedSiteName ? 'Daily Production Report - ' + selectedSiteName : 'Daily Production Report';
@@ -660,7 +675,7 @@ const ProductionReport = () => {
       '</tr></thead><tbody>';
     
     // Build table rows
-    dailyData.forEach((entry) => {
+    sortedDailyData.forEach((entry) => {
       const services = entry.services || [];
       const servicesText = services.length > 0 
         ? services.map((service) => {
@@ -793,6 +808,13 @@ const ProductionReport = () => {
       }
 
       const { dailyData, totals } = calculateProductionMetrics(entries);
+      
+      // Sort dailyData by date in ascending order
+      const sortedDailyData = [...dailyData].sort((a, b) => {
+        const dateA = dayjs(a.date);
+        const dateB = dayjs(b.date);
+        return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0;
+      });
 
       // Prepare Excel data
       const periodStart = dateRange[0].format("DD/MM/YYYY");
@@ -828,7 +850,7 @@ const ProductionReport = () => {
       ];
 
       // Add data rows
-      dailyData.forEach((entry) => {
+      sortedDailyData.forEach((entry) => {
         // Get site name
         let entrySiteName = entry.site?.siteName;
         if (!entrySiteName && entry.siteId) {

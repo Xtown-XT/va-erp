@@ -28,6 +28,7 @@ import CompressorServiceHistory from "./components/CompressorServiceHistory";
 import AddressManagement from "./components/AddressManagement";
 // import InventoryManagement from "./components/InventoryManagement"; // Commented out - page hidden
 import ProductionReport from "./components/ProductionReport";
+import SiteProductionReport from "./components/SiteProductionReport";
 import ProductionDetail from "./components/ProductionDetail";
 import EmployeeDetails from "./components/EmployeeDetails";
 import InventoryReport from "./components/InventoryReport";
@@ -75,7 +76,8 @@ function App() {
             {/* Reports sub-routes */}
             <Route path="reports" element={<Reports />} />
             {/* <Route path="reports/item-stock" element={<ItemStockReport />} /> */} {/* Commented out - page hidden */}
-            <Route path="reports/production" element={<ProductionReport />} />
+            <Route path="reports/production" element={<SiteProductionReport />} />
+            <Route path="reports/production-detailed" element={<ProductionReport />} />
             <Route path="reports/production/detail" element={<ProductionDetail />} />
             <Route path="reports/inventory" element={<InventoryReport />} />
             <Route path="reports/service-usage" element={<ServiceUsageReport />} />

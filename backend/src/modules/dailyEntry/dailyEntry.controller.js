@@ -584,9 +584,9 @@ class DailyEntryCustomController extends BaseController {
       // Only update if closing RPM is higher than current RPM
       const currentRPM = machine.vehicleRPM || 0;
       if (maxClosingRPM > currentRPM) {
-        await machine.update({
+      await machine.update({
           vehicleRPM: maxClosingRPM
-        }, { transaction });
+      }, { transaction });
       }
 
       const serviceCreates = [];
@@ -621,9 +621,9 @@ class DailyEntryCustomController extends BaseController {
         // Only update if closing RPM is higher than current RPM
         const currentRPM = compressor.compressorRPM || 0;
         if (maxClosingRPM > currentRPM) {
-          await compressor.update({
+        await compressor.update({
             compressorRPM: maxClosingRPM
-          }, { transaction });
+        }, { transaction });
         }
 
         if (compressorServiceDone) {
@@ -831,9 +831,9 @@ update = async (req, res, next) => {
         // Only update if closing RPM is higher than current RPM (prevents old entries from overwriting newer values)
         const currentRPM = machine.vehicleRPM || 0;
         if (maxClosingRPM > currentRPM) {
-          await machine.update({
+        await machine.update({
             vehicleRPM: maxClosingRPM
-          }, { transaction });
+        }, { transaction });
         }
 
         const serviceCreates = [];
@@ -868,9 +868,9 @@ update = async (req, res, next) => {
         // Only update if closing RPM is higher than current RPM (prevents old entries from overwriting newer values)
         const currentRPM = compressor.compressorRPM || 0;
         if (maxClosingRPM > currentRPM) {
-          await compressor.update({
+        await compressor.update({
             compressorRPM: maxClosingRPM
-          }, { transaction });
+        }, { transaction });
         }
 
         if (compressorServiceDone) {

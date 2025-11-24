@@ -1056,7 +1056,7 @@ const DailyEntry = () => {
       if (clickedShift === 1) {
         setEditingShift1Id(clickedEntry.id);
         setEditingShift2Id(null);
-      } else {
+        } else {
         setEditingShift1Id(null);
         setEditingShift2Id(clickedEntry.id);
       }
@@ -2626,7 +2626,7 @@ const DailyEntry = () => {
             </Button>
               <Button onClick={handleCancel} size="small" style={{ height: '28px', fontSize: '11px' }}>
                 Cancel
-              </Button>
+            </Button>
             </div>
           </div>
         </Card>

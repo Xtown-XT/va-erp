@@ -31,6 +31,7 @@ const navArray = [
     label: "Reports",
     children: [
       { icon: <TbReport />, label: "Production", path: "/reports/production" },
+      { icon: <TbReport />, label: "Production Detailed", path: "/reports/production-detailed" },
       { icon: <FaWarehouse />, label: "Inventory", path: "/reports/inventory" },
       { icon: <FaCog />, label: "Service Usage", path: "/reports/service-usage" },
     ],
