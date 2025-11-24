@@ -463,7 +463,7 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                 className="w-full mt-1"
                 value={selectedDate}
                 format="DD/MM/YYYY"
-                disabled
+                onChange={(date) => setSelectedDate(date)}
               />
             </Col>
             <Col xs={24} sm={6}>
