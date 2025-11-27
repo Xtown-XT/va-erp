@@ -208,7 +208,10 @@ const SiteProductionReport = () => {
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      const url = `/api/dailyEntries?siteId=${selectedSite}&startDate=${startDate}&endDate=${endDate}&limit=10000`;
+      // If selectedSite is 'all', don't filter by siteId
+      const url = selectedSite === 'all' 
+        ? `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`
+        : `/api/dailyEntries?siteId=${selectedSite}&startDate=${startDate}&endDate=${endDate}&limit=10000`;
 
       const res = await api.get(url);
       let entries = res.data.data || [];
@@ -257,8 +260,13 @@ const SiteProductionReport = () => {
 
   // Handle site selection
   const handleSiteSelect = (site) => {
-    setSelectedSite(site.id);
-    setSelectedSiteName(site.siteName);
+    if (site === 'all') {
+      setSelectedSite('all');
+      setSelectedSiteName('All Sites');
+    } else {
+      setSelectedSite(site.id);
+      setSelectedSiteName(site.siteName);
+    }
     setAggregatedData([]);
     setTotals({});
   };
@@ -366,7 +374,10 @@ const SiteProductionReport = () => {
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      const url = `/api/dailyEntries?siteId=${selectedSite}&startDate=${startDate}&endDate=${endDate}&limit=10000`;
+      // If selectedSite is 'all', don't filter by siteId
+      const url = selectedSite === 'all' 
+        ? `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`
+        : `/api/dailyEntries?siteId=${selectedSite}&startDate=${startDate}&endDate=${endDate}&limit=10000`;
 
       const res = await api.get(url);
       let entries = res.data.data || [];
@@ -524,7 +535,10 @@ const SiteProductionReport = () => {
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
-      const url = `/api/dailyEntries?siteId=${selectedSite}&startDate=${startDate}&endDate=${endDate}&limit=10000`;
+      // If selectedSite is 'all', don't filter by siteId
+      const url = selectedSite === 'all' 
+        ? `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`
+        : `/api/dailyEntries?siteId=${selectedSite}&startDate=${startDate}&endDate=${endDate}&limit=10000`;
 
       const res = await api.get(url);
       let entries = res.data.data || [];
@@ -669,6 +683,43 @@ const SiteProductionReport = () => {
           Select a site to view aggregated production data
         </Text>
         <Row gutter={[24, 24]}>
+          {/* All Sites button - appears first */}
+          <Col xs={24} sm={12} lg={6}>
+            <Card
+              hoverable
+              className="text-center h-full"
+              style={{
+                border: '2px solid #52c41a',
+                transition: 'all 0.3s ease',
+                cursor: 'pointer',
+                backgroundColor: '#f6ffed',
+              }}
+              bodyStyle={{ padding: '24px' }}
+              onClick={() => handleSiteSelect('all')}
+            >
+              <div
+                className="mb-4"
+                style={{
+                  fontSize: "3rem",
+                  color: "#52c41a",
+                  marginBottom: "1.5rem"
+                }}
+              >
+                🌐
+              </div>
+              <Title level={4} className="mb-3" style={{ color: "#52c41a" }}>
+                All Sites
+              </Title>
+              <Button
+                type="primary"
+                style={{ backgroundColor: "#52c41a", borderColor: "#52c41a" }}
+                className="w-full"
+                onClick={() => handleSiteSelect('all')}
+              >
+                View All Sites Report
+              </Button>
+            </Card>
+          </Col>
           {sites.map((site) => (
             <Col xs={24} sm={12} lg={6} key={site.id}>
               <Card
