@@ -78,6 +78,17 @@ const Item = sequelize.define(
       allowNull: true,
       unique: true,
     },
+    // Individual drilling tool lifetime tracking
+    currentRPM: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+      defaultValue: 0,
+    },
+    currentMeter: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+      defaultValue: 0,
+    },
     ...commonFields,
   },
   {

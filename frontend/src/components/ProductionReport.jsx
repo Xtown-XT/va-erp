@@ -50,6 +50,7 @@ const ProductionReport = () => {
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [servicesLoaded, setServicesLoaded] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 
   // Fetch production data - filters work together (AND logic) and individually
   const fetchProductionData = async () => {
@@ -60,7 +61,8 @@ const ProductionReport = () => {
       const endDate = dateRange[1]?.format('YYYY-MM-DD');
 
       // Build URL with all selected filters (AND logic - all filters must match)
-      let url = `/api/dailyEntries?limit=10000`;
+      // Use server-side pagination with page and limit
+      let url = `/api/dailyEntries?page=${pagination.current}&limit=${pagination.pageSize}`;
       
       // Date range is always required
       if (startDate && endDate) {
@@ -88,6 +90,9 @@ const ProductionReport = () => {
 
       const res = await api.get(url);
       let entries = res.data.data || [];
+
+      // Update pagination total from backend response
+      setPagination(prev => ({ ...prev, total: res.data.total || 0 }));
 
       // Services are now fetched on-demand (lazy-loaded) to improve page load performance
       // Initialize entries with empty services array
@@ -987,10 +992,15 @@ const ProductionReport = () => {
     fetchEmployees();
   }, []);
 
-  // Fetch production data when filters change
+  // Reset pagination to page 1 when filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, current: 1 }));
+  }, [dateRange, selectedSite, selectedMachine, selectedEmployee]);
+
+  // Fetch production data when filters or pagination change
   useEffect(() => {
     fetchProductionData();
-  }, [dateRange, selectedSite, selectedMachine, selectedEmployee]);
+  }, [dateRange, selectedSite, selectedMachine, selectedEmployee, pagination.current, pagination.pageSize]);
 
   return (
     <div className="space-y-2">
@@ -1137,79 +1147,115 @@ const ProductionReport = () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            pageSize: 20,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
             showSizeChanger: true,
             pageSizeOptions: ['10', '20', '50'],
             showTotal: (total, range) => range[0] + '-' + range[1] + ' of ' + total + ' entries',
+            onChange: (page, pageSize) => {
+              setPagination(prev => ({ ...prev, current: page, pageSize: pageSize || 20 }));
+            },
+            onShowSizeChange: (current, size) => {
+              setPagination(prev => ({ ...prev, current: 1, pageSize: size }));
+            },
           }}
           scroll={{ x: 1200 }}
           size="small"
-          summary={() => (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                <Table.Summary.Cell index={0}>
-                  <Text strong>Total</Text>
-                </Table.Summary.Cell>
+          summary={() => {
+            // Calculate totals from current page data (productionData now only contains current page)
+            let pageTotalCrawlerHSD = 0;
+            let pageTotalCamperHSD = 0;
+            let pageTotalCompressorHSD = 0;
+            let pageTotalTotalHSD = 0;
+            let pageTotalMeter = 0;
+            let pageTotalCrawlerRPM = 0;
+            let pageTotalCompressorRPM = 0;
+            let pageTotalHoles = 0;
 
-                <Table.Summary.Cell index={1}></Table.Summary.Cell>
+            productionData.forEach(entry => {
+              pageTotalCrawlerHSD += entry.crawlerHSD || 0;
+              pageTotalCamperHSD += entry.camperHSD || 0;
+              pageTotalCompressorHSD += entry.compressorHSD || 0;
+              pageTotalTotalHSD += entry.totalHSD || 0;
+              pageTotalMeter += entry.meter || 0;
+              pageTotalCrawlerRPM += entry.crawlerRPM || 0;
+              pageTotalCompressorRPM += entry.compressorRPM || 0;
+              pageTotalHoles += entry.holes || entry.noOfHoles || 0;
+            });
 
-                <Table.Summary.Cell index={2}></Table.Summary.Cell>
+            const pageTotalHsdMtr = pageTotalMeter > 0 ? parseFloat((pageTotalTotalHSD / pageTotalMeter).toFixed(2)) : 0;
+            const pageTotalMtrRPM = pageTotalCompressorRPM > 0 ? parseFloat((pageTotalMeter / pageTotalCompressorRPM).toFixed(2)) : 0;
+            const pageTotalCrawlerHsdPerRpm = pageTotalCrawlerRPM > 0 ? parseFloat((pageTotalCrawlerHSD / pageTotalCrawlerRPM).toFixed(2)) : 0;
+            const pageTotalCompHsdPerRpm = pageTotalCompressorRPM > 0 ? parseFloat((pageTotalCompressorHSD / pageTotalCompressorRPM).toFixed(2)) : 0;
+            const pageTotalDepthAvg = pageTotalHoles > 0 ? parseFloat((pageTotalMeter / pageTotalHoles).toFixed(2)) : 0;
 
-                <Table.Summary.Cell index={3}>
-                  <Text strong>{truncateToFixed(totals.totalMeter || 0, 2)}</Text>
-                </Table.Summary.Cell>
+            return (
+              <Table.Summary fixed>
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0}>
+                    <Text strong>Total</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={4}>
-                  <Text strong>{Math.round(totals.totalCrawlerHSD || 0)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={1}></Table.Summary.Cell>
 
-                <Table.Summary.Cell index={5}>
-                  <Text strong>{Math.round(totals.totalCompressorHSD || 0)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={2}></Table.Summary.Cell>
 
-                <Table.Summary.Cell index={6}>
-                  <Text strong>{Math.round(totals.totalCamperHSD || 0)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={3}>
+                    <Text strong>{truncateToFixed(pageTotalMeter || 0, 2)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={7}>
-                  <Text strong>{Math.round(totals.totalTotalHSD || 0)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={4}>
+                    <Text strong>{Math.round(pageTotalCrawlerHSD || 0)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={8}>
-                  <Text strong>{truncateToFixed(totals.totalCrawlerRPM || 0, 2)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={5}>
+                    <Text strong>{Math.round(pageTotalCompressorHSD || 0)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={9}>
-                  <Text strong>{truncateToFixed(totals.totalCompressorRPM || 0, 2)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={6}>
+                    <Text strong>{Math.round(pageTotalCamperHSD || 0)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={10}>
-                  <Text strong>{truncateToFixed(totals.totalHsdMtr || 0, 2)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={7}>
+                    <Text strong>{Math.round(pageTotalTotalHSD || 0)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={11}>
-                  <Text strong>{truncateToFixed(totals.totalMtrRPM || 0, 2)}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={8}>
+                    <Text strong>{truncateToFixed(pageTotalCrawlerRPM || 0, 2)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={12}>
-                  <Text strong>{totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-'}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={9}>
+                    <Text strong>{truncateToFixed(pageTotalCompressorRPM || 0, 2)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={13}>
-                  <Text strong>{totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-'}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={10}>
+                    <Text strong>{truncateToFixed(pageTotalHsdMtr || 0, 2)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={14}>
-                  <Text strong>{totals.totalHoles || 0}</Text>
-                </Table.Summary.Cell>
+                  <Table.Summary.Cell index={11}>
+                    <Text strong>{truncateToFixed(pageTotalMtrRPM || 0, 2)}</Text>
+                  </Table.Summary.Cell>
 
-                <Table.Summary.Cell index={15}>
-                  <Text strong>{truncateToFixed(totals.totalDepthAvg || 0, 2)}</Text>
-                </Table.Summary.Cell>
-              </Table.Summary.Row>
-            </Table.Summary>
+                  <Table.Summary.Cell index={12}>
+                    <Text strong>{pageTotalCrawlerHsdPerRpm > 0 ? truncateToFixed(pageTotalCrawlerHsdPerRpm, 2) : '-'}</Text>
+                  </Table.Summary.Cell>
 
-          )}
+                  <Table.Summary.Cell index={13}>
+                    <Text strong>{pageTotalCompHsdPerRpm > 0 ? truncateToFixed(pageTotalCompHsdPerRpm, 2) : '-'}</Text>
+                  </Table.Summary.Cell>
+
+                  <Table.Summary.Cell index={14}>
+                    <Text strong>{pageTotalHoles || 0}</Text>
+                  </Table.Summary.Cell>
+
+                  <Table.Summary.Cell index={15}>
+                    <Text strong>{truncateToFixed(pageTotalDepthAvg || 0, 2)}</Text>
+                  </Table.Summary.Cell>
+                </Table.Summary.Row>
+              </Table.Summary>
+            );
+          }}
         />
       </Card>
 

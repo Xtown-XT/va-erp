@@ -288,7 +288,7 @@ class ItemCustomController extends BaseController {
           balance: { [Op.gt]: 0 }
         },
         order: [['itemName', 'ASC'], ['partNumber', 'ASC']],
-        attributes: ['id', 'itemName', 'partNumber', 'units', 'balance', 'itemType', 'modelName']
+        attributes: ['id', 'itemName', 'partNumber', 'units', 'balance', 'itemType', 'modelName', 'currentRPM', 'currentMeter']
       });
 
       return res.json({

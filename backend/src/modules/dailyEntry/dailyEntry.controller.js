@@ -348,22 +348,31 @@ class DailyEntryCustomController extends BaseController {
 
         if (!itemService) continue;
 
-        // Calculate final totals including today's RPM/meter
-        const finalRPM = (itemService.fittedRPM || 0) + (dailyRPM || 0);
-        const finalMeter = (itemService.fittedMeter || 0) + (dailyMeter || 0);
+        // Get tool's current lifetime values
+        const toolCurrentRPM = item.currentRPM || 0;
+        const toolCurrentMeter = item.currentMeter || 0;
 
-        // Update ItemService status to removed
+        // Final values after today's run
+        const finalRPM = toolCurrentRPM + (dailyRPM || 0);
+        const finalMeter = toolCurrentMeter + (dailyMeter || 0);
+
+        // Calculate totals (difference between removed and fitted)
+        const totalRPMRun = finalRPM - (itemService.fittedRPM || 0);
+        const totalMeterRun = finalMeter - (itemService.fittedMeter || 0);
+
+        // Update ItemService (but DON'T update item.currentRPM/currentMeter - preserve for next fitting)
         await itemService.update({
           removedDate: date,
-          removedRPM: currentCompressorRPM || 0,
-          removedMeter: currentMeter || 0,
-          totalRPMRun: finalRPM,
-          totalMeterRun: finalMeter,
+          removedRPM: finalRPM,
+          removedMeter: finalMeter,
+          totalRPMRun: totalRPMRun,
+          totalMeterRun: totalMeterRun,
           status: 'removed',
           updatedBy: username,
         }, { transaction });
 
         // Restore stock to inventory
+        // Note: item.currentRPM and item.currentMeter remain unchanged
         await item.update({
           inward: (item.inward || 0) + quantity,
           balance: (item.balance || 0) + quantity,
@@ -389,14 +398,25 @@ class DailyEntryCustomController extends BaseController {
 
         if (!itemService) continue;
 
-        // Update RPM and meter by adding daily totals
-        const newRPM = (itemService.fittedRPM || 0) + (dailyRPM || 0);
-        const newMeter = (itemService.fittedMeter || 0) + (dailyMeter || 0);
+        // Get tool's current lifetime values from Item model
+        const toolCurrentRPM = item.currentRPM || 0;
+        const toolCurrentMeter = item.currentMeter || 0;
 
-        // Update the existing ItemService record with new accumulated values
+        // Add daily values to tool's lifetime
+        const newToolRPM = toolCurrentRPM + (dailyRPM || 0);
+        const newToolMeter = toolCurrentMeter + (dailyMeter || 0);
+
+        // Update Item model with new lifetime values
+        await item.update({
+          currentRPM: newToolRPM,
+          currentMeter: newToolMeter,
+          updatedBy: username,
+        }, { transaction });
+
+        // Update ItemService fittedRPM/fittedMeter to match current values
         await itemService.update({
-          fittedRPM: newRPM,
-          fittedMeter: newMeter,
+          fittedRPM: newToolRPM,
+          fittedMeter: newToolMeter,
           updatedBy: username,
         }, { transaction });
 
@@ -408,8 +428,8 @@ class DailyEntryCustomController extends BaseController {
           compressorId,
           serviceType: 'drilling_tool',
           fittedDate: date,
-          fittedRPM: newRPM,
-          fittedMeter: newMeter,
+          fittedRPM: newToolRPM,
+          fittedMeter: newToolMeter,
           quantity,
           status: 'fitted',
           createdBy: username,
@@ -419,26 +439,13 @@ class DailyEntryCustomController extends BaseController {
       }
 
       // Handle new tool (fit new drilling tool)
-      // Check if there's a previously removed tool for this item+compressor to continue from
-      const previousRemovedTool = await ItemService.findOne({
-        where: {
-          itemId,
-          compressorId,
-          serviceType: 'drilling_tool',
-          status: 'removed',
-        },
-        order: [['removedDate', 'DESC'], ['createdAt', 'DESC']],
-        transaction,
-      });
+      // Get tool's current lifetime values (0 for new, or existing for old tools)
+      const toolCurrentRPM = item.currentRPM || 0;
+      const toolCurrentMeter = item.currentMeter || 0;
 
-      // If there's a previous removed tool, continue from its totalRPMRun and totalMeterRun
-      // Otherwise, start from the daily RPM/meter values
-      const startingRPM = previousRemovedTool 
-        ? (previousRemovedTool.totalRPMRun || previousRemovedTool.fittedRPM || 0) + (dailyRPM || 0)
-        : (dailyRPM || currentCompressorRPM || 0);
-      const startingMeter = previousRemovedTool
-        ? (previousRemovedTool.totalMeterRun || previousRemovedTool.fittedMeter || 0) + (dailyMeter || 0)
-        : (dailyMeter || currentMeter || 0);
+      // Add today's RPM/meter to tool's lifetime values
+      const newToolRPM = toolCurrentRPM + (dailyRPM || 0);
+      const newToolMeter = toolCurrentMeter + (dailyMeter || 0);
 
       // Verify sufficient balance (handle null/undefined balance)
       const currentBalance = item.balance ?? 0;
@@ -446,7 +453,7 @@ class DailyEntryCustomController extends BaseController {
         throw new Error(`Insufficient balance for item ${item.itemName}. Available: ${currentBalance}, Required: ${quantity}`);
       }
 
-      // Create ItemService record
+      // Create ItemService record (fittedRPM/fittedMeter stored for tracking, but main tracking is in item.currentRPM/currentMeter)
       await ItemService.create({
         itemId,
         dailyEntryId,
@@ -454,15 +461,17 @@ class DailyEntryCustomController extends BaseController {
         compressorId,
         serviceType: 'drilling_tool',
         fittedDate: date,
-        fittedRPM: startingRPM,
-        fittedMeter: startingMeter,
+        fittedRPM: toolCurrentRPM, // Value before adding today
+        fittedMeter: toolCurrentMeter, // Value before adding today
         quantity,
         status: 'fitted',
         createdBy: username,
       }, { transaction });
 
-      // Update item inventory (reduce balance, increment outward)
+      // Update Item model with new lifetime values
       await item.update({
+        currentRPM: newToolRPM,
+        currentMeter: newToolMeter,
         outward: (item.outward || 0) + quantity,
         balance: (item.balance || 0) - quantity,
         updatedBy: username,

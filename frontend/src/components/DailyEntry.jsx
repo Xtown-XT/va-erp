@@ -53,6 +53,7 @@ const DailyEntry = () => {
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState([null, null]);
+  const [selectedSite, setSelectedSite] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingShift1Id, setEditingShift1Id] = useState(null);
@@ -76,6 +77,11 @@ const DailyEntry = () => {
   if (dateRange[0] && dateRange[1]) {
     queryParams.startDate = dateRange[0].format('YYYY-MM-DD');
     queryParams.endDate = dateRange[1].format('YYYY-MM-DD');
+  }
+  
+  // Add site filter to query params if selected
+  if (selectedSite) {
+    queryParams.siteId = selectedSite;
   }
   
   const { data: entriesData = { data: [], total: 0, page: 1, limit: 10 }, isLoading: loading, refetch: refetchEntries } = useDailyEntries(queryParams);
@@ -1775,7 +1781,7 @@ const DailyEntry = () => {
                 value={item.id}
                 disabled={(item.balance ?? 0) <= 0}
               >
-                {item.itemName} ({item.balance})
+                {item.itemName} (Current RPM: {item.currentRPM || 0}, Current Meter: {item.currentMeter || 0})
               </Select.Option>
             ))}
           </Select>
@@ -2648,17 +2654,38 @@ const DailyEntry = () => {
                 format="DD/MM/YYYY"
                 allowClear
               />
-              {dateRange[0] && dateRange[1] && (
+              <Text strong>Filter by Site:</Text>
+              <Select
+                placeholder="Select site"
+                value={selectedSite || undefined}
+                onChange={(value) => {
+                  setSelectedSite(value || undefined);
+                  // Reset pagination to page 1 when site filter changes
+                  setPagination(prev => ({ ...prev, current: 1 }));
+                }}
+                allowClear
+                showSearch
+                optionFilterProp="children"
+                style={{ minWidth: 200 }}
+              >
+                {sites.map(site => (
+                  <Select.Option key={site.id} value={site.id}>
+                    {site.siteName}
+                  </Select.Option>
+                ))}
+              </Select>
+              {(dateRange[0] && dateRange[1]) || selectedSite ? (
                 <Button
                   size="small"
                   onClick={() => {
                     setDateRange([null, null]);
+                    setSelectedSite(null);
                     setPagination(prev => ({ ...prev, current: 1 }));
                   }}
                 >
                   Clear Filter
                 </Button>
-              )}
+              ) : null}
             </Space>
           </Col>
         </Row>
