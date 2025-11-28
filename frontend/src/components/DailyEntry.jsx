@@ -143,6 +143,57 @@ const DailyEntry = () => {
     drillingTools: [], // Drilling tools added
   });
   
+  // Helper functions to get initial form state with employees properly initialized
+  const getInitialShift1Data = () => {
+    const timestamp = Date.now();
+    return {
+      siteId: null,
+      vehicleId: null,
+      compressorId: null,
+      vehicleOpeningRPM: null,
+      vehicleClosingRPM: null,
+      compressorOpeningRPM: null,
+      compressorClosingRPM: null,
+      vehicleHSD: null,
+      compressorHSD: null,
+      dieselUsed: null,
+      noOfHoles: null,
+      meter: null,
+      employees: [
+        { id: timestamp, role: 'operator', employeeId: null },
+        { id: timestamp + 1, role: 'helper', employeeId: null }
+      ],
+      machineSpares: [],
+      compressorSpares: [],
+      drillingTools: [],
+    };
+  };
+
+  const getInitialShift2Data = () => {
+    const timestamp = Date.now();
+    return {
+      siteId: null,
+      vehicleId: null,
+      compressorId: null,
+      vehicleOpeningRPM: null,
+      vehicleClosingRPM: null,
+      compressorOpeningRPM: null,
+      compressorClosingRPM: null,
+      vehicleHSD: null,
+      compressorHSD: null,
+      dieselUsed: null,
+      noOfHoles: null,
+      meter: null,
+      employees: [
+        { id: timestamp + 2, role: 'operator', employeeId: null },
+        { id: timestamp + 3, role: 'helper', employeeId: null }
+      ],
+      machineSpares: [],
+      compressorSpares: [],
+      drillingTools: [],
+    };
+  };
+
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [shift1Enabled, setShift1Enabled] = useState(true);
   const [shift2Enabled, setShift2Enabled] = useState(false); // Toggle to enable/disable Shift 2
@@ -181,26 +232,25 @@ const DailyEntry = () => {
   const processedCompressorRef = useRef(null);
   const processedToolIdsRef = useRef(new Set());
 
-  // Update pagination when entries data changes
+  // Update pagination total and pageSize when entries data changes
+  // Don't update 'current' from response - it's controlled by user interaction
   useEffect(() => {
     setPagination(prev => {
-      const newPage = entriesData.page || prev.current;
       const newTotal = entriesData.total || 0;
       const newPageSize = entriesData.limit || prev.pageSize;
       
       // Only update if values actually changed to prevent infinite loops
-      if (newPage === prev.current && newTotal === prev.total && newPageSize === prev.pageSize) {
+      if (newTotal === prev.total && newPageSize === prev.pageSize) {
         return prev;
       }
       
       return {
         ...prev,
-        current: newPage,
         total: newTotal,
         pageSize: newPageSize,
       };
     });
-  }, [entriesData.page, entriesData.total, entriesData.limit]);
+  }, [entriesData.total, entriesData.limit]);
 
   // Fetch compressor fresh when machine changes (safety net for any direct machine changes)
   useEffect(() => {
@@ -1002,42 +1052,8 @@ const DailyEntry = () => {
     setValidationWarnings([]); // Clear warnings on cancel
     setShift1Enabled(true);
     setShift2Enabled(false);
-    setShift1Data({
-      siteId: null,
-      vehicleId: null,
-      compressorId: null,
-      vehicleOpeningRPM: 0,
-      vehicleClosingRPM: 0,
-      compressorOpeningRPM: 0,
-      compressorClosingRPM: 0,
-      vehicleHSD: 0,
-      compressorHSD: 0,
-      dieselUsed: 0,
-      noOfHoles: 0,
-      meter: 0,
-      employees: [],
-      machineSpares: [],
-      compressorSpares: [],
-      drillingTools: [],
-    });
-    setShift2Data({
-      siteId: null,
-      vehicleId: null,
-      compressorId: null,
-      vehicleOpeningRPM: 0,
-      vehicleClosingRPM: 0,
-      compressorOpeningRPM: 0,
-      compressorClosingRPM: 0,
-      vehicleHSD: 0,
-      compressorHSD: 0,
-      dieselUsed: 0,
-      noOfHoles: 0,
-      meter: 0,
-      employees: [],
-      machineSpares: [],
-      compressorSpares: [],
-      drillingTools: [],
-    });
+    setShift1Data(getInitialShift1Data());
+    setShift2Data(getInitialShift2Data());
     setSelectedShift1Machine(null);
     setSelectedShift2Machine(null);
     setSelectedShift1Compressor(null);
@@ -1878,8 +1894,20 @@ const DailyEntry = () => {
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
-                setShowForm(true);
+                // Reset form state before showing the form
+                setShift1Data(getInitialShift1Data());
+                setShift2Data(getInitialShift2Data());
+                setShift1Enabled(true);
+                setShift2Enabled(false);
+                setSelectedShift1Machine(null);
+                setSelectedShift2Machine(null);
+                setSelectedShift1Compressor(null);
+                setSelectedShift2Compressor(null);
                 setSelectedDate(dayjs());
+                setValidationWarnings([]);
+                setServiceNameInput("");
+                setServiceNameDraft("");
+                setShowForm(true);
               }}
             >
               Add Daily Entry
@@ -2697,7 +2725,10 @@ const DailyEntry = () => {
           pagination={{
             ...pagination,
             onChange: (page, pageSize) => {
-              setPagination(prev => ({ ...prev, current: page, pageSize }));
+              setPagination(prev => ({ ...prev, current: page, pageSize: pageSize || prev.pageSize }));
+            },
+            onShowSizeChange: (current, size) => {
+              setPagination(prev => ({ ...prev, current: 1, pageSize: size }));
             },
           }}
           size="middle"
