@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Button,
-  Input,
   Table,
   Tag,
   Space,
-  Form,
   Select,
   InputNumber,
   Switch,
@@ -17,15 +15,11 @@ import {
   Row,
   Col,
   Typography,
-  Divider,
-  Collapse,
   Modal,
 } from "antd";
 import {
   PlusOutlined,
-  EditOutlined,
   DeleteOutlined,
-  ReloadOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
@@ -33,15 +27,33 @@ import dayjs from "dayjs";
 import { truncateToFixed } from "../utils/textUtils";
 
 const { Title, Text } = Typography;
-const { Panel } = Collapse;
 
 const DailyEntry = () => {
-  const [form] = Form.useForm();
-  const [entries, setEntries] = useState([]);
+  // Factory for initial shift data
+  const getInitialShiftData = () => ({
+    siteId: null,
+    vehicleId: null,
+    compressorId: null,
+    vehicleOpeningRPM: 0,
+    vehicleClosingRPM: 0,
+    compressorOpeningRPM: 0,
+    compressorClosingRPM: 0,
+    vehicleHSD: 0,
+    compressorHSD: 0,
+    dieselUsed: 0,
+    noOfHoles: 0,
+    meter: 0,
+    employees: [],
+    machineServiceItems: [],
+    compressorServiceItems: [],
+    drillingTools: [],
+    vehicleServiceDone: false,
+    compressorServiceDone: false,
+  });
+
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [entries, setEntries] = useState([]);
   const [sites, setSites] = useState([]);
   const [machines, setMachines] = useState([]);
   const [compressors, setCompressors] = useState([]);
@@ -53,75 +65,33 @@ const DailyEntry = () => {
     showSizeChanger: true,
     pageSizeOptions: ['10', '20', '50'],
   });
-  
-  // Shift 1 state
-  const [shift1Data, setShift1Data] = useState({
-    siteId: null,
-    vehicleId: null,
-    compressorId: null,
-    vehicleOpeningRPM: 0,
-    vehicleClosingRPM: 0,
-    compressorOpeningRPM: 0,
-    compressorClosingRPM: 0,
-    vehicleHSD: 0,
-    compressorHSD: 0,
-    dieselUsed: 0,
-    noOfHoles: 0,
-    meter: 0,
-    employees: [],
-    machineServiceItems: [],
-    compressorServiceItems: [],
-    drillingTools: [],
-    vehicleServiceDone: false,
-    compressorServiceDone: false,
-  });
-  
-  // Shift 2 state  
-  const [shift2Data, setShift2Data] = useState({
-    siteId: null,
-    vehicleId: null,
-    compressorId: null,
-    vehicleOpeningRPM: 0,
-    vehicleClosingRPM: 0,
-    compressorOpeningRPM: 0,
-    compressorClosingRPM: 0,
-    vehicleHSD: 0,
-    compressorHSD: 0,
-    dieselUsed: 0,
-    noOfHoles: 0,
-    meter: 0,
-    employees: [],
-    machineServiceItems: [],
-    compressorServiceItems: [],
-    drillingTools: [],
-    vehicleServiceDone: false,
-    compressorServiceDone: false,
-  });
-  
+
+  // Shift states
+  const [shift1Data, setShift1Data] = useState(getInitialShiftData());
+  const [shift2Data, setShift2Data] = useState(getInitialShiftData());
+
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [selectedShift1Machine, setSelectedShift1Machine] = useState(null);
-  const [selectedShift2Machine, setSelectedShift2Machine] = useState(null);
   const [selectedShift1Compressor, setSelectedShift1Compressor] = useState(null);
-  const [selectedShift2Compressor, setSelectedShift2Compressor] = useState(null);
-  
+
   // Service items modals
   const [showMachineServiceModal, setShowMachineServiceModal] = useState(false);
   const [showCompressorServiceModal, setShowCompressorServiceModal] = useState(false);
   const [showDrillingToolsModal, setShowDrillingToolsModal] = useState(false);
   const [currentShiftForServiceModal, setCurrentShiftForServiceModal] = useState(null);
   const [currentServiceType, setCurrentServiceType] = useState(null); // 'machine', 'compressor', or 'drilling_tool'
-  
+
   // Available items for service
   const [availableMachineItems, setAvailableMachineItems] = useState([]);
   const [availableCompressorItems, setAvailableCompressorItems] = useState([]);
   const [availableDrillingTools, setAvailableDrillingTools] = useState([]);
   const [selectedServiceItems, setSelectedServiceItems] = useState([]);
   const [selectedDrillingTools, setSelectedDrillingTools] = useState([]);
-  
+
   // Currently fitted items
   const [fittedMachineItems, setFittedMachineItems] = useState([]);
   const [fittedCompressorItems, setFittedCompressorItems] = useState([]);
-  
+
   const hasFetchedRef = useRef(false);
 
   // Fetch data
@@ -242,7 +212,7 @@ const DailyEntry = () => {
   useEffect(() => {
     if (hasFetchedRef.current) return;
     hasFetchedRef.current = true;
-    
+
     fetchEntries();
     fetchSites();
     fetchMachines();
@@ -262,16 +232,7 @@ const DailyEntry = () => {
     }
   }, [selectedShift1Machine, selectedShift1Compressor]);
 
-  useEffect(() => {
-    if (selectedShift2Machine?.vehicleType) {
-      fetchAvailableMachineItems(selectedShift2Machine.vehicleType);
-      fetchFittedMachineItems(selectedShift2Machine.id);
-    }
-    if (selectedShift2Compressor?.compressorName) {
-      fetchAvailableCompressorItems(selectedShift2Compressor.compressorName);
-      fetchFittedCompressorItems(selectedShift2Compressor.id);
-    }
-  }, [selectedShift2Machine, selectedShift2Compressor]);
+
 
   // Auto-generate reference number
   const generateRefNo = async () => {
@@ -284,95 +245,69 @@ const DailyEntry = () => {
     }
   };
 
-  // Handle machine selection for shifts
-  const handleMachineChange = (machineId, shift) => {
+  // Handle machine selection (Shared for both shifts)
+  const handleMachineChange = (machineId) => {
     const machine = machines.find(m => m.id === machineId);
-    
-    if (shift === 1) {
-      setSelectedShift1Machine(machine);
+    setSelectedShift1Machine(machine);
+
+    // Update Shift 1 Machine
+    setShift1Data(prev => ({
+      ...prev,
+      vehicleId: machineId,
+      vehicleOpeningRPM: machine?.vehicleRPM || 0,
+      compressorId: machine?.compressorId || null,
+    }));
+
+    // Update Shift 2 Machine (mirrors Shift 1)
+    setShift2Data(prev => ({
+      ...prev,
+      vehicleId: machineId,
+      vehicleOpeningRPM: machine?.vehicleRPM || 0,
+      compressorId: machine?.compressorId || null,
+    }));
+
+    if (machine?.compressorId) {
+      const compressor = compressors.find(c => c.id === machine.compressorId);
+      setSelectedShift1Compressor(compressor);
       setShift1Data(prev => ({
         ...prev,
-        vehicleId: machineId,
-        vehicleOpeningRPM: machine?.vehicleRPM || 0,
-        compressorId: machine?.compressorId || null,
+        compressorOpeningRPM: compressor?.compressorRPM || 0,
       }));
-      
-      if (machine?.compressorId) {
-        const compressor = compressors.find(c => c.id === machine.compressorId);
-        setSelectedShift1Compressor(compressor);
-        setShift1Data(prev => ({
-          ...prev,
-          compressorOpeningRPM: compressor?.compressorRPM || 0,
-        }));
-      }
-    } else {
-      setSelectedShift2Machine(machine);
       setShift2Data(prev => ({
         ...prev,
-        vehicleId: machineId,
-        vehicleOpeningRPM: machine?.vehicleRPM || 0,
-        compressorId: machine?.compressorId || null,
+        compressorOpeningRPM: compressor?.compressorRPM || 0,
       }));
-      
-      if (machine?.compressorId) {
-        const compressor = compressors.find(c => c.id === machine.compressorId);
-        setSelectedShift2Compressor(compressor);
-        setShift2Data(prev => ({
-          ...prev,
-          compressorOpeningRPM: compressor?.compressorRPM || 0,
-        }));
-      }
+    } else {
+      setSelectedShift1Compressor(null);
     }
   };
 
-  // Add employee to shift
+  // Consolidated Employee Management
+  const updateShiftEmployee = (shift, empId, field, value) => {
+    const setter = shift === 1 ? setShift1Data : setShift2Data;
+    setter(prev => ({
+      ...prev,
+      employees: prev.employees.map(e =>
+        e.id === empId ? { ...e, [field]: value } : e
+      )
+    }));
+  };
+
   const addEmployeeToShift = (shift) => {
     const newEmployee = { id: Date.now(), role: 'operator', employeeId: null };
-    if (shift === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        employees: [...prev.employees, newEmployee],
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        employees: [...prev.employees, newEmployee],
-      }));
-    }
+    const setter = shift === 1 ? setShift1Data : setShift2Data;
+    setter(prev => ({
+      ...prev,
+      employees: [...prev.employees, newEmployee],
+    }));
   };
 
-  // Remove employee from shift
   const removeEmployeeFromShift = (shift, empId) => {
-    if (shift === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        employees: prev.employees.filter(e => e.id !== empId),
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        employees: prev.employees.filter(e => e.id !== empId),
-      }));
-    }
-  };
-
-  // Update employee in shift
-  const updateEmployeeInShift = (shift, empId, field, value) => {
-    if (shift === 1) {
-      setShift1Data(prev => ({
-        ...prev,
-        employees: prev.employees.map(e => 
-          e.id === empId ? { ...e, [field]: value } : e
-        ),
-      }));
-    } else {
-      setShift2Data(prev => ({
-        ...prev,
-        employees: prev.employees.map(e => 
-          e.id === empId ? { ...e, [field]: value } : e
-        ),
-      }));
-    }
+    const setter = shift === 1 ? setShift1Data : setShift2Data;
+    setter(prev => ({
+      ...prev,
+      employees: prev.employees.filter(e => e.id !== empId),
+    }));
   };
 
   // Open service items modal
@@ -381,9 +316,9 @@ const DailyEntry = () => {
     setCurrentServiceType(serviceType);
     setSelectedServiceItems([]);
     setSelectedDrillingTools([]);
-    
+
     if (serviceType === 'machine') {
-      const machine = shift === 1 ? selectedShift1Machine : selectedShift2Machine;
+      const machine = selectedShift1Machine;
       if (machine?.vehicleType) {
         fetchAvailableMachineItems(machine.vehicleType);
         setShowMachineServiceModal(true);
@@ -391,7 +326,7 @@ const DailyEntry = () => {
         message.warning("Please select a machine first");
       }
     } else if (serviceType === 'compressor') {
-      const compressor = shift === 1 ? selectedShift1Compressor : selectedShift2Compressor;
+      const compressor = selectedShift1Compressor;
       if (compressor?.compressorName) {
         fetchAvailableCompressorItems(compressor.compressorName);
         setShowCompressorServiceModal(true);
@@ -432,7 +367,7 @@ const DailyEntry = () => {
 
   // Handle quantity change for service item
   const handleServiceItemQuantityChange = (itemId, quantity) => {
-    setSelectedServiceItems(prev => prev.map(item => 
+    setSelectedServiceItems(prev => prev.map(item =>
       item.itemId === itemId ? { ...item, quantity: Math.max(1, quantity) } : item
     ));
   };
@@ -490,7 +425,7 @@ const DailyEntry = () => {
     const shiftData = shift === 1 ? shift1Data : shift2Data;
     const currentRPM = shiftData.compressorClosingRPM || shiftData.compressorOpeningRPM || 0;
     const currentMeter = shiftData.meter || 0;
-    
+
     setSelectedDrillingTools(prev => [...prev, {
       itemId: tool.id,
       itemName: tool.itemName,
@@ -507,7 +442,7 @@ const DailyEntry = () => {
   };
 
   const handleDrillingToolRPMChange = (itemId, field, value) => {
-    setSelectedDrillingTools(prev => prev.map(tool => 
+    setSelectedDrillingTools(prev => prev.map(tool =>
       tool.itemId === itemId ? { ...tool, [field]: value } : tool
     ));
   };
@@ -584,81 +519,8 @@ const DailyEntry = () => {
   const handleSubmit = async () => {
     try {
       const dateStr = selectedDate.format("YYYY-MM-DD");
-      
-      // If editing, update existing entry
-      if (editingId) {
-        // Determine which shift is being edited
-        const editingEntry = entries.find(e => e.id === editingId);
-        const editingShift = editingEntry?.shift || 1;
-        
-        // Validate the shift being edited
-        const shiftData = editingShift === 1 ? shift1Data : shift2Data;
-        const shiftOperators = shiftData.employees.filter(e => e.role === 'operator' && e.employeeId);
-        if (shiftOperators.length === 0) {
-          message.error(`Shift ${editingShift} must have at least one operator`);
-          return;
-        }
-        if (!shiftData.siteId || !shiftData.vehicleId) {
-          message.error(`Shift ${editingShift} must have site and machine selected`);
-          return;
-        }
 
-        // Get current RPM for service items
-        const currentVehicleRPM = shiftData.vehicleClosingRPM || 0;
-        const currentCompressorRPM = shiftData.compressorClosingRPM || 0;
-        const currentMeter = shiftData.meter || 0;
-
-        // Prepare payload based on which shift is being edited
-        const payload = {
-          date: dateStr,
-          shift: editingShift,
-          siteId: shiftData.siteId,
-          vehicleId: shiftData.vehicleId,
-          compressorId: shiftData.compressorId,
-          vehicleOpeningRPM: shiftData.vehicleOpeningRPM || 0,
-          vehicleClosingRPM: shiftData.vehicleClosingRPM || 0,
-          compressorOpeningRPM: shiftData.compressorOpeningRPM || 0,
-          compressorClosingRPM: shiftData.compressorClosingRPM || 0,
-          dieselUsed: shiftData.dieselUsed || 0,
-          vehicleHSD: shiftData.vehicleHSD || 0,
-          compressorHSD: shiftData.compressorHSD || 0,
-          noOfHoles: shiftData.noOfHoles || 0,
-          meter: shiftData.meter || 0,
-          employees: shiftData.employees
-            .filter(e => e.employeeId)
-            .map(e => ({ employeeId: e.employeeId, role: e.role, shift: editingShift })),
-          vehicleServiceDone: Boolean(shiftData.vehicleServiceDone),
-          compressorServiceDone: Boolean(shiftData.compressorServiceDone),
-          machineServiceItems: shiftData.machineServiceItems.map(item => ({
-            itemId: item.itemId,
-            action: item.action || 'fit',
-            quantity: item.quantity || 1
-          })),
-          compressorServiceItems: shiftData.compressorServiceItems.map(item => ({
-            itemId: item.itemId,
-            action: item.action || 'fit',
-            quantity: item.quantity || 1
-          })),
-          drillingTools: shiftData.drillingTools.map(tool => ({
-            itemId: tool.itemId,
-            action: tool.action || 'fit',
-            startingRPM: tool.startingRPM || 0,
-            startingMeter: tool.startingMeter || 0,
-          })),
-          notes: editingEntry?.notes || "",
-        };
-
-        // Update using PUT API
-        await api.put(`/api/dailyEntries/${editingId}`, payload);
-        message.success(`Shift ${editingShift} entry updated successfully`);
-        
-        // Refresh and close form
-        await fetchEntries();
-        await fetchMachines();
-        await fetchCompressors();
-        handleCancel();
-        return;
-      }
+      // Create new entries - always create both shifts
 
       // Create new entries - always create both shifts
       // Validate Shift 1 (at least one operator required)
@@ -671,7 +533,7 @@ const DailyEntry = () => {
         message.error("Shift 1 must have site and machine selected");
         return;
       }
-      
+
       // Validate Shift 2
       const shift2Operators = shift2Data.employees.filter(e => e.role === 'operator' && e.employeeId);
       if (shift2Operators.length === 0) {
@@ -724,7 +586,7 @@ const DailyEntry = () => {
         })),
         notes: "",
       };
-      
+
       await api.post("/api/dailyEntries", payload1);
       message.success("Shift 1 entry saved successfully");
 
@@ -769,7 +631,7 @@ const DailyEntry = () => {
         })),
         notes: "",
       };
-      
+
       await api.post("/api/dailyEntries", payload2);
       message.success("Shift 2 entry saved successfully");
 
@@ -779,7 +641,7 @@ const DailyEntry = () => {
       await fetchMachines();
       await fetchCompressors();
       handleCancel();
-      
+
     } catch (err) {
       message.error(`Failed to save daily entries: ${err.response?.data?.message || err.message}`);
     }
@@ -809,30 +671,9 @@ const DailyEntry = () => {
       vehicleServiceDone: false,
       compressorServiceDone: false,
     });
-    setShift2Data({
-      siteId: null,
-      vehicleId: null,
-      compressorId: null,
-      vehicleOpeningRPM: 0,
-      vehicleClosingRPM: 0,
-      compressorOpeningRPM: 0,
-      compressorClosingRPM: 0,
-      vehicleHSD: 0,
-      compressorHSD: 0,
-      dieselUsed: 0,
-      noOfHoles: 0,
-      meter: 0,
-      employees: [],
-      machineServiceItems: [],
-      compressorServiceItems: [],
-      drillingTools: [],
-      vehicleServiceDone: false,
-      compressorServiceDone: false,
-    });
+    setShift2Data(getInitialShiftData());
     setSelectedShift1Machine(null);
-    setSelectedShift2Machine(null);
     setSelectedShift1Compressor(null);
-    setSelectedShift2Compressor(null);
   };
 
   // Handle delete
@@ -846,97 +687,7 @@ const DailyEntry = () => {
     }
   };
 
-  // Handle edit
-  const handleEdit = async (id) => {
-    try {
-      setLoading(true);
-      const res = await api.get(`/api/dailyEntries/${id}`);
-      const entry = res.data.data;
 
-      if (!entry) {
-        message.error("Entry not found");
-        return;
-      }
-
-      // Set editing ID
-      setEditingId(id);
-
-      // Set date
-      setSelectedDate(entry.date ? dayjs(entry.date) : dayjs());
-
-      // Determine which shift this entry belongs to
-      const entryShift = entry.shift || 1;
-
-      // Prepare employee data
-      const entryEmployees = entry.employees || [];
-      const employeesData = entryEmployees.map((emp, index) => ({
-        id: Date.now() + index,
-        employeeId: emp.id,
-        role: emp.role || 'operator',
-      }));
-
-      // Prepare entry data
-      const entryData = {
-        siteId: entry.siteId,
-        vehicleId: entry.vehicleId,
-        compressorId: entry.compressorId,
-        vehicleOpeningRPM: entry.vehicleOpeningRPM || 0,
-        vehicleClosingRPM: entry.vehicleClosingRPM || 0,
-        compressorOpeningRPM: entry.compressorOpeningRPM || 0,
-        compressorClosingRPM: entry.compressorClosingRPM || 0,
-        vehicleHSD: entry.vehicleHSD || 0,
-        compressorHSD: entry.compressorHSD || 0,
-        dieselUsed: entry.dieselUsed || 0,
-        noOfHoles: entry.noOfHoles || 0,
-        meter: entry.meter || 0,
-        employees: employeesData,
-        machineServiceItems: [],
-        compressorServiceItems: [],
-        drillingTools: [],
-        vehicleServiceDone: entry.vehicleServiceDone || false,
-        compressorServiceDone: entry.compressorServiceDone || false,
-      };
-
-      // Set machine and compressor selections
-      if (entryShift === 1) {
-        setShift1Data(entryData);
-        const machine = machines.find(m => m.id === entry.vehicleId);
-        const compressor = compressors.find(c => c.id === entry.compressorId);
-        setSelectedShift1Machine(machine);
-        setSelectedShift1Compressor(compressor);
-        
-        // Fetch fitted items for this entry
-        if (entry.vehicleId) {
-          fetchFittedMachineItems(entry.vehicleId);
-        }
-        if (entry.compressorId) {
-          fetchFittedCompressorItems(entry.compressorId);
-        }
-      } else {
-        setShift2Data(entryData);
-        const machine = machines.find(m => m.id === entry.vehicleId);
-        const compressor = compressors.find(c => c.id === entry.compressorId);
-        setSelectedShift2Machine(machine);
-        setSelectedShift2Compressor(compressor);
-        
-        // Fetch fitted items for this entry
-        if (entry.vehicleId) {
-          fetchFittedMachineItems(entry.vehicleId);
-        }
-        if (entry.compressorId) {
-          fetchFittedCompressorItems(entry.compressorId);
-        }
-      }
-
-      // Show form
-      setShowForm(true);
-      message.success("Entry loaded for editing");
-    } catch (err) {
-      message.error(`Failed to load entry: ${err.response?.data?.message || err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Render shift section
   const renderShiftSection = (shift, shiftData, selectedMachine, selectedCompressor) => {
@@ -952,12 +703,13 @@ const DailyEntry = () => {
     const compressorRPMDiff = (shiftData.compressorClosingRPM || 0) - (shiftData.compressorOpeningRPM || 0);
 
     return (
-      <Card 
+      <Card
         title={`Shift ${shift}`}
         className="mb-4"
       >
         <>
-            {/* Basic Info */}
+          {/* Basic Info - Only for Shift 1 */}
+          {shift === 1 && (
             <div className="mb-4">
               <Title level={5}>Basic Information</Title>
               <Row gutter={16}>
@@ -984,7 +736,7 @@ const DailyEntry = () => {
                     className="w-full mt-1"
                     placeholder="Select machine"
                     value={shiftData.vehicleId}
-                    onChange={(value) => handleMachineChange(value, shift)}
+                    onChange={(value) => handleMachineChange(value)}
                     showSearch
                     optionFilterProp="children"
                   >
@@ -1005,6 +757,7 @@ const DailyEntry = () => {
                     showSearch
                     optionFilterProp="children"
                     allowClear
+                    disabled
                   >
                     {compressors.map(compressor => (
                       <Select.Option key={compressor.id} value={compressor.id}>
@@ -1015,393 +768,394 @@ const DailyEntry = () => {
                 </Col>
               </Row>
             </div>
+          )}
 
-            {/* Service Details Display */}
-            {selectedMachine && (
-              <Alert
-                message="Service Details"
-                description={
-                  <div>
-                    <Text><strong>Machine Current RPM:</strong> {truncateToFixed(selectedMachine.vehicleRPM || 0, 2)}</Text><br />
-                    <Text><strong>Machine Next Service:</strong> {selectedMachine.nextServiceRPM || 'Not set'}</Text><br />
-                    {selectedCompressor && (
-                      <>
-                        <Text><strong>Compressor Current RPM:</strong> {truncateToFixed(selectedCompressor.compressorRPM || 0, 2)}</Text><br />
-                        <Text><strong>Compressor Next Service:</strong> {selectedCompressor.nextServiceRPM || 'Not set'}</Text>
-                      </>
-                    )}
+          {/* Service Details Display */}
+          {selectedMachine && (
+            <Alert
+              message="Service Details"
+              description={
+                <div>
+                  <Text><strong>Machine Current RPM:</strong> {truncateToFixed(selectedMachine.vehicleRPM || 0, 2)}</Text><br />
+                  <Text><strong>Machine Next Service:</strong> {selectedMachine.nextServiceRPM || 'Not set'}</Text><br />
+                  {selectedCompressor && (
+                    <>
+                      <Text><strong>Compressor Current RPM:</strong> {truncateToFixed(selectedCompressor.compressorRPM || 0, 2)}</Text><br />
+                      <Text><strong>Compressor Next Service:</strong> {selectedCompressor.nextServiceRPM || 'Not set'}</Text>
+                    </>
+                  )}
+                </div>
+              }
+              type="info"
+              className="mb-4"
+            />
+          )}
+
+          {/* RPM Tracking */}
+          <div className="mb-4">
+            <Title level={5}>RPM Tracking</Title>
+            <Row gutter={16}>
+              <Col xs={24} sm={12}>
+                <Card title="Machine RPM" size="small">
+                  <Row gutter={8}>
+                    <Col span={12}>
+                      <Text strong>Opening</Text>
+                      <InputNumber
+                        className="w-full mt-1"
+                        value={shiftData.vehicleOpeningRPM}
+                        onChange={(value) => updateShiftData('vehicleOpeningRPM', value)}
+                        min={0}
+                        step={0.1}
+                        precision={1}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Text strong>Closing</Text>
+                      <InputNumber
+                        className="w-full mt-1"
+                        value={shiftData.vehicleClosingRPM}
+                        onChange={(value) => updateShiftData('vehicleClosingRPM', value)}
+                        min={0}
+                        step={0.1}
+                        precision={1}
+                      />
+                    </Col>
+                  </Row>
+                  <div className="text-center mt-2">
+                    <Text strong>Total: {truncateToFixed(vehicleRPMDiff, 2)} RPM</Text>
                   </div>
-                }
-                type="info"
-                className="mb-4"
-              />
-            )}
+                </Card>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Card title="Compressor RPM" size="small">
+                  <Row gutter={8}>
+                    <Col span={12}>
+                      <Text strong>Opening</Text>
+                      <InputNumber
+                        className="w-full mt-1"
+                        value={shiftData.compressorOpeningRPM}
+                        onChange={(value) => updateShiftData('compressorOpeningRPM', value)}
+                        min={0}
+                        step={0.1}
+                        precision={1}
+                        disabled={!shiftData.compressorId}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Text strong>Closing</Text>
+                      <InputNumber
+                        className="w-full mt-1"
+                        value={shiftData.compressorClosingRPM}
+                        onChange={(value) => updateShiftData('compressorClosingRPM', value)}
+                        min={0}
+                        step={0.1}
+                        precision={1}
+                        disabled={!shiftData.compressorId}
+                      />
+                    </Col>
+                  </Row>
+                  <div className="text-center mt-2">
+                    <Text strong>Total: {truncateToFixed(compressorRPMDiff, 2)} RPM</Text>
+                  </div>
+                </Card>
+              </Col>
+            </Row>
+          </div>
 
-            {/* RPM Tracking */}
-            <div className="mb-4">
-              <Title level={5}>RPM Tracking</Title>
-              <Row gutter={16}>
-                <Col xs={24} sm={12}>
-                  <Card title="Machine RPM" size="small">
-                    <Row gutter={8}>
-                      <Col span={12}>
-                        <Text strong>Opening</Text>
-                        <InputNumber
-                          className="w-full mt-1"
-                          value={shiftData.vehicleOpeningRPM}
-                          onChange={(value) => updateShiftData('vehicleOpeningRPM', value)}
-                          min={0}
-                          step={0.1}
-                          precision={1}
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <Text strong>Closing</Text>
-                        <InputNumber
-                          className="w-full mt-1"
-                          value={shiftData.vehicleClosingRPM}
-                          onChange={(value) => updateShiftData('vehicleClosingRPM', value)}
-                          min={0}
-                          step={0.1}
-                          precision={1}
-                        />
-                      </Col>
-                    </Row>
-                    <div className="text-center mt-2">
-                      <Text strong>Total: {truncateToFixed(vehicleRPMDiff, 2)} RPM</Text>
-                    </div>
-                  </Card>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Card title="Compressor RPM" size="small">
-                    <Row gutter={8}>
-                      <Col span={12}>
-                        <Text strong>Opening</Text>
-                        <InputNumber
-                          className="w-full mt-1"
-                          value={shiftData.compressorOpeningRPM}
-                          onChange={(value) => updateShiftData('compressorOpeningRPM', value)}
-                          min={0}
-                          step={0.1}
-                          precision={1}
-                          disabled={!shiftData.compressorId}
-                        />
-                      </Col>
-                      <Col span={12}>
-                        <Text strong>Closing</Text>
-                        <InputNumber
-                          className="w-full mt-1"
-                          value={shiftData.compressorClosingRPM}
-                          onChange={(value) => updateShiftData('compressorClosingRPM', value)}
-                          min={0}
-                          step={0.1}
-                          precision={1}
-                          disabled={!shiftData.compressorId}
-                        />
-                      </Col>
-                    </Row>
-                    <div className="text-center mt-2">
-                      <Text strong>Total: {truncateToFixed(compressorRPMDiff, 2)} RPM</Text>
-                    </div>
-                  </Card>
-                </Col>
-              </Row>
+          {/* HSD and Production */}
+          <div className="mb-4">
+            <Title level={5}>HSD & Production</Title>
+            <Row gutter={16}>
+              <Col xs={24} sm={6}>
+                <Text strong>Vehicle HSD</Text>
+                <InputNumber
+                  className="w-full mt-1"
+                  value={shiftData.vehicleHSD}
+                  onChange={(value) => updateShiftData('vehicleHSD', value)}
+                  min={0}
+                  step={0.1}
+                  precision={1}
+                />
+              </Col>
+              <Col xs={24} sm={6}>
+                <Text strong>Compressor HSD</Text>
+                <InputNumber
+                  className="w-full mt-1"
+                  value={shiftData.compressorHSD}
+                  onChange={(value) => updateShiftData('compressorHSD', value)}
+                  min={0}
+                  step={0.1}
+                  precision={1}
+                />
+              </Col>
+              <Col xs={24} sm={6}>
+                <Text strong>Diesel Used</Text>
+                <InputNumber
+                  className="w-full mt-1"
+                  value={shiftData.dieselUsed}
+                  onChange={(value) => updateShiftData('dieselUsed', value)}
+                  min={0}
+                  step={0.1}
+                  precision={1}
+                />
+              </Col>
+              <Col xs={24} sm={6}>
+                <Text strong>No. of Holes</Text>
+                <InputNumber
+                  className="w-full mt-1"
+                  value={shiftData.noOfHoles}
+                  onChange={(value) => updateShiftData('noOfHoles', value)}
+                  min={0}
+                />
+              </Col>
+            </Row>
+            <Row gutter={16} className="mt-3">
+              <Col xs={24} sm={6}>
+                <Text strong>Total Meter</Text>
+                <InputNumber
+                  className="w-full mt-1"
+                  value={shiftData.meter}
+                  onChange={(value) => updateShiftData('meter', value)}
+                  min={0}
+                  step={0.1}
+                  precision={1}
+                />
+              </Col>
+            </Row>
+          </div>
+
+          {/* Employees */}
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <Title level={5}>Employees</Title>
+              <Button
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => addEmployeeToShift(shift)}
+              >
+                Add Employee
+              </Button>
             </div>
-
-            {/* HSD and Production */}
-            <div className="mb-4">
-              <Title level={5}>HSD & Production</Title>
-              <Row gutter={16}>
-                <Col xs={24} sm={6}>
-                  <Text strong>Vehicle HSD</Text>
-                  <InputNumber
-                    className="w-full mt-1"
-                    value={shiftData.vehicleHSD}
-                    onChange={(value) => updateShiftData('vehicleHSD', value)}
-                    min={0}
-                    step={0.1}
-                    precision={1}
-                  />
+            {shiftData.employees.map((emp) => (
+              <Row gutter={16} key={emp.id} className="mb-2">
+                <Col xs={24} sm={8}>
+                  <Select
+                    placeholder="Select role"
+                    value={emp.role}
+                    onChange={(value) => updateEmployeeInShift(shift, emp.id, 'role', value)}
+                    className="w-full"
+                  >
+                    <Select.Option value="operator">Operator</Select.Option>
+                    <Select.Option value="helper">Helper</Select.Option>
+                  </Select>
                 </Col>
-                <Col xs={24} sm={6}>
-                  <Text strong>Compressor HSD</Text>
-                  <InputNumber
-                    className="w-full mt-1"
-                    value={shiftData.compressorHSD}
-                    onChange={(value) => updateShiftData('compressorHSD', value)}
-                    min={0}
-                    step={0.1}
-                    precision={1}
-                  />
+                <Col xs={24} sm={14}>
+                  <Select
+                    placeholder={`Select ${emp.role}`}
+                    value={emp.employeeId}
+                    onChange={(value) => updateEmployeeInShift(shift, emp.id, 'employeeId', value)}
+                    showSearch
+                    optionFilterProp="children"
+                    className="w-full"
+                  >
+                    {employees.map(employee => (
+                      <Select.Option key={employee.id} value={employee.id}>
+                        {employee.name} ({employee.empId})
+                      </Select.Option>
+                    ))}
+                  </Select>
                 </Col>
-                <Col xs={24} sm={6}>
-                  <Text strong>Diesel Used</Text>
-                  <InputNumber
-                    className="w-full mt-1"
-                    value={shiftData.dieselUsed}
-                    onChange={(value) => updateShiftData('dieselUsed', value)}
-                    min={0}
-                    step={0.1}
-                    precision={1}
-                  />
-                </Col>
-                <Col xs={24} sm={6}>
-                  <Text strong>No. of Holes</Text>
-                  <InputNumber
-                    className="w-full mt-1"
-                    value={shiftData.noOfHoles}
-                    onChange={(value) => updateShiftData('noOfHoles', value)}
-                    min={0}
+                <Col xs={24} sm={2}>
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => removeEmployeeFromShift(shift, emp.id)}
                   />
                 </Col>
               </Row>
-              <Row gutter={16} className="mt-3">
-                <Col xs={24} sm={6}>
-                  <Text strong>Total Meter</Text>
-                  <InputNumber
-                    className="w-full mt-1"
-                    value={shiftData.meter}
-                    onChange={(value) => updateShiftData('meter', value)}
-                    min={0}
-                    step={0.1}
-                    precision={1}
-                  />
-                </Col>
-              </Row>
-            </div>
+            ))}
+          </div>
 
-            {/* Employees */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <Title level={5}>Employees</Title>
+          {/* Service Items Section */}
+          <div className="mb-4" style={{ border: '1px solid #d9d9d9', padding: '16px', borderRadius: '4px' }}>
+            <Title level={5} style={{ marginBottom: '16px' }}>Service Items</Title>
+            <Row gutter={[8, 8]} style={{ marginBottom: '16px' }}>
+              <Col xs={24} sm={8}>
                 <Button
-                  type="dashed"
+                  type="primary"
+                  block
                   icon={<PlusOutlined />}
-                  onClick={() => addEmployeeToShift(shift)}
+                  onClick={() => openServiceItemsModal(shift, 'machine')}
+                  size="large"
                 >
-                  Add Employee
+                  Machine Service
                 </Button>
-              </div>
-              {shiftData.employees.map((emp) => (
-                <Row gutter={16} key={emp.id} className="mb-2">
-                  <Col xs={24} sm={8}>
-                    <Select
-                      placeholder="Select role"
-                      value={emp.role}
-                      onChange={(value) => updateEmployeeInShift(shift, emp.id, 'role', value)}
-                      className="w-full"
-                    >
-                      <Select.Option value="operator">Operator</Select.Option>
-                      <Select.Option value="helper">Helper</Select.Option>
-                    </Select>
-                  </Col>
-                  <Col xs={24} sm={14}>
-                    <Select
-                      placeholder={`Select ${emp.role}`}
-                      value={emp.employeeId}
-                      onChange={(value) => updateEmployeeInShift(shift, emp.id, 'employeeId', value)}
-                      showSearch
-                      optionFilterProp="children"
-                      className="w-full"
-                    >
-                      {employees.map(employee => (
-                        <Select.Option key={employee.id} value={employee.id}>
-                          {employee.name} ({employee.empId})
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  </Col>
-                  <Col xs={24} sm={2}>
-                    <Button
-                      danger
-                      icon={<DeleteOutlined />}
-                      onClick={() => removeEmployeeFromShift(shift, emp.id)}
-                    />
-                  </Col>
-                </Row>
-              ))}
+              </Col>
+              <Col xs={24} sm={8}>
+                <Button
+                  type="primary"
+                  block
+                  icon={<PlusOutlined />}
+                  onClick={() => openServiceItemsModal(shift, 'compressor')}
+                  size="large"
+                >
+                  Compressor Service
+                </Button>
+              </Col>
+              <Col xs={24} sm={8}>
+                <Button
+                  type="primary"
+                  block
+                  icon={<PlusOutlined />}
+                  onClick={() => openServiceItemsModal(shift, 'drilling_tool')}
+                  size="large"
+                >
+                  Fit Drilling Tools
+                </Button>
+              </Col>
+            </Row>
+
+            {/* Machine Service Items */}
+            <div className="mb-3">
+              <Text strong>Machine Service Items:</Text>
+              <Table
+                dataSource={shiftData.machineServiceItems}
+                columns={[
+                  { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+                  { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                  {
+                    title: "Quantity",
+                    dataIndex: "quantity",
+                    key: "quantity",
+                    render: (qty) => qty || 1
+                  },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => removeServiceItem(shift, 'machine', record.itemId)}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                pagination={false}
+                size="small"
+                rowKey="itemId"
+                locale={{ emptyText: "No machine service items added" }}
+              />
             </div>
 
-            {/* Service Items Section */}
-            <div className="mb-4" style={{ border: '1px solid #d9d9d9', padding: '16px', borderRadius: '4px' }}>
-              <Title level={5} style={{ marginBottom: '16px' }}>Service Items</Title>
-              <Row gutter={[8, 8]} style={{ marginBottom: '16px' }}>
-                <Col xs={24} sm={8}>
-                  <Button
-                    type="primary"
-                    block
-                    icon={<PlusOutlined />}
-                    onClick={() => openServiceItemsModal(shift, 'machine')}
-                    size="large"
-                  >
-                    Machine Service
-                  </Button>
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Button
-                    type="primary"
-                    block
-                    icon={<PlusOutlined />}
-                    onClick={() => openServiceItemsModal(shift, 'compressor')}
-                    size="large"
-                  >
-                    Compressor Service
-                  </Button>
-                </Col>
-                <Col xs={24} sm={8}>
-                  <Button
-                    type="primary"
-                    block
-                    icon={<PlusOutlined />}
-                    onClick={() => openServiceItemsModal(shift, 'drilling_tool')}
-                    size="large"
-                  >
-                    Fit Drilling Tools
-                  </Button>
-                </Col>
-              </Row>
-
-              {/* Machine Service Items */}
-              <div className="mb-3">
-                <Text strong>Machine Service Items:</Text>
-                <Table
-                  dataSource={shiftData.machineServiceItems}
-                  columns={[
-                    { title: "Item Name", dataIndex: "itemName", key: "itemName" },
-                    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-                    { 
-                      title: "Quantity", 
-                      dataIndex: "quantity",
-                      key: "quantity",
-                      render: (qty) => qty || 1
-                    },
-                    {
-                      title: "Actions",
-                      key: "actions",
-                      render: (_, record) => (
-                        <Button
-                          size="small"
-                          danger
-                          onClick={() => removeServiceItem(shift, 'machine', record.itemId)}
-                        >
-                          Remove
-                        </Button>
-                      )
-                    }
-                  ]}
-                  pagination={false}
-                  size="small"
-                  rowKey="itemId"
-                  locale={{ emptyText: "No machine service items added" }}
-                />
-              </div>
-
-              {/* Compressor Service Items */}
-              <div className="mb-3">
-                <Text strong>Compressor Service Items:</Text>
-                <Table
-                  dataSource={shiftData.compressorServiceItems}
-                  columns={[
-                    { title: "Item Name", dataIndex: "itemName", key: "itemName" },
-                    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-                    { 
-                      title: "Quantity", 
-                      dataIndex: "quantity",
-                      key: "quantity",
-                      render: (qty) => qty || 1
-                    },
-                    {
-                      title: "Actions",
-                      key: "actions",
-                      render: (_, record) => (
-                        <Button
-                          size="small"
-                          danger
-                          onClick={() => removeServiceItem(shift, 'compressor', record.itemId)}
-                        >
-                          Remove
-                        </Button>
-                      )
-                    }
-                  ]}
-                  pagination={false}
-                  size="small"
-                  rowKey="itemId"
-                  locale={{ emptyText: "No compressor service items added" }}
-                />
-              </div>
-
-              {/* Drilling Tools */}
-              <div className="mb-3">
-                <Text strong>Drilling Tools:</Text>
-                <Table
-                  dataSource={shiftData.drillingTools}
-                  columns={[
-                    { title: "Tool Name", dataIndex: "itemName", key: "itemName" },
-                    { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-                    { 
-                      title: "Starting RPM", 
-                      dataIndex: "startingRPM",
-                      key: "startingRPM",
-                      render: (rpm) => truncateToFixed(rpm || 0, 2)
-                    },
-                    { 
-                      title: "Starting Meter", 
-                      dataIndex: "startingMeter",
-                      key: "startingMeter",
-                      render: (meter) => truncateToFixed(meter || 0, 2)
-                    },
-                    {
-                      title: "Actions",
-                      key: "actions",
-                      render: (_, record) => (
-                        <Button
-                          size="small"
-                          danger
-                          onClick={() => removeDrillingTool(shift, record.itemId)}
-                        >
-                          Remove
-                        </Button>
-                      )
-                    }
-                  ]}
-                  pagination={false}
-                  size="small"
-                  rowKey="itemId"
-                  locale={{ emptyText: "No drilling tools added" }}
-                />
-              </div>
+            {/* Compressor Service Items */}
+            <div className="mb-3">
+              <Text strong>Compressor Service Items:</Text>
+              <Table
+                dataSource={shiftData.compressorServiceItems}
+                columns={[
+                  { title: "Item Name", dataIndex: "itemName", key: "itemName" },
+                  { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                  {
+                    title: "Quantity",
+                    dataIndex: "quantity",
+                    key: "quantity",
+                    render: (qty) => qty || 1
+                  },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => removeServiceItem(shift, 'compressor', record.itemId)}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                pagination={false}
+                size="small"
+                rowKey="itemId"
+                locale={{ emptyText: "No compressor service items added" }}
+              />
             </div>
 
-            {/* Service Status */}
-            <div className="mb-4">
-              <Title level={5}>Service Status</Title>
-              <Row gutter={16}>
-                <Col xs={24} sm={12}>
-                  <Text strong>Vehicle Service Done</Text>
-                  <div className="mt-1">
-                    <Switch
-                      checked={shiftData.vehicleServiceDone}
-                      onChange={(checked) => updateShiftData('vehicleServiceDone', checked)}
-                      checkedChildren="Done"
-                      unCheckedChildren="Pending"
-                    />
-                  </div>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Text strong>Compressor Service Done</Text>
-                  <div className="mt-1">
-                    <Switch
-                      checked={shiftData.compressorServiceDone}
-                      onChange={(checked) => updateShiftData('compressorServiceDone', checked)}
-                      checkedChildren="Done"
-                      unCheckedChildren="Pending"
-                      disabled={!shiftData.compressorId}
-                    />
-                  </div>
-                </Col>
-              </Row>
+            {/* Drilling Tools */}
+            <div className="mb-3">
+              <Text strong>Drilling Tools:</Text>
+              <Table
+                dataSource={shiftData.drillingTools}
+                columns={[
+                  { title: "Tool Name", dataIndex: "itemName", key: "itemName" },
+                  { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
+                  {
+                    title: "Starting RPM",
+                    dataIndex: "startingRPM",
+                    key: "startingRPM",
+                    render: (rpm) => truncateToFixed(rpm || 0, 2)
+                  },
+                  {
+                    title: "Starting Meter",
+                    dataIndex: "startingMeter",
+                    key: "startingMeter",
+                    render: (meter) => truncateToFixed(meter || 0, 2)
+                  },
+                  {
+                    title: "Actions",
+                    key: "actions",
+                    render: (_, record) => (
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => removeDrillingTool(shift, record.itemId)}
+                      >
+                        Remove
+                      </Button>
+                    )
+                  }
+                ]}
+                pagination={false}
+                size="small"
+                rowKey="itemId"
+                locale={{ emptyText: "No drilling tools added" }}
+              />
             </div>
+          </div>
+
+          {/* Service Status */}
+          <div className="mb-4">
+            <Title level={5}>Service Status</Title>
+            <Row gutter={16}>
+              <Col xs={24} sm={12}>
+                <Text strong>Vehicle Service Done</Text>
+                <div className="mt-1">
+                  <Switch
+                    checked={shiftData.vehicleServiceDone}
+                    onChange={(checked) => updateShiftData('vehicleServiceDone', checked)}
+                    checkedChildren="Done"
+                    unCheckedChildren="Pending"
+                  />
+                </div>
+              </Col>
+              <Col xs={24} sm={12}>
+                <Text strong>Compressor Service Done</Text>
+                <div className="mt-1">
+                  <Switch
+                    checked={shiftData.compressorServiceDone}
+                    onChange={(checked) => updateShiftData('compressorServiceDone', checked)}
+                    checkedChildren="Done"
+                    unCheckedChildren="Pending"
+                    disabled={!shiftData.compressorId}
+                  />
+                </div>
+              </Col>
+            </Row>
+          </div>
         </>
       </Card>
     );
@@ -1444,12 +1198,7 @@ const DailyEntry = () => {
       key: "actions",
       render: (_, record) => (
         <Space>
-          {canEdit() && (
-            <Button 
-              icon={<EditOutlined />} 
-              onClick={() => handleEdit(record.id)}
-            />
-          )}
+
           {canDelete() && (
             <Popconfirm
               title="Are you sure you want to delete this entry?"
@@ -1506,7 +1255,7 @@ const DailyEntry = () => {
           {renderShiftSection(1, shift1Data, selectedShift1Machine, selectedShift1Compressor)}
 
           {/* Shift 2 Section */}
-          {renderShiftSection(2, shift2Data, selectedShift2Machine, selectedShift2Compressor)}
+          {renderShiftSection(2, shift2Data, selectedShift1Machine, selectedShift1Compressor)}
 
           <Divider />
 
@@ -1559,9 +1308,9 @@ const DailyEntry = () => {
               <strong>Selected Machine:</strong> {selectedShift1Machine.vehicleType} ({selectedShift1Machine.vehicleNumber})
             </Text>
           )}
-          {currentShiftForServiceModal === 2 && selectedShift2Machine && (
+          {currentShiftForServiceModal === 2 && selectedShift1Machine && (
             <Text className="mb-2 block">
-              <strong>Selected Machine:</strong> {selectedShift2Machine.vehicleType} ({selectedShift2Machine.vehicleNumber})
+              <strong>Selected Machine:</strong> {selectedShift1Machine.vehicleType} ({selectedShift1Machine.vehicleNumber})
             </Text>
           )}
           <Table
@@ -1569,8 +1318,8 @@ const DailyEntry = () => {
             columns={[
               { title: "Item Name", dataIndex: "itemName", key: "itemName" },
               { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-              { 
-                title: "Stock Count", 
+              {
+                title: "Stock Count",
                 dataIndex: "balance",
                 key: "balance",
                 render: (balance) => <Text strong>{balance || 0}</Text>
@@ -1597,7 +1346,7 @@ const DailyEntry = () => {
             rowKey="id"
             locale={{ emptyText: "No items available for this machine type" }}
           />
-          
+
           {selectedServiceItems.length > 0 && (
             <div className="mt-4">
               <Title level={5}>Selected Items:</Title>
@@ -1664,9 +1413,9 @@ const DailyEntry = () => {
               <strong>Selected Compressor:</strong> {selectedShift1Compressor.compressorName}
             </Text>
           )}
-          {currentShiftForServiceModal === 2 && selectedShift2Compressor && (
+          {currentShiftForServiceModal === 2 && selectedShift1Compressor && (
             <Text className="mb-2 block">
-              <strong>Selected Compressor:</strong> {selectedShift2Compressor.compressorName}
+              <strong>Selected Compressor:</strong> {selectedShift1Compressor.compressorName}
             </Text>
           )}
           <Table
@@ -1674,8 +1423,8 @@ const DailyEntry = () => {
             columns={[
               { title: "Item Name", dataIndex: "itemName", key: "itemName" },
               { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-              { 
-                title: "Stock Count", 
+              {
+                title: "Stock Count",
                 dataIndex: "balance",
                 key: "balance",
                 render: (balance) => <Text strong>{balance || 0}</Text>
@@ -1702,7 +1451,7 @@ const DailyEntry = () => {
             rowKey="id"
             locale={{ emptyText: "No items available for this compressor" }}
           />
-          
+
           {selectedServiceItems.length > 0 && (
             <div className="mt-4">
               <Title level={5}>Selected Items:</Title>
@@ -1770,8 +1519,8 @@ const DailyEntry = () => {
               { title: "Tool Name", dataIndex: "itemName", key: "itemName" },
               { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
               { title: "Model Name", dataIndex: "modelName", key: "modelName" },
-              { 
-                title: "Stock Count", 
+              {
+                title: "Stock Count",
                 dataIndex: "balance",
                 key: "balance",
                 render: (balance) => <Text strong>{balance || 0}</Text>
@@ -1798,7 +1547,7 @@ const DailyEntry = () => {
             rowKey="id"
             locale={{ emptyText: "No drilling tools available" }}
           />
-          
+
           {selectedDrillingTools.length > 0 && (
             <div className="mt-4">
               <Title level={5}>Selected Drilling Tools:</Title>

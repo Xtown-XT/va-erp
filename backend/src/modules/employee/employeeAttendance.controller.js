@@ -17,10 +17,10 @@ export class EmployeeAttendanceController extends BaseController {
   getAll = async (req, res, next) => {
     try {
       const { page = 1, limit = 10, date, startDate, endDate, siteId } = req.query;
-      
+
       // Build where clause for filtering
       const whereClause = {};
-      
+
       // Date filtering
       if (date) {
         whereClause.date = date;
@@ -31,13 +31,13 @@ export class EmployeeAttendanceController extends BaseController {
       } else if (endDate) {
         whereClause.date = { [Op.lte]: endDate };
       }
-      
+
       // Site filtering
       if (siteId) {
         whereClause.siteId = siteId;
       }
-      
-      
+
+
       const items = await this.service.getAll(page, limit, {
         where: whereClause,
         include: [
@@ -51,11 +51,11 @@ export class EmployeeAttendanceController extends BaseController {
           },
           {
             association: 'machine',
-            attributes: ['id', 'vehicleNumber', 'vehicleType']
+            attributes: ['id', 'machineNumber', 'machineType']
           }
         ]
       });
-      
+
       return res.json({ success: true, ...items });
     } catch (error) {
       next(error);
@@ -126,7 +126,7 @@ export class EmployeeAttendanceController extends BaseController {
         updatedBy: username,
       };
 
-      
+
       const updatedAttendance = await this.service.update(id, updatePayload, { transaction });
 
       // Handle salary deduction if salary changed
@@ -299,9 +299,9 @@ export class EmployeeAttendanceController extends BaseController {
       const username = (req.user && (req.user.username || req.user.name)) || "system";
 
       if (!Array.isArray(records) || records.length === 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: "Records array is required and must not be empty" 
+        return res.status(400).json({
+          success: false,
+          message: "Records array is required and must not be empty"
         });
       }
 
@@ -390,9 +390,9 @@ export class EmployeeAttendanceController extends BaseController {
             createdCount++;
           }
         } catch (recordError) {
-          errors.push({ 
-            employeeId: record.employeeId || 'unknown', 
-            error: recordError.message 
+          errors.push({
+            employeeId: record.employeeId || 'unknown',
+            error: recordError.message
           });
         }
       }

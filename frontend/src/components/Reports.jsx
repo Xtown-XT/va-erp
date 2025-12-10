@@ -1,122 +1,116 @@
+import React, { useState, useEffect } from "react";
 import {
   Card,
+  DatePicker,
+  Button,
+  Table,
+  Space,
+  Typography,
+  Select,
   Row,
   Col,
-  Button,
-  Typography,
+  Statistic,
+  message
 } from "antd";
 import {
-  FileTextOutlined,
-  BarChartOutlined,
-  PrinterOutlined,
+  SearchOutlined,
+  DownloadOutlined
 } from "@ant-design/icons";
-import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { getAuthHeader } from "../service/auth";
+import dayjs from "dayjs";
 
-const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
+const { Title } = Typography;
 
 const Reports = () => {
-  const navigate = useNavigate();
+  const [dateRange, setDateRange] = useState([dayjs().subtract(30, 'days'), dayjs()]);
+  const [reportData, setReportData] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  const reportTypes = [
-    {
-      title: "Item Stock Report",
-      description: "Opening, Inward, Outward, and Balance report for all items",
-      icon: <FileTextOutlined />,
-      path: "/reports/item-stock",
-      color: "#1890ff",
-    },
-    {
-      title: "Employee Salary Report",
-      description: "Employee salary details and attendance-based calculations",
-      icon: <BarChartOutlined />,
-      path: "/employee/salary",
-      color: "#fa8c16",
-    },
-    {
-      title: "Production Report",
-      description: "Daily production metrics and vehicle performance analysis",
-      icon: <BarChartOutlined />,
-      path: "/reports/production",
-      color: "#fa8c16",
-    },
-    {
-      title: "Service Report",
-      description: "Vehicle and compressor service history and schedules",
-      icon: <PrinterOutlined />,
-      path: "/reports/service",
-      color: "#eb2f96",
-    },
+  const fetchReport = async () => {
+    if (!dateRange) return;
+    setLoading(true);
+    try {
+      const startDate = dateRange[0].format('YYYY-MM-DD');
+      const endDate = dateRange[1].format('YYYY-MM-DD');
+
+      const response = await axios.get(
+        `${import.meta.env.VITE_API_URL}/api/inventory/reports/stock?startDate=${startDate}&endDate=${endDate}`,
+        { headers: getAuthHeader() }
+      );
+
+      if (response.data.success) {
+        setReportData(response.data.data);
+      }
+    } catch (error) {
+      message.error("Failed to fetch report");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReport();
+  }, []); // Initial load
+
+  const columns = [
+    { title: "Item Name", dataIndex: "name", key: "name" },
+    { title: "Part No.", dataIndex: "partNumber", key: "partNumber" },
+    { title: "Opening Balance", dataIndex: "openingBalance", sorter: (a, b) => a.openingBalance - b.openingBalance },
+    { title: "Purchased (In)", dataIndex: "purchased", sorter: (a, b) => a.purchased - b.purchased, className: "text-green-600" },
+    { title: "Consumed (Out)", dataIndex: "consumed", sorter: (a, b) => a.consumed - b.consumed, className: "text-red-600" },
+    { title: "Closing Balance", dataIndex: "closingBalance", sorter: (a, b) => a.closingBalance - b.closingBalance, render: (v) => <b>{v}</b> }
   ];
 
   return (
-    <div className="p-4 bg-gray-50 min-h-screen">
+    <div className="p-4">
+      <Card title="Stock Report">
+        <Space className="mb-4">
+          <RangePicker
+            value={dateRange}
+            onChange={setDateRange}
+          />
+          <Button type="primary" icon={<SearchOutlined />} onClick={fetchReport}>
+            Generate Report
+          </Button>
+          <Button icon={<DownloadOutlined />}>Export CSV</Button>
+        </Space>
 
-      {/* Reports Grid */}
-      <Row gutter={[24, 24]}>
-        {reportTypes.map((report, index) => (
-          <Col xs={24} sm={12} lg={6} key={index}>
-            <Card
-              hoverable
-              className="text-center h-full"
-              style={{ 
-                border: `2px solid ${report.color}20`,
-                transition: 'all 0.3s ease',
-              }}
-              bodyStyle={{ padding: '24px' }}
-              onClick={() => navigate(report.path)}
-            >
-              <div 
-                className="mb-4"
-                style={{ 
-                  fontSize: "3rem", 
-                  color: report.color,
-                  marginBottom: "1.5rem" 
-                }}
-              >
-                {report.icon}
-              </div>
-              <Title level={4} className="mb-3" style={{ color: report.color }}>
-                {report.title}
-              </Title>
-              <Text type="secondary" className="block mb-4">
-                {report.description}
-              </Text>
-              <Button 
-                type="primary" 
-                style={{ backgroundColor: report.color, borderColor: report.color }}
-                className="w-full"
-                onClick={() => navigate(report.path)}
-              >
-                Generate Report
-              </Button>
-            </Card>
-          </Col>
-        ))}
-      </Row>
-
-      {/* Quick Stats */}
-      <Row gutter={[16, 16]} className="mt-8">
-        <Col xs={24} sm={8}>
-          <Card className="text-center">
-            <div className="text-3xl font-bold text-blue-600 mb-2">4</div>
-            <Text type="secondary">Available Reports</Text>
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card className="text-center">
-            <div className="text-3xl font-bold text-green-600 mb-2">PDF</div>
-            <Text type="secondary">Export Format</Text>
-          </Card>
-        </Col>
-        <Col xs={24} sm={8}>
-          <Card className="text-center">
-            <div className="text-3xl font-bold text-purple-600 mb-2">Real-time</div>
-            <Text type="secondary">Data Updates</Text>
-          </Card>
-        </Col>
-      </Row>
+        <Table
+          columns={columns}
+          dataSource={reportData}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 20 }}
+          summary={pageData => {
+            let totalIn = 0;
+            let totalOut = 0;
+            pageData.forEach(({ purchased, consumed }) => {
+              totalIn += purchased;
+              totalOut += consumed;
+            });
+            return (
+              <Table.Summary fixed>
+                <Table.Summary.Row>
+                  <Table.Summary.Cell index={0} colSpan={3}>Total</Table.Summary.Cell>
+                  <Table.Summary.Cell index={1}>
+                    <Text type="success">{totalIn}</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={2}>
+                    <Text type="danger">{totalOut}</Text>
+                  </Table.Summary.Cell>
+                  <Table.Summary.Cell index={3} />
+                </Table.Summary.Row>
+              </Table.Summary>
+            );
+          }}
+        />
+      </Card>
     </div>
   );
 };
+
+const Text = Typography.Text;
 
 export default Reports;

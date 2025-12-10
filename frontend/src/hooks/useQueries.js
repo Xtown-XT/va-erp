@@ -38,21 +38,20 @@ export const useSites = (params = { limit: 1000 }) => {
   });
 };
 
-// Vehicles/Machines
-export const useVehicles = (params = { limit: 1000 }) => {
+// Machines
+export const useMachines = (params = { limit: 1000 }) => {
   return useQuery({
-    queryKey: queryKeys.vehicles(params),
+    queryKey: queryKeys.machines(params),
     queryFn: async () => {
       const queryString = new URLSearchParams(params).toString();
-      const res = await api.get(`/api/vehicles?${queryString}`);
+      const res = await api.get(`/api/machines?${queryString}`);
       return res.data.data || [];
     },
     staleTime: 5 * 60 * 1000,
   });
 };
 
-// Alias for vehicles
-export const useMachines = useVehicles;
+
 
 // Compressors
 export const useCompressors = (params = { limit: 1000 }) => {
@@ -130,27 +129,29 @@ export const useDailyEntries = (params = { page: 1, limit: 10 }) => {
 };
 
 // ItemService - Get fitted items
-export const useFittedItems = (vehicleId, compressorId) => {
+export const useFittedItems = (machineId, compressorId) => {
   return useQuery({
-    queryKey: ["fittedItems", { vehicleId, compressorId }],
+    queryKey: ["fittedItems", { machineId, compressorId }],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (vehicleId) params.append("vehicleId", vehicleId);
+      if (machineId) params.append("machineId", machineId);
       if (compressorId) params.append("compressorId", compressorId);
-      const res = await api.get(`/api/itemServices/fitted?${params.toString()}`);
+      const res = await api.get(`/api/dailyEntries/fitted-drilling-tools?${params.toString()}`);
       return res.data.data || [];
     },
-    enabled: !!(vehicleId || compressorId),
+    enabled: !!(machineId || compressorId),
     staleTime: 1 * 60 * 1000,
   });
 };
 
 // ItemService - Get items by type
-export const useItemsByType = (itemType) => {
+export const useItemsByType = (itemType, siteId) => {
   return useQuery({
-    queryKey: ["itemsByType", itemType],
+    queryKey: ["itemsByType", itemType, siteId],
     queryFn: async () => {
-      const res = await api.get(`/api/items/by-type/${encodeURIComponent(itemType)}`);
+      const params = new URLSearchParams();
+      if (siteId) params.append("siteId", siteId);
+      const res = await api.get(`/api/items/by-type/${encodeURIComponent(itemType)}?${params.toString()}`);
       return res.data.data || [];
     },
     enabled: !!itemType,
@@ -172,13 +173,14 @@ export const useFittedDrillingTools = (compressorId) => {
 };
 
 // Inventory Report
-export const useInventoryReport = (month, year, itemType) => {
+export const useInventoryReport = (month, year, itemType, siteId) => {
   return useQuery({
-    queryKey: ["inventoryReport", { month, year, itemType }],
+    queryKey: ["inventoryReport", { month, year, itemType, siteId }],
     queryFn: async () => {
       const params = new URLSearchParams({ month, year });
       if (itemType) params.append("itemType", itemType);
-      const res = await api.get(`/api/items/monthly-report?${params.toString()}`);
+      if (siteId) params.append("siteId", siteId);
+      const res = await api.get(`/api/inventory/reports/stock?${params.toString()}`);
       return res.data;
     },
     enabled: !!(month && year),
@@ -187,16 +189,16 @@ export const useInventoryReport = (month, year, itemType) => {
 };
 
 // Service Usage Report
-export const useServiceUsageReport = (startDate, endDate, vehicleId, compressorId) => {
+export const useServiceUsageReport = (startDate, endDate, machineId, compressorId) => {
   return useQuery({
-    queryKey: ["serviceUsageReport", { startDate, endDate, vehicleId, compressorId }],
+    queryKey: ["serviceUsageReport", { startDate, endDate, machineId, compressorId }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
-      if (vehicleId) params.append("vehicleId", vehicleId);
+      if (machineId) params.append("machineId", machineId);
       if (compressorId) params.append("compressorId", compressorId);
-      const res = await api.get(`/api/itemServices/usage-report?${params.toString()}`);
+      const res = await api.get(`/api/reports/spares-usage-log?${params.toString()}`);
       return res.data.data || [];
     },
     staleTime: 2 * 60 * 1000,

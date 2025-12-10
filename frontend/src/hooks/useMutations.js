@@ -23,7 +23,7 @@ const createMutationHook = (mutationFn, defaultOptions = {}) => {
         if (showSuccessMessage && successMessage) {
           message.success(successMessage);
         }
-        
+
         // Invalidate queries to refetch data
         invalidateQueries.forEach((key) => {
           // If key is a function, call it; otherwise use as-is
@@ -43,21 +43,21 @@ const createMutationHook = (mutationFn, defaultOptions = {}) => {
             queryClient.invalidateQueries({ queryKey: key });
           }
         });
-        
+
         if (onSuccess) {
           onSuccess(data, variables, context);
         }
       },
       onError: (error, variables, context) => {
-        const errorMsg = error?.response?.data?.message || 
-                        error?.message || 
-                        errorMessage || 
-                        'An error occurred';
-        
+        const errorMsg = error?.response?.data?.message ||
+          error?.message ||
+          errorMessage ||
+          'An error occurred';
+
         if (showErrorMessage) {
           message.error(errorMsg);
         }
-        
+
         if (onError) {
           onError(error, variables, context);
         }
@@ -74,7 +74,7 @@ export const useCreateDailyEntry = createMutationHook(
   },
   {
     successMessage: "Daily entry saved successfully",
-    invalidateQueries: [["dailyEntries"], ["vehicles"], ["compressors"]], // Invalidate all matching queries
+    invalidateQueries: [["dailyEntries"], ["machines"], ["compressors"]], // Invalidate all matching queries
   }
 );
 
@@ -134,37 +134,37 @@ export const useDeleteItem = createMutationHook(
   }
 );
 
-// Vehicle/Machine Mutations
-export const useCreateVehicle = createMutationHook(
+// Machine Mutations
+export const useCreateMachine = createMutationHook(
   async (payload) => {
-    const res = await api.post("/api/vehicles", payload);
+    const res = await api.post("/api/machines", payload);
     return res.data;
   },
   {
-    successMessage: "Vehicle created successfully",
-    invalidateQueries: [queryKeys.vehicles()],
+    successMessage: "Machine created successfully",
+    invalidateQueries: [queryKeys.machines()],
   }
 );
 
-export const useUpdateVehicle = createMutationHook(
+export const useUpdateMachine = createMutationHook(
   async ({ id, ...payload }) => {
-    const res = await api.put(`/api/vehicles/${id}`, payload);
+    const res = await api.put(`/api/machines/${id}`, payload);
     return res.data;
   },
   {
-    successMessage: "Vehicle updated successfully",
-    invalidateQueries: [queryKeys.vehicles()],
+    successMessage: "Machine updated successfully",
+    invalidateQueries: [queryKeys.machines()],
   }
 );
 
-export const useDeleteVehicle = createMutationHook(
+export const useDeleteMachine = createMutationHook(
   async (id) => {
-    const res = await api.delete(`/api/vehicles/${id}`);
+    const res = await api.delete(`/api/machines/${id}`);
     return res.data;
   },
   {
-    successMessage: "Vehicle deleted successfully",
-    invalidateQueries: [queryKeys.vehicles()],
+    successMessage: "Machine deleted successfully",
+    invalidateQueries: [queryKeys.machines()],
   }
 );
 

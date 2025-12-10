@@ -12,7 +12,7 @@ const User = sequelize.define(
     },
     username: {
       type: DataTypes.STRING,
-      unique: true,
+      unique: 'unique_username', // Explicit index name to prevent duplicates
       allowNull: false,
     },
     password: {

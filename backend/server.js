@@ -9,7 +9,7 @@ import { authenticate } from "./src/shared/middlewares/auth.js";
 import { connectDB } from "./src/config/db.js";
 import sequelize from "./src/config/db.js";
 import { apiLimiter } from "./src/shared/middlewares/rateLimit.js";
-import { seedAdminUser } from "./src/shared/seedAdmin.js";
+// import { seedAdminUser } from "./src/shared/seedAdmin.js";
 import { notFound } from "./src/shared/middlewares/notFound.js";
 import { errorHandler } from "./src/shared/middlewares/errorHandler.js";
 import {
@@ -18,26 +18,31 @@ import {
 } from "./src/modules/employee/index.js";
 import { brandRoutes } from "./src/modules/brand/index.js";
 import { dailyEntryRoutes } from "./src/modules/dailyEntry/index.js";
-import { itemRoutes } from "./src/modules/item/index.js";
-import { itemServiceRoutes } from "./src/modules/itemService/index.js";
-import { poRoutes } from "./src/modules/po/index.js";
-import { poItemRoutes } from "./src/modules/poItem/index.js";
-import { serviceRoutes } from "./src/modules/service/index.js";
-import serviceAlertsRoutes from "./src/modules/service/serviceAlerts.routes.js";
+
 import { siteRoutes } from "./src/modules/site/index.js";
 import { supplierRoutes } from "./src/modules/supplier/index.js";
-import { machineRoutes } from "./src/modules/vehicle/index.js"; // Changed from vehicleRoutes
+import { machineRoutes } from "./src/modules/machine/index.js";
 import { compressorRoutes } from "./src/modules/compressor/index.js";
 import { userRoutes } from "./src/modules/user/index.js";
 import { addressRoutes } from "./src/modules/address/index.js";
-import stockTransactionRoutes from "./src/modules/stockTransaction/stockTransaction.routes.js";
+import { sparesRoutes } from "./src/modules/spares/index.js";
+import { drillingToolsRoutes } from "./src/modules/drillingTools/index.js";
+import { inventoryRoutes } from "./src/modules/inventory/index.js";
+import itemRoutes from "./src/modules/item/item.routes.js";
+import { purchaseOrderRoutes } from "./src/modules/inventory/index.js";
+import { serviceRoutes } from "./src/modules/service/index.js";
+import reportsRoutes from "./src/modules/inventory/reports.routes.js";
+
 import { defineAssociations } from "./src/shared/models/associations.js";
-import Service from "./src/modules/service/service.model.js";
-import ItemService from "./src/modules/itemService/itemService.model.js";
+
 import DailyEntryEmployee from "./src/modules/dailyEntry/dailyEntryEmployee.model.js";
 import DailyEntry from "./src/modules/dailyEntry/dailyEntry.model.js";
 import Compressor from "./src/modules/compressor/compressor.model.js";
 import Address from "./src/modules/address/address.model.js";
+import Spares from "./src/modules/spares/spares.model.js";
+import DrillingTools from "./src/modules/drillingTools/drillingTools.model.js";
+import Purchase from "./src/modules/inventory/models/purchase.model.js";
+import SiteStock from "./src/modules/inventory/models/siteStock.model.js";
 
 const app = express();
 
@@ -45,12 +50,16 @@ dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 
+// Body parser MUST come first
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 // CORS configuration
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl, Postman)
     if (!origin) return callback(null, true);
-    
+
     // Allow localhost and the production frontend URL
     const allowedOrigins = [
       'http://localhost:5173',
@@ -59,7 +68,7 @@ app.use(cors({
       'https://va-erp-backend.onrender.com',
       'https://va-erp.xtown.in'
     ];
-    
+
     if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('localhost')) {
       callback(null, true);
     } else {
@@ -77,72 +86,19 @@ app.use("/api", apiLimiter);
 
 
 // Connect DB
-// const initializeDatabase = async () => {
-//   try {
-//     await connectDB(); // connect only
-//     defineAssociations(); // define relationships
-
-//     console.log(Object.keys(sequelize.models));
-
-//     await sequelize.sync({ force: false, alter: true }); // now sync with associations
-//     await seedAdminUser();
-//     console.log("✅ Database initialized successfully with associations");
-//   } catch (error) {
-//     console.error("❌ Database initialization failed:", error);
-//     process.exit(1);
-//   }
-// };
-
-// Replace your initializeDatabase function in server.js with this:
-
-// Replace your initializeDatabase function in server.js with this:
-
 const initializeDatabase = async () => {
   try {
- 
+
     await connectDB();
 
     defineAssociations();
-   
-    // Sync all tables without alter (to avoid conflicts with existing tables)
-    await sequelize.sync({ force: false, alter: false, logging: false });
-    
-    // Manually sync/alter specific tables that need updates
-    console.log("🔄 Syncing tables with latest schema...");
-    try {
-      // Sync DailyEntry tables (create if doesn't exist, alter if exists)
-      // Sync DailyEntryEmployee first (has foreign key to DailyEntry)
-      await DailyEntryEmployee.sync({ alter: true, logging: false });
-      console.log("✅ DailyEntryEmployee table synced");
-      
-      // Sync DailyEntry table (will create if dropped)
-      await DailyEntry.sync({ alter: true, logging: false });
-      console.log("✅ DailyEntry table synced");
-      
-      // Sync ItemService table (new)
-      await ItemService.sync({ alter: true, logging: false });
-      console.log("✅ ItemService table synced");
-      
-      // Alter Service table to add serviceName column
-      await Service.sync({ alter: true, logging: false });
-      console.log("✅ Service table columns updated");
-      
-      // Alter Compressor table to sync schema changes
-      await Compressor.sync({ alter: true, logging: false });
-      console.log("✅ Compressor table columns updated");
-      
-      // Alter Address table to allow null phone/email columns
-      await Address.sync({ alter: true, logging: false });
-      console.log("✅ Address table columns updated");
-    } catch (alterError) {
-      console.log("⚠️  Warning: Some table alterations failed (columns may already exist):", alterError.message);
-      // Continue even if alter fails - columns might already exist
-    }
-    
-    await seedAdminUser();
-    console.log("✅ Step 4: Admin user seeded");
 
-    console.log("✅ Database initialized successfully with associations");
+    await sequelize.sync({ alter: true }); // Sync with schema alterations enabled
+    // await sequelize.sync(); // Disabled simple sync
+    console.log("✅ Database synced");
+
+    // await seedAdminUser(); // Removed as per request (use seed_admin.md)
+
   } catch (error) {
     console.error("❌ Database initialization failed:", error.message);
     console.error("Full error:", error);
@@ -174,29 +130,17 @@ protectedRoutes.use("/brands", brandRoutes);
 // Daily Entry routes
 protectedRoutes.use("/dailyEntries", dailyEntryRoutes);
 
-// Item routes
-protectedRoutes.use("/items", itemRoutes);
-protectedRoutes.use("/itemServices", itemServiceRoutes);
-
-// Purchase Order routes
-protectedRoutes.use("/pos", poRoutes);
-protectedRoutes.use("/poItems", poItemRoutes);
-
-// Service routes (deprecated, but kept for backward compatibility)
-protectedRoutes.use("/services", serviceRoutes);
-protectedRoutes.use("/service-alerts", serviceAlertsRoutes);
-
 // Site routes
 protectedRoutes.use("/sites", siteRoutes);
 
 // Supplier routes
 protectedRoutes.use("/suppliers", supplierRoutes);
 
-//address routes
+// Address routes
 protectedRoutes.use("/address", addressRoutes);
 
-// Machine routes (kept /vehicles path for backward compatibility)
-protectedRoutes.use("/vehicles", machineRoutes); // Changed from vehicleRoutes
+// Machine routes
+protectedRoutes.use("/machines", machineRoutes);
 
 // Compressor routes
 protectedRoutes.use("/compressors", compressorRoutes);
@@ -204,11 +148,16 @@ protectedRoutes.use("/compressors", compressorRoutes);
 // User Management routes (Admin only)
 protectedRoutes.use("/users", userRoutes);
 
-// Stock Transaction routes
-protectedRoutes.use("/stockTransactions", stockTransactionRoutes);
-
-
-// Item Instance routes
+// Spares routes
+protectedRoutes.use("/spares", sparesRoutes);
+protectedRoutes.use("/drilling-tools", drillingToolsRoutes);
+protectedRoutes.use("/inventory", inventoryRoutes);
+protectedRoutes.use("/items", itemRoutes);
+protectedRoutes.use("/purchase-orders", purchaseOrderRoutes);
+protectedRoutes.use("/service", serviceRoutes);
+protectedRoutes.use("/reports", reportsRoutes);
+import dashboardRoutes from "./src/modules/dashboard/dashboard.routes.js";
+protectedRoutes.use("/dashboard", dashboardRoutes);
 
 // Now apply auth + mount once
 app.use("/api", authenticate, protectedRoutes);

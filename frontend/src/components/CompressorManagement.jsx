@@ -50,10 +50,10 @@ const CompressorManagement = () => {
     try {
       let queryParams = `page=${page}&limit=${limit}`;
       if (search) queryParams += `&search=${encodeURIComponent(search)}`;
-      
+
       const res = await api.get(`/api/compressors?${queryParams}`);
       setCompressors(res.data.data || []);
-      
+
       // Update pagination state
       setPagination(prev => ({
         ...prev,
@@ -72,18 +72,18 @@ const CompressorManagement = () => {
   useEffect(() => {
     fetchCompressors(pagination.current, pagination.pageSize);
   }, []);
-  
+
   // Handle pagination change
   const handleTableChange = (paginationConfig) => {
     fetchCompressors(paginationConfig.current, paginationConfig.pageSize, searchTerm);
   };
-  
+
   // Trigger search when searchTerm changes
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchCompressors(1, pagination.pageSize, searchTerm);
     }, 300); // Debounce search
-    
+
     return () => clearTimeout(timeoutId);
   }, [searchTerm]);
 
@@ -96,7 +96,8 @@ const CompressorManagement = () => {
         serialNumber: values.serialNumber || null,
         purchaseDate: values.purchaseDate ? values.purchaseDate.format("YYYY-MM-DD") : null,
         compressorRPM: values.compressorRPM ?? null,
-        nextServiceRPM: values.nextServiceRPM ?? null,
+        serviceCycleRpm: values.serviceCycleRpm ?? 250,
+        engineServiceCycleRpm: values.engineServiceCycleRpm ?? 300,
       };
 
       if (editingId) {
@@ -104,7 +105,7 @@ const CompressorManagement = () => {
       } else {
         const res = await api.post("/api/compressors", payload);
         setCompressors([res.data.data, ...compressors]);
-      
+
       }
 
       setShowForm(false);
@@ -123,7 +124,8 @@ const CompressorManagement = () => {
     form.setFieldsValue({
       ...record,
       purchaseDate: record.purchaseDate ? dayjs(record.purchaseDate) : null,
-      nextServiceRPM: record.nextServiceRPM ?? undefined,
+      serviceCycleRpm: record.serviceCycleRpm ?? 250,
+      engineServiceCycleRpm: record.engineServiceCycleRpm ?? 300,
     });
   };
 
@@ -209,12 +211,6 @@ const CompressorManagement = () => {
       dataIndex: "compressorRPM",
       key: "compressorRPM",
       render: (value) => value || 0,
-    },
-    {
-      title: "Next Service RPM",
-      dataIndex: "nextServiceRPM",
-      key: "nextServiceRPM",
-      render: (value) => value || '-',
     },
     {
       title: "Status",
@@ -383,11 +379,20 @@ const CompressorManagement = () => {
                 />
               </Form.Item>
               <Form.Item
-                name="nextServiceRPM"
-                label="Next Service RPM"
-                tooltip="Enter the RPM at which the next service is due"
+                name="serviceCycleRpm"
+                label="Compressor Service Cycle (RPM)"
+                tooltip="RPM interval for compressor service alerts"
+                initialValue={250}
               >
-                <InputNumber className="w-full" min={0} step={0.1} precision={1} placeholder="e.g., 1000" />
+                <InputNumber className="w-full" min={1} step={1} placeholder="e.g., 250" />
+              </Form.Item>
+              <Form.Item
+                name="engineServiceCycleRpm"
+                label="Engine Service Cycle (RPM)"
+                tooltip="RPM interval for engine service alerts"
+                initialValue={300}
+              >
+                <InputNumber className="w-full" min={1} step={1} placeholder="e.g., 300" />
               </Form.Item>
             </div>
             <Form.Item>
@@ -405,16 +410,16 @@ const CompressorManagement = () => {
         columns={columns}
         // dataSource={compressors}
         dataSource={(compressors || []).filter((c) => {
-        const searchMatch = c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) 
-          
-        const statusMatch = statusFilter
+          const searchMatch = c.compressorName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            c.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+
+          const statusMatch = statusFilter
             ? c.status?.toLowerCase() === statusFilter.toLowerCase()
             : true;
 
-            return searchMatch && statusMatch;
+          return searchMatch && statusMatch;
         }
-      )}
+        )}
 
         rowKey="id"
         loading={loading}

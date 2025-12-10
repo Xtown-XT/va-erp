@@ -1,7 +1,7 @@
 import EmployeeList from "./employeeList.model.js";
 import EmployeeAttendance from "./employeeAttendance.model.js";
 import Site from "../site/site.model.js";
-import Vehicle from "../vehicle/vehicle.model.js";
+import Machine from "../machine/machine.model.js";
 import DailyEntry from "../dailyEntry/dailyEntry.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
@@ -30,7 +30,7 @@ class EmployeeListCustomController extends BaseController {
       };
 
       const employee = await EmployeeList.create(employeeData);
-      
+
       return res.status(201).json({
         success: true,
         message: "Employee created successfully",
@@ -55,7 +55,7 @@ class EmployeeListCustomController extends BaseController {
       );
 
       const updatedEmployee = await EmployeeList.findByPk(id);
-      
+
       return res.json({
         success: true,
         message: "Employee updated successfully",
@@ -72,7 +72,7 @@ class EmployeeListCustomController extends BaseController {
       const { id } = req.params;
       const { page = 1, limit = 50, startDate, endDate } = req.query;
       const offset = (page - 1) * limit;
-      
+
       // Get employee with all related data
       const employee = await EmployeeList.findByPk(id, {
         include: [
@@ -89,9 +89,9 @@ class EmployeeListCustomController extends BaseController {
       });
 
       if (!employee) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Employee not found" 
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found"
         });
       }
 
@@ -107,19 +107,19 @@ class EmployeeListCustomController extends BaseController {
       // We need to join with DailyEntryEmployee to get role and shift
       const DailyEntryEmployee = (await import('../dailyEntry/dailyEntryEmployee.model.js')).default;
       const Compressor = (await import('../compressor/compressor.model.js')).default;
-      
+
       const dailyEntries = await DailyEntry.findAll({
         where,
         include: [
-          { 
-            model: Site, 
+          {
+            model: Site,
             as: 'site',
             attributes: ['id', 'siteName', 'location']
           },
-          { 
-            model: Vehicle, 
+          {
+            model: Vehicle,
             as: 'vehicle',
-            attributes: ['id', 'vehicleNumber', 'vehicleType']
+            attributes: ['id', 'machineNumber', 'machineType']
           },
           {
             model: Compressor,
@@ -127,7 +127,7 @@ class EmployeeListCustomController extends BaseController {
             attributes: ['id', 'compressorName'],
             required: false
           },
-          { 
+          {
             model: DailyEntryEmployee,
             as: 'dailyEntryEmployees',
             where: { employeeId: id },
@@ -159,7 +159,7 @@ class EmployeeListCustomController extends BaseController {
           refNo: entry.refNo,
           site: entry.site?.siteName || 'N/A',
           machine: entry.vehicle?.vehicleNumber || 'N/A',
-          machineType: entry.vehicle?.vehicleType || 'N/A',
+          machineType: entry.vehicle?.machineType || 'N/A',
           compressor: entry.compressor?.compressorName || 'N/A',
           role: empData.role || 'N/A',
           shift: empData.shift || 1,
@@ -177,7 +177,7 @@ class EmployeeListCustomController extends BaseController {
       const totalSalaryPaid = attendances.reduce((sum, a) => sum + (a.salary || 0), 0);
       const uniqueSites = [...new Set(workHistory.map(w => w.site))].filter(s => s !== 'N/A');
       const uniqueMachines = [...new Set(workHistory.map(w => w.machine))].filter(m => m !== 'N/A');
-      
+
       // Count days by role
       const operatorDays = workHistory.filter(w => w.role === 'operator').length;
       const helperDays = workHistory.filter(w => w.role === 'helper').length;

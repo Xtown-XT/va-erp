@@ -22,37 +22,37 @@ const ProductionDetail = () => {
       // Get last 30 days of data
       const startDate = dayjs().subtract(30, 'days').format('YYYY-MM-DD');
       const endDate = dayjs().format('YYYY-MM-DD');
-      
+
       const url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
       const response = await api.get(url);
 
       if (response.data.success || response.data.data) {
         const entries = response.data.data || [];
-        
+
         // Transform data similar to ProductionReport
         const transformedData = entries.map((entry) => {
-          const vehicle = entry.vehicle || machines.find(m => m.id === entry.vehicleId);
-          const isCrawler = vehicle?.vehicleType?.toLowerCase().includes('crawler');
-          const isCamper = vehicle?.vehicleType?.toLowerCase().includes('camper');
-          
-          const vehicleHSD = parseFloat(entry.vehicleHSD) || 0;
+          const machine = entry.machine || machines.find(m => m.id === entry.machineId);
+          const isCrawler = machine?.machineType?.toLowerCase().includes('crawler');
+          const isCamper = machine?.machineType?.toLowerCase().includes('camper');
+
+          const machineHSD = parseFloat(entry.machineHSD) || 0;
           const compressorHSD = parseFloat(entry.compressorHSD) || 0;
-          
+
           let crawlerHSD = 0;
           let camperHSD = 0;
-          
+
           if (isCrawler) {
-            crawlerHSD = vehicleHSD;
+            crawlerHSD = machineHSD;
           } else if (isCamper) {
-            camperHSD = vehicleHSD;
+            camperHSD = machineHSD;
           }
-          
+
           const totalHSD = parseFloat((crawlerHSD + camperHSD + compressorHSD).toFixed(2));
-          
+
           return {
             ...entry,
             site: entry.site,
-            vehicle: entry.vehicle,
+            machine: entry.machine,
             isCrawler,
             isCamper,
             crawlerHSD,
@@ -84,7 +84,7 @@ const ProductionDetail = () => {
 
   const fetchMachines = async () => {
     try {
-      const res = await api.get('/api/vehicles?limit=1000');
+      const res = await api.get('/api/machines?limit=1000');
       setMachines(res.data.data || []);
     } catch (error) {
       console.error('Error fetching machines:', error);
@@ -155,9 +155,9 @@ const ProductionDetail = () => {
       key: 'machine',
       width: 180,
       render: (_, record) => {
-        const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
+        const machine = record.machine || machines.find(m => m.id === record.machineId);
         if (!machine) return '-';
-        return `${machine.vehicleType} (${machine.vehicleNumber})`;
+        return `${machine.machineType} (${machine.machineNumber})`;
       },
     },
     {

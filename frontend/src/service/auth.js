@@ -6,7 +6,7 @@ export const getUserRole = () => {
   try {
     const token = localStorage.getItem("token");
     if (!token) return null;
-    
+
     const decoded = jwtDecode(token);
     return decoded.role;
   } catch (error) {
@@ -56,4 +56,12 @@ export const getUsername = () => {
     console.error("Error decoding token:", error);
     return null;
   }
+};
+
+export const getAuthHeader = () => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
 };

@@ -12,7 +12,7 @@ import {
   Tag,
 } from "antd";
 import { FilePdfOutlined, FileExcelOutlined } from "@ant-design/icons";
-import { useServiceUsageReport, useVehicles, useCompressors } from "../hooks/useQueries";
+import { useServiceUsageReport, useMachines, useCompressors } from "../hooks/useQueries";
 import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
@@ -25,28 +25,31 @@ const ServiceUsageReport = () => {
     dayjs().startOf("month"),
     dayjs().endOf("month"),
   ]);
-  const [selectedVehicle, setSelectedVehicle] = useState("");
+  const [selectedMachine, setSelectedMachine] = useState("");
   const [selectedCompressor, setSelectedCompressor] = useState("");
 
   // Fetch machines and compressors
-  const { data: machines = [] } = useVehicles();
+  const { data: machines = [] } = useMachines();
   const { data: compressors = [] } = useCompressors();
 
   const startDate = dateRange[0]?.format("YYYY-MM-DD");
   const endDate = dateRange[1]?.format("YYYY-MM-DD");
 
   // Fetch service usage report
-  const { data: usageData = [], isLoading } = useServiceUsageReport(
+  const { data: allUsageData = [], isLoading } = useServiceUsageReport(
     startDate,
     endDate,
-    selectedVehicle,
+    selectedMachine,
     selectedCompressor
   );
+
+  // Filter only Drilling Tools
+  const usageData = allUsageData.filter(item => item.serviceType === 'drilling_tool');
 
   // Export to Excel (CSV format)
   const exportToExcel = () => {
     const csv = [
-      ["Service Usage Report"],
+      ["Drilling Tools Report"],
       [`Date Range: ${startDate} to ${endDate}`],
       [`Generated: ${new Date().toLocaleString()}`],
       [],
@@ -76,7 +79,7 @@ const ServiceUsageReport = () => {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `service-usage-report-${startDate}-to-${endDate}.csv`;
+    link.download = `drilling-tools-report-${startDate}-to-${endDate}.csv`;
     link.click();
   };
 
@@ -86,7 +89,7 @@ const ServiceUsageReport = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Service Usage Report</title>
+          <title>Drilling Tools Report</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -99,10 +102,10 @@ const ServiceUsageReport = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Service Usage Report</h1>
+            <h1>Drilling Tools Report</h1>
             <p><strong>Date Range:</strong> ${startDate} to ${endDate}</p>
             <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-            ${selectedVehicle ? `<p><strong>Machine:</strong> ${machines.find(m => m.id === selectedVehicle)?.vehicleNumber || ""}</p>` : ""}
+            ${selectedMachine ? `<p><strong>Machine:</strong> ${machines.find(m => m.id === selectedMachine)?.machineNumber || ""}</p>` : ""}
             ${selectedCompressor ? `<p><strong>Compressor:</strong> ${compressors.find(c => c.id === selectedCompressor)?.compressorName || ""}</p>` : ""}
           </div>
           
@@ -112,7 +115,8 @@ const ServiceUsageReport = () => {
                 <th>Date</th>
                 <th>Item Name</th>
                 <th>Part Number</th>
-                <th>Type</th>
+                <th>Machine</th>
+                <th>Compressor</th>
                 <th>RPM Run</th>
                 <th>Meter Run</th>
                 <th>Qty</th>
@@ -125,7 +129,8 @@ const ServiceUsageReport = () => {
                   <td>${item.fittedDate}</td>
                   <td>${item.item?.itemName || ""}</td>
                   <td>${item.item?.partNumber || ""}</td>
-                  <td>${item.serviceType}</td>
+                  <td>${item.machine?.machineNumber || machines.find(m => m.id === item.machineId)?.machineNumber || "-"}</td>
+                  <td>${item.compressor?.compressorName || compressors.find(c => c.id === item.compressorId)?.compressorName || "-"}</td>
                   <td><strong>${item.totalRPMRun ? truncateToFixed(item.totalRPMRun, 2) : "-"}</strong></td>
                   <td>${item.totalMeterRun ? truncateToFixed(item.totalMeterRun, 2) : "-"}</td>
                   <td>${item.quantity}</td>
@@ -167,19 +172,20 @@ const ServiceUsageReport = () => {
       width: 100,
     },
     {
-      title: "Service Type",
-      dataIndex: "serviceType",
-      key: "serviceType",
+      title: "Machine",
+      dataIndex: ["machine", "machineNumber"],
+      key: "machine",
       width: 100,
-      render: (value) => {
-        const colors = {
-          machine: "blue",
-          compressor: "green",
-          drilling_tool: "purple",
-        };
-        return <Tag color={colors[value] || "default"}>{value}</Tag>;
-      },
+      render: (val, record) => record.machine?.machineNumber || machines.find(m => m.id === record.machineId)?.machineNumber || '-'
     },
+    {
+      title: "Compressor",
+      dataIndex: ["compressor", "compressorName"],
+      key: "compressor",
+      width: 120,
+      render: (val, record) => record.compressor?.compressorName || compressors.find(c => c.id === record.compressorId)?.compressorName || '-'
+    },
+
     {
       title: "Total RPM Run",
       dataIndex: "totalRPMRun",
@@ -236,7 +242,7 @@ const ServiceUsageReport = () => {
       <Card>
         <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
           <Col>
-            <Title level={2}>Service Usage Report</Title>
+            <Title level={2}>Drilling Tools Report</Title>
           </Col>
           <Col>
             <Space>
@@ -279,8 +285,8 @@ const ServiceUsageReport = () => {
             </Text>
             <Select
               placeholder="Select Machine"
-              value={selectedVehicle}
-              onChange={setSelectedVehicle}
+              value={selectedMachine}
+              onChange={setSelectedMachine}
               style={{ width: "100%" }}
               allowClear
               showSearch
@@ -291,7 +297,7 @@ const ServiceUsageReport = () => {
             >
               {machines.map((m) => (
                 <Option key={m.id} value={m.id}>
-                  {m.vehicleNumber}
+                  {m.machineNumber}
                 </Option>
               ))}
             </Select>

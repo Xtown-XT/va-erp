@@ -40,7 +40,7 @@ const Attendance = () => {
   const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState([]);
   const [sites, setSites] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
+  const [machines, setMachines] = useState([]);
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [attendanceData, setAttendanceData] = useState({});
   const [modifiedEmployees, setModifiedEmployees] = useState(new Set());
@@ -88,7 +88,7 @@ const Attendance = () => {
           workStatus: existingRecord?.workStatus || 'working',
           salary: existingRecord?.salary || 0,
           siteId: existingRecord?.siteId || '',
-          vehicleId: existingRecord?.vehicleId || '',
+          machineId: existingRecord?.machineId || '',
           recordId: existingRecord?.id || null
         };
       });
@@ -155,12 +155,12 @@ const Attendance = () => {
     }
   };
 
-  const fetchVehicles = async () => {
+  const fetchMachines = async () => {
     try {
-      const res = await api.get("/api/vehicles?limit=1000");
-      setVehicles(res.data.data || []);
+      const res = await api.get("/api/machines?limit=1000");
+      setMachines(res.data.data || []);
     } catch (err) {
-      message.error("Error fetching vehicles");
+      message.error("Error fetching machines");
     }
   };
 
@@ -169,7 +169,7 @@ const Attendance = () => {
       await Promise.all([
         fetchEmployees(),
         fetchSites(),
-        fetchVehicles()
+        fetchMachines()
       ]);
       // fetchRecords();
       fetchViewRecords(viewDate, viewSite, viewPagination.current, viewPagination.pageSize);
@@ -199,7 +199,7 @@ const Attendance = () => {
   //       [employeeId]: nextEntry,
   //     };
   //   });
-    
+
   //   // Track that this employee has been modified
   //   setModifiedEmployees(prev => new Set(prev).add(employeeId));
   // };
@@ -208,7 +208,7 @@ const Attendance = () => {
   // const saveAllAttendance = async () => {
   //   setSaving(true);
   //   const hideLoading = message.loading('Saving attendance records...', 0);
-    
+
   //   try {
   //     const currentUser = localStorage.getItem("username") || "Unknown";
   //     const dateStr = selectedDate.format("YYYY-MM-DD");
@@ -240,13 +240,13 @@ const Attendance = () => {
   //       const batchNumber = Math.floor(i / batchSize) + 1;
   //       const totalBatches = Math.ceil(entriesToSave.length / batchSize);
   //       const progress = Math.round((i / totalRecords) * 100);
-        
+
   //       console.log(`Processing batch ${batchNumber}/${totalBatches} (${progress}% complete)`);
-        
+
   //       const batchPromises = batch.map(async ([employeeId, data]) => {
   //         const emp = employees.find(e => e.id === employeeId);
   //         const empName = emp?.name || employeeId;
-          
+
   //         try {
   //           const payload = {
   //             employeeId,
@@ -255,7 +255,7 @@ const Attendance = () => {
   //             salary: Number(data.salary) || 0,
   //             date: dateStr,
   //             siteId: data.siteId || null,
-  //             vehicleId: data.vehicleId || null,
+  //             machineId: data.machineId || null,
   //           };
 
   //           if (data.recordId) {
@@ -277,10 +277,10 @@ const Attendance = () => {
   //       const results = await Promise.all(batchPromises);
   //       const batchSuccess = results.filter(r => r.success).length;
   //       const batchFail = results.filter(r => !r.success).length;
-        
+
   //       successCount += batchSuccess;
   //       failCount += batchFail;
-        
+
   //       // Track failed employees
   //       results.filter(r => !r.success).forEach(r => {
   //         failedEmployees.push({
@@ -289,9 +289,9 @@ const Attendance = () => {
   //           error: r.error
   //         });
   //       });
-        
+
   //       console.log(`Batch ${batchNumber} completed: ${batchSuccess} success, ${batchFail} failed (${Math.round(((i + batch.length) / totalRecords) * 100)}% done)`);
-        
+
   //       // Add small delay between batches to prevent transaction conflicts
   //       if (i + batchSize < entriesToSave.length) {
   //         await new Promise(resolve => setTimeout(resolve, 50));
@@ -328,73 +328,73 @@ const Attendance = () => {
   // };
 
   // Track modified employees safely
-const updateAttendanceData = (employeeId, field, value) => {
-  setAttendanceData(prev => {
-    const prevEntry = prev[employeeId] || {};
-    const nextEntry = { ...prevEntry, [field]: value };
-    if (field === 'presence' && value === 'absent') {
-      nextEntry.workStatus = 'non-working';
-    }
-    return { ...prev, [employeeId]: nextEntry };
-  });
-
-  setModifiedEmployees(prev => new Set([...prev, employeeId])); // <- important
-};
-
-// Save function using batch upsert endpoint - saves ALL employees in one API call
-const saveAllAttendance = async () => {
-  setSaving(true);
-  const hideLoading = message.loading('Saving attendance records...', 0);
-  const currentUser = localStorage.getItem("username") || "Unknown";
-  const dateStr = selectedDate.format("YYYY-MM-DD");
-
-  try {
-    // Prepare batch records - ALL employees with their data or defaults
-    const records = employees.map(emp => {
-      const existingData = attendanceData[emp.id] || {};
-      return {
-        employeeId: emp.id,
-        presence: existingData.presence || 'present',
-        workStatus: existingData.workStatus || 'working',
-        salary: Number(existingData.salary) || 0,
-        date: dateStr,
-        siteId: existingData.siteId || null,
-        vehicleId: existingData.vehicleId || null,
-      };
+  const updateAttendanceData = (employeeId, field, value) => {
+    setAttendanceData(prev => {
+      const prevEntry = prev[employeeId] || {};
+      const nextEntry = { ...prevEntry, [field]: value };
+      if (field === 'presence' && value === 'absent') {
+        nextEntry.workStatus = 'non-working';
+      }
+      return { ...prev, [employeeId]: nextEntry };
     });
 
-    console.log('Saving batch:', records.length, 'records'); // <-- debug
+    setModifiedEmployees(prev => new Set([...prev, employeeId])); // <- important
+  };
 
-    // Use batch upsert endpoint - single API call for all records
-    const response = await api.put("/api/employeeAttendance/upsert-batch", { records });
+  // Save function using batch upsert endpoint - saves ALL employees in one API call
+  const saveAllAttendance = async () => {
+    setSaving(true);
+    const hideLoading = message.loading('Saving attendance records...', 0);
+    const currentUser = localStorage.getItem("username") || "Unknown";
+    const dateStr = selectedDate.format("YYYY-MM-DD");
 
-    hideLoading();
-    
-    if (response.data.success) {
-      const { created, updated, total, errors } = response.data.data;
-      let messageText = `Saved ${total} attendance records: ${created} created, ${updated} updated`;
-      
-      if (errors && errors.length > 0) {
-        messageText += ` (${errors.length} errors)`;
-        message.warning(messageText);
-        console.error('Batch save errors:', errors);
+    try {
+      // Prepare batch records - ALL employees with their data or defaults
+      const records = employees.map(emp => {
+        const existingData = attendanceData[emp.id] || {};
+        return {
+          employeeId: emp.id,
+          presence: existingData.presence || 'present',
+          workStatus: existingData.workStatus || 'working',
+          salary: Number(existingData.salary) || 0,
+          date: dateStr,
+          siteId: existingData.siteId || null,
+          machineId: existingData.machineId || null,
+        };
+      });
+
+      console.log('Saving batch:', records.length, 'records'); // <-- debug
+
+      // Use batch upsert endpoint - single API call for all records
+      const response = await api.put("/api/employeeAttendance/upsert-batch", { records });
+
+      hideLoading();
+
+      if (response.data.success) {
+        const { created, updated, total, errors } = response.data.data;
+        let messageText = `Saved ${total} attendance records: ${created} created, ${updated} updated`;
+
+        if (errors && errors.length > 0) {
+          messageText += ` (${errors.length} errors)`;
+          message.warning(messageText);
+          console.error('Batch save errors:', errors);
+        } else {
+          message.success(messageText);
+        }
       } else {
-        message.success(messageText);
+        message.error(response.data.message || "Error saving attendance");
       }
-    } else {
-      message.error(response.data.message || "Error saving attendance");
-    }
 
-    setModifiedEmployees(new Set());
-    await fetchRecords(selectedDate);
-  } catch (err) {
-    hideLoading();
-    console.error("Error saving attendance:", err);
-    message.error(`Error saving attendance: ${err.response?.data?.message || err.message}`);
-  } finally {
-    setSaving(false);
-  }
-};
+      setModifiedEmployees(new Set());
+      await fetchRecords(selectedDate);
+    } catch (err) {
+      hideLoading();
+      console.error("Error saving attendance:", err);
+      message.error(`Error saving attendance: ${err.response?.data?.message || err.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
 
 
   // Handle individual record edit
@@ -413,7 +413,7 @@ const saveAllAttendance = async () => {
       workStatus: record.workStatus || 'working',
       salary: record.salary || 0,
       siteId: record.siteId || '',
-      vehicleId: record.vehicleId || '',
+      machineId: record.machineId || '',
     });
   };
 
@@ -445,7 +445,7 @@ const saveAllAttendance = async () => {
         salary: Number(inlineEdit.salary) || 0,
         date: dayjs(inlineEdit.date).format('YYYY-MM-DD'),
         siteId: inlineEdit.siteId || null,
-        vehicleId: inlineEdit.vehicleId || null,
+        machineId: inlineEdit.machineId || null,
       };
       await api.put(`/api/employeeAttendance/${inlineEdit.id}`, payload);
       message.success('Attendance updated');
@@ -478,14 +478,14 @@ const saveAllAttendance = async () => {
   // Get all employees for adding attendance (no filters)
   const getFilteredEmployees = () => {
     let filtered = employees;
-    
+
     // Filter by attendance status
     if (attendanceFilter === 'present') {
       filtered = filtered.filter(emp => attendanceData[emp.id]?.presence === 'present');
     } else if (attendanceFilter === 'absent') {
       filtered = filtered.filter(emp => attendanceData[emp.id]?.presence === 'absent');
     }
-    
+
     return filtered;
   };
 
@@ -560,17 +560,17 @@ const saveAllAttendance = async () => {
                 <th>Work Status</th>
                 <th>Salary</th>
                 <th>Site</th>
-                <th>Vehicle</th>
+                <th>Machine</th>
                 <th>Date</th>
               </tr>
             </thead>
             <tbody>
               ${allRecords
-            // viewRecords
+        // viewRecords
         .map(record => {
           const employee = employees.find(emp => emp.id === record.employeeId);
           const site = sites.find(s => s.id === record.siteId);
-          const vehicle = vehicles.find(v => v.id === record.vehicleId);
+          const machine = machines.find(m => m.id === record.machineId);
           return `
                     <tr>
                       <td>${employee?.name || "-"}</td>
@@ -579,7 +579,7 @@ const saveAllAttendance = async () => {
                       <td class="status-${record.workStatus?.replace('-', '')}">${record.workStatus || "-"}</td>
                       <td>₹${truncateToFixed(record.salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</td>
                       <td>${site?.siteName || "-"}</td>
-                      <td>${vehicle ? `${vehicle.vehicleNumber} (${vehicle.vehicleType})` : "-"}</td>
+                      <td>${machine ? `${machine.machineNumber} (${machine.machineType})` : "-"}</td>
                       <td>${dayjs(record.date).format('DD/MM/YYYY')}</td>
                     </tr>`;
         })
@@ -679,11 +679,11 @@ const saveAllAttendance = async () => {
       },
     },
     {
-      title: "Vehicle",
-      key: "vehicle",
+      title: "Machine",
+      key: "machine",
       render: (_, record) => {
-        const vehicle = vehicles.find(v => v.id === record.vehicleId);
-        return <Text>{vehicle ? `${vehicle.vehicleNumber} (${vehicle.vehicleType})` : '-'}</Text>;
+        const machine = machines.find(m => m.id === record.machineId);
+        return <Text>{machine ? `${machine.machineNumber} (${machine.machineType})` : '-'}</Text>;
       },
     },
     {
@@ -707,14 +707,14 @@ const saveAllAttendance = async () => {
             </Button>
           )}
           {canDelete() && (
-       
-             <Popconfirm
+
+            <Popconfirm
               title="Are you sure to delete this record permanently?"
               onConfirm={() => handleDelete(record.id)}
             >
               <Button icon={<DeleteOutlined />} danger />
             </Popconfirm>
-   
+
           )}
         </Space>
       ),
@@ -787,16 +787,16 @@ const saveAllAttendance = async () => {
             </Select>
           </Col>
           <Col xs={24} sm={12}>
-            <Text strong>Vehicle</Text>
+            <Text strong>Machine</Text>
             <Select
               className="w-full mt-1"
-              value={inlineEdit.vehicleId || ''}
-              onChange={(v) => handleInlineField('vehicleId', v)}
+              value={inlineEdit.machineId || ''}
+              onChange={(v) => handleInlineField('machineId', v)}
               allowClear
             >
-              {vehicles.map(vehicle => (
-                <Select.Option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.vehicleNumber} ({vehicle.vehicleType})
+              {machines.map(machine => (
+                <Select.Option key={machine.id} value={machine.id}>
+                  {machine.machineNumber} ({machine.machineType})
                 </Select.Option>
               ))}
             </Select>
@@ -949,7 +949,7 @@ const saveAllAttendance = async () => {
         return (
           <Select
             value={data.vehicleId || ''}
-            onChange={(value) => updateAttendanceData(employee.id, 'vehicleId', value)}
+            onChange={(value) => updateAttendanceData(employee.id, 'machineId', value)}
             style={{ width: 150 }}
             size="small"
             placeholder="Select vehicle"
@@ -957,9 +957,9 @@ const saveAllAttendance = async () => {
             showSearch
             optionFilterProp="children"
           >
-            {vehicles.map(vehicle => (
-              <Select.Option key={vehicle.id} value={vehicle.id}>
-                {vehicle.vehicleNumber} ({vehicle.vehicleType})
+            {machines.map(machine => (
+              <Select.Option key={machine.id} value={machine.id}>
+                {machine.machineNumber} ({machine.machineType})
               </Select.Option>
             ))}
           </Select>
@@ -1204,7 +1204,7 @@ const saveAllAttendance = async () => {
         />
 
       </div>
-    </div>
+    </div >
   );
 };
 

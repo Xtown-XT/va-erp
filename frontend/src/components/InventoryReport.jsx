@@ -12,7 +12,7 @@ import {
   Statistic,
 } from "antd";
 import { FilePdfOutlined, FileExcelOutlined } from "@ant-design/icons";
-import { useInventoryReport, useVehicles, useCompressors } from "../hooks/useQueries";
+import { useInventoryReport, useVehicles, useCompressors, useSites } from "../hooks/useQueries";
 import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
@@ -22,6 +22,7 @@ const { Option } = Select;
 const InventoryReport = () => {
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [itemTypeFilter, setItemTypeFilter] = useState("");
+  const [selectedSite, setSelectedSite] = useState(null);
 
   const month = selectedMonth.month() + 1; // dayjs months are 0-indexed
   const year = selectedMonth.year();
@@ -29,6 +30,7 @@ const InventoryReport = () => {
   // Fetch machines and compressors for filter
   const { data: machines = [] } = useVehicles();
   const { data: compressors = [] } = useCompressors();
+  const { data: sites = [] } = useSites();
 
   // Build item type options
   const itemTypeOptions = [
@@ -48,7 +50,8 @@ const InventoryReport = () => {
   const { data: reportData, isLoading } = useInventoryReport(
     month,
     year,
-    itemTypeFilter
+    itemTypeFilter,
+    selectedSite
   );
 
   const items = reportData?.data || [];
@@ -269,6 +272,22 @@ const InventoryReport = () => {
         </Text>
       ),
     },
+    ...(itemTypeFilter === 'Drilling Tools' ? [
+      {
+        title: "Total RPM",
+        dataIndex: "totalRPM",
+        key: "totalRPM",
+        width: 100,
+        render: (val) => truncateToFixed(val || 0, 1)
+      },
+      {
+        title: "Total Meter",
+        dataIndex: "totalMeter",
+        key: "totalMeter",
+        width: 100,
+        render: (val) => truncateToFixed(val || 0, 1)
+      }
+    ] : [])
   ];
 
   return (
@@ -320,6 +339,21 @@ const InventoryReport = () => {
               {itemTypeOptions.map((opt) => (
                 <Option key={opt.value} value={opt.value}>
                   {opt.label}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Select
+              placeholder="Filter by Site"
+              value={selectedSite}
+              onChange={setSelectedSite}
+              style={{ width: "100%" }}
+              allowClear
+            >
+              {sites.map((site) => (
+                <Option key={site.id} value={site.id}>
+                  {site.siteName}
                 </Option>
               ))}
             </Select>

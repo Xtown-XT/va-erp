@@ -29,6 +29,12 @@ export const createDailyEntrySchema = z.object({
     role: z.enum(["operator", "helper"]),
     shift: z.number().int().min(1),
   })).optional(),
+  // Machine fields (new aliases)
+  machineId: z.string().uuid("Invalid machine ID format").optional(),
+  machineOpeningRPM: z.number().min(0, "Machine opening RPM must be non-negative").optional(),
+  machineClosingRPM: z.number().min(0, "Machine closing RPM must be non-negative").optional(),
+  machineHSD: z.number().min(0, "Machine HSD must be non-negative").optional(),
+
   siteId: z.string().uuid("Invalid site ID format").optional(),
   vehicleId: z.string().uuid("Invalid vehicle ID format").optional(),
   compressorId: z.string().uuid("Invalid compressor ID format").optional(),

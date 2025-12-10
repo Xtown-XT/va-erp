@@ -18,12 +18,12 @@ const DailyEntry = sequelize.define(
       type: DataTypes.DATEONLY,
       allowNull: false,
     },
-    // Vehicle RPM - opening and closing
-    vehicleOpeningRPM: {
+    // Machine RPM - opening and closing
+    machineOpeningRPM: {
       type: DataTypes.DOUBLE,
       allowNull: true,
     },
-    vehicleClosingRPM: {
+    machineClosingRPM: {
       type: DataTypes.DOUBLE,
       allowNull: true,
     },
@@ -42,7 +42,7 @@ const DailyEntry = sequelize.define(
       allowNull: true,
     },
     // HSD usage
-    vehicleHSD: {
+    machineHSD: {
       type: DataTypes.DOUBLE,
       allowNull: true,
     },
@@ -60,7 +60,7 @@ const DailyEntry = sequelize.define(
       allowNull: true,
       defaultValue: 0,
     },
-    vehicleServiceDone: {
+    machineServiceDone: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
@@ -109,11 +109,11 @@ const DailyEntry = sequelize.define(
         key: "id",
       },
     },
-    vehicleId: {
+    machineId: {
       type: DataTypes.UUID,
       allowNull: false,
       references: {
-        model: "vehicle",
+        model: "machine",
         key: "id",
       },
     },

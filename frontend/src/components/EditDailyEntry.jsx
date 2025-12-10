@@ -23,10 +23,10 @@ import {
 import api from "../service/api";
 import dayjs from "dayjs";
 import { truncateToFixed } from "../utils/textUtils";
-import { 
-  useSites, 
-  useVehicles, 
-  useCompressors, 
+import {
+  useSites,
+  useMachines,
+  useCompressors,
   useEmployees,
 } from "../hooks/useQueries";
 import { useUpdateDailyEntry } from "../hooks/useMutations";
@@ -38,24 +38,24 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState(dayjs());
-  
+
   const { data: sites = [] } = useSites();
-  const { data: machines = [] } = useVehicles();
+  const { data: machines = [] } = useMachines();
   const { data: compressors = [] } = useCompressors();
   const { data: employees = [] } = useEmployees();
-  
+
   const updateDailyEntry = useUpdateDailyEntry();
-  
+
   // Shift 1 state
   const [shift1Data, setShift1Data] = useState({
     siteId: null,
-    vehicleId: null,
+    machineId: null,
     compressorId: null,
-    vehicleOpeningRPM: null,
-    vehicleClosingRPM: null,
+    machineOpeningRPM: null,
+    machineClosingRPM: null,
     compressorOpeningRPM: null,
     compressorClosingRPM: null,
-    vehicleHSD: null,
+    machineHSD: null,
     compressorHSD: null,
     dieselUsed: null,
     noOfHoles: null,
@@ -65,17 +65,17 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
     compressorSpares: [],
     drillingTools: [],
   });
-  
+
   // Shift 2 state  
   const [shift2Data, setShift2Data] = useState({
     siteId: null,
-    vehicleId: null,
+    machineId: null,
     compressorId: null,
-    vehicleOpeningRPM: null,
-    vehicleClosingRPM: null,
+    machineOpeningRPM: null,
+    machineClosingRPM: null,
     compressorOpeningRPM: null,
     compressorClosingRPM: null,
-    vehicleHSD: null,
+    machineHSD: null,
     compressorHSD: null,
     dieselUsed: null,
     noOfHoles: null,
@@ -85,7 +85,7 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
     compressorSpares: [],
     drillingTools: [],
   });
-  
+
   const [shift1Enabled, setShift1Enabled] = useState(true);
   const [shift2Enabled, setShift2Enabled] = useState(false);
   const [selectedShift1Machine, setSelectedShift1Machine] = useState(null);
@@ -126,9 +126,9 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
 
       // Load Shift 1 data
       if (shift1Entry) {
-        const machine = machines.find(m => m.id === shift1Entry.vehicleId);
+        const machine = machines.find(m => m.id === shift1Entry.machineId);
         setSelectedShift1Machine(machine);
-        
+
         if (shift1Entry.compressorId) {
           try {
             const compressorRes = await api.get(`/api/compressors/${shift1Entry.compressorId}`);
@@ -157,13 +157,13 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
 
         setShift1Data({
           siteId: shift1Entry.siteId,
-          vehicleId: shift1Entry.vehicleId,
+          machineId: shift1Entry.machineId || shift1Entry.vehicleId, // Fallback to vehicleId
           compressorId: shift1Entry.compressorId || null,
-          vehicleOpeningRPM: shift1Entry.vehicleOpeningRPM ?? null,
-          vehicleClosingRPM: shift1Entry.vehicleClosingRPM ?? null,
+          machineOpeningRPM: shift1Entry.machineOpeningRPM ?? shift1Entry.vehicleOpeningRPM ?? null,
+          machineClosingRPM: shift1Entry.machineClosingRPM ?? shift1Entry.vehicleClosingRPM ?? null,
           compressorOpeningRPM: shift1Entry.compressorOpeningRPM ?? null,
           compressorClosingRPM: shift1Entry.compressorClosingRPM ?? null,
-          vehicleHSD: shift1Entry.vehicleHSD ?? null,
+          machineHSD: shift1Entry.machineHSD ?? shift1Entry.vehicleHSD ?? null,
           compressorHSD: shift1Entry.compressorHSD ?? null,
           dieselUsed: shift1Entry.dieselUsed ?? null,
           noOfHoles: shift1Entry.noOfHoles ?? null,
@@ -180,9 +180,9 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
 
       // Load Shift 2 data (only if shift2EntryId was provided)
       if (shift2Entry) {
-        const machine = machines.find(m => m.id === shift2Entry.vehicleId);
+        const machine = machines.find(m => m.id === shift2Entry.machineId);
         setSelectedShift2Machine(machine);
-        
+
         const compressorId = shift2Entry.compressorId || shift1Entry?.compressorId;
         if (compressorId) {
           try {
@@ -212,13 +212,13 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
 
         setShift2Data({
           siteId: shift2Entry.siteId || shift1Entry?.siteId || null,
-          vehicleId: shift2Entry.vehicleId || shift1Entry?.vehicleId || null,
+          machineId: shift2Entry.machineId || shift1Entry?.machineId || null,
           compressorId: shift2Entry.compressorId || shift1Entry?.compressorId || null,
-          vehicleOpeningRPM: shift2Entry.vehicleOpeningRPM ?? null,
-          vehicleClosingRPM: shift2Entry.vehicleClosingRPM ?? null,
+          machineOpeningRPM: shift2Entry.machineOpeningRPM ?? shift2Entry.vehicleOpeningRPM ?? null,
+          machineClosingRPM: shift2Entry.machineClosingRPM ?? shift2Entry.vehicleClosingRPM ?? null,
           compressorOpeningRPM: shift2Entry.compressorOpeningRPM ?? null,
           compressorClosingRPM: shift2Entry.compressorClosingRPM ?? null,
-          vehicleHSD: shift2Entry.vehicleHSD ?? null,
+          machineHSD: shift2Entry.machineHSD ?? shift2Entry.vehicleHSD ?? null,
           compressorHSD: shift2Entry.compressorHSD ?? null,
           dieselUsed: shift2Entry.dieselUsed ?? null,
           noOfHoles: shift2Entry.noOfHoles ?? null,
@@ -246,16 +246,16 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
   // Handle machine change - NO AUTO-FILL in edit mode
   const handleMachineChange = (machineId, shift) => {
     const machine = machines.find(m => m.id === machineId);
-    
+
     if (shift === 1) {
       setSelectedShift1Machine(machine);
       setShift1Data(prev => ({
         ...prev,
-        vehicleId: machineId,
+        machineId: machineId,
         compressorId: machine?.compressorId || null,
         // DO NOT auto-fill opening RPM - keep existing values
       }));
-      
+
       if (machine?.compressorId) {
         const compressor = compressors.find(c => c.id === machine.compressorId);
         setSelectedShift1Compressor(compressor);
@@ -263,16 +263,16 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
       } else {
         setSelectedShift1Compressor(null);
       }
-      
+
       // Sync to Shift 2
       setSelectedShift2Machine(machine);
       setShift2Data(prev => ({
         ...prev,
-        vehicleId: machineId,
+        machineId: machineId,
         compressorId: machine?.compressorId || null,
         siteId: shift1Data.siteId || prev.siteId,
       }));
-      
+
       if (machine?.compressorId) {
         const compressor = compressors.find(c => c.id === machine.compressorId);
         setSelectedShift2Compressor(compressor);
@@ -283,11 +283,11 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
       setSelectedShift2Machine(machine);
       setShift2Data(prev => ({
         ...prev,
-        vehicleId: machineId,
+        machineId: machineId,
         compressorId: machine?.compressorId || null,
         // DO NOT auto-fill opening RPM
       }));
-      
+
       if (machine?.compressorId) {
         const compressor = compressors.find(c => c.id === machine.compressorId);
         setSelectedShift2Compressor(compressor);
@@ -302,13 +302,13 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
     try {
       const dateStr = selectedDate.format('YYYY-MM-DD');
       const shift2SiteId = shift2Data.siteId || shift1Data.siteId;
-      const shift2VehicleId = shift2Data.vehicleId || shift1Data.vehicleId;
+      const shift2VehicleId = shift2Data.machineId || shift1Data.machineId;
       const shift2CompressorId = shift2Data.compressorId || shift1Data.compressorId;
 
       const cleanPayload = (payload) => {
         const cleaned = { ...payload };
         if (cleaned.siteId === null) delete cleaned.siteId;
-        if (cleaned.vehicleId === null) delete cleaned.vehicleId;
+        if (cleaned.machineId === null) delete cleaned.machineId;
         if (cleaned.compressorId === null) delete cleaned.compressorId;
         return cleaned;
       };
@@ -319,14 +319,14 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
           date: dateStr,
           shift: 1,
           siteId: shift1Data.siteId,
-          vehicleId: shift1Data.vehicleId,
+          machineId: shift1Data.machineId,
           compressorId: shift1Data.compressorId,
-          vehicleOpeningRPM: shift1Data.vehicleOpeningRPM ?? 0,
-          vehicleClosingRPM: shift1Data.vehicleClosingRPM ?? 0,
+          machineOpeningRPM: shift1Data.machineOpeningRPM ?? 0,
+          machineClosingRPM: shift1Data.machineClosingRPM ?? 0,
           compressorOpeningRPM: shift1Data.compressorOpeningRPM ?? 0,
           compressorClosingRPM: shift1Data.compressorClosingRPM ?? 0,
           dieselUsed: shift1Data.dieselUsed ?? 0,
-          vehicleHSD: shift1Data.vehicleHSD ?? 0,
+          machineHSD: shift1Data.machineHSD ?? 0,
           compressorHSD: shift1Data.compressorHSD ?? 0,
           noOfHoles: shift1Data.noOfHoles ?? 0,
           meter: shift1Data.meter ?? 0,
@@ -338,7 +338,7 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
           compressorSpares: shift1Data.compressorSpares || [],
           drillingTools: shift1Data.drillingTools || [],
         });
-        
+
         await updateDailyEntry.mutateAsync({ id: shift1EntryId, ...payload1 });
       }
 
@@ -348,14 +348,14 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
           date: dateStr,
           shift: 2,
           siteId: shift2SiteId,
-          vehicleId: shift2VehicleId,
+          machineId: shift2VehicleId,
           compressorId: shift2CompressorId,
-          vehicleOpeningRPM: shift2Data.vehicleOpeningRPM ?? 0,
-          vehicleClosingRPM: shift2Data.vehicleClosingRPM ?? 0,
+          machineOpeningRPM: shift2Data.machineOpeningRPM ?? 0,
+          machineClosingRPM: shift2Data.machineClosingRPM ?? 0,
           compressorOpeningRPM: shift2Data.compressorOpeningRPM ?? 0,
           compressorClosingRPM: shift2Data.compressorClosingRPM ?? 0,
           dieselUsed: shift2Data.dieselUsed ?? 0,
-          vehicleHSD: shift2Data.vehicleHSD ?? 0,
+          machineHSD: shift2Data.machineHSD ?? 0,
           compressorHSD: shift2Data.compressorHSD ?? 0,
           noOfHoles: shift2Data.noOfHoles ?? 0,
           meter: shift2Data.meter ?? 0,
@@ -367,7 +367,7 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
           compressorSpares: shift2Data.compressorSpares || [],
           drillingTools: shift2Data.drillingTools || [],
         });
-        
+
         await updateDailyEntry.mutateAsync({ id: shift2EntryId, ...payload2 });
       }
 
@@ -426,21 +426,21 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
     if (shift === 1) {
       setShift1Data(prev => ({
         ...prev,
-        employees: prev.employees.map(e => 
+        employees: prev.employees.map(e =>
           e.id === empId ? { ...e, [field]: value } : e
         ),
       }));
     } else {
       setShift2Data(prev => ({
         ...prev,
-        employees: prev.employees.map(e => 
+        employees: prev.employees.map(e =>
           e.id === empId ? { ...e, [field]: value } : e
         ),
       }));
     }
   };
 
-  const filteredMachines = machines.filter(m => 
+  const filteredMachines = machines.filter(m =>
     !shift1Data.siteId || m.siteId === shift1Data.siteId
   );
 
@@ -451,7 +451,7 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
       onCancel={onCancel}
       width={1200}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ maxHeight: '80vh', overflowY: 'auto' }}>
         {/* Header Row - Date, Site, Machine, Compressor, Shift (all disabled) */}
@@ -484,12 +484,12 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
               <Text strong>Machine</Text>
               <Select
                 className="w-full mt-1"
-                value={shift1Enabled ? shift1Data.vehicleId : shift2Data.vehicleId}
+                value={shift1Enabled ? shift1Data.machineId : shift2Data.machineId}
                 disabled
               >
                 {machines.map(machine => (
                   <Select.Option key={machine.id} value={machine.id}>
-                    {machine.vehicleType} ({machine.vehicleNumber})
+                    {machine.machineNumber} - {machine.machineType}
                   </Select.Option>
                 ))}
               </Select>
@@ -533,8 +533,8 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                       <Text strong>Opening</Text>
                       <InputNumber
                         className="w-full mt-1"
-                        value={shift1Data.vehicleOpeningRPM}
-                        onChange={(value) => updateShiftData(1, 'vehicleOpeningRPM', value)}
+                        value={shift1Data.machineOpeningRPM}
+                        onChange={(value) => updateShiftData(1, 'machineOpeningRPM', value)}
                         min={0}
                         step={0.1}
                         precision={1}
@@ -545,8 +545,8 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                       <Text strong>Closing</Text>
                       <InputNumber
                         className="w-full mt-1"
-                        value={shift1Data.vehicleClosingRPM}
-                        onChange={(value) => updateShiftData(1, 'vehicleClosingRPM', value)}
+                        value={shift1Data.machineClosingRPM}
+                        onChange={(value) => updateShiftData(1, 'machineClosingRPM', value)}
                         min={0}
                         step={0.1}
                         precision={1}
@@ -593,8 +593,8 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                 <Text strong>HSD (Machine)</Text>
                 <InputNumber
                   className="w-full mt-1"
-                  value={shift1Data.vehicleHSD}
-                  onChange={(value) => updateShiftData(1, 'vehicleHSD', value)}
+                  value={shift1Data.machineHSD}
+                  onChange={(value) => updateShiftData(1, 'machineHSD', value)}
                   min={0}
                   step={0.1}
                   precision={2}
@@ -707,8 +707,8 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                       <Text strong>Opening</Text>
                       <InputNumber
                         className="w-full mt-1"
-                        value={shift2Data.vehicleOpeningRPM}
-                        onChange={(value) => updateShiftData(2, 'vehicleOpeningRPM', value)}
+                        value={shift2Data.machineOpeningRPM}
+                        onChange={(value) => updateShiftData(2, 'machineOpeningRPM', value)}
                         min={0}
                         step={0.1}
                         precision={1}
@@ -719,8 +719,8 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                       <Text strong>Closing</Text>
                       <InputNumber
                         className="w-full mt-1"
-                        value={shift2Data.vehicleClosingRPM}
-                        onChange={(value) => updateShiftData(2, 'vehicleClosingRPM', value)}
+                        value={shift2Data.machineClosingRPM}
+                        onChange={(value) => updateShiftData(2, 'machineClosingRPM', value)}
                         min={0}
                         step={0.1}
                         precision={1}
@@ -767,8 +767,8 @@ const EditDailyEntry = ({ visible, onCancel, onSuccess, shift1EntryId, shift2Ent
                 <Text strong>HSD (Machine)</Text>
                 <InputNumber
                   className="w-full mt-1"
-                  value={shift2Data.vehicleHSD}
-                  onChange={(value) => updateShiftData(2, 'vehicleHSD', value)}
+                  value={shift2Data.machineHSD}
+                  onChange={(value) => updateShiftData(2, 'machineHSD', value)}
                   min={0}
                   step={0.1}
                   precision={2}

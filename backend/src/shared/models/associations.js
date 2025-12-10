@@ -1,22 +1,27 @@
 import EmployeeList from "../../modules/employee/employeeList.model.js";
 import EmployeeAttendance from "../../modules/employee/employeeAttendance.model.js";
 import Brand from "../../modules/brand/brand.model.js";
-import Machine from "../../modules/vehicle/vehicle.model.js";
-import Service from "../../modules/service/service.model.js";
+import Machine from "../../modules/machine/machine.model.js";
 import Site from "../../modules/site/site.model.js";
-import Item from "../../modules/item/item.model.js";
-import ItemService from "../../modules/itemService/itemService.model.js";
-import StockTransaction from "../../modules/stockTransaction/stockTransaction.model.js";
-import Supplier from "../../modules/supplier/supplier.model.js";
-import Po from "../../modules/po/po.model.js";
-import PoItem from "../../modules/poItem/poItem.model.js";
+import Compressor from "../../modules/compressor/compressor.model.js";
 import DailyEntry from "../../modules/dailyEntry/dailyEntry.model.js";
 import DailyEntryEmployee from "../../modules/dailyEntry/dailyEntryEmployee.model.js";
-import Compressor from "../../modules/compressor/compressor.model.js";
+import Supplier from "../../modules/supplier/supplier.model.js";
+import Spares from "../../modules/spares/spares.model.js";
+import DrillingTools from "../../modules/drillingTools/drillingTools.model.js";
+import Purchase from "../../modules/inventory/models/purchase.model.js";
+import SiteStock from "../../modules/inventory/models/siteStock.model.js";
 import Address from "../../modules/address/address.model.js";
-import User from "../../modules/user/user.model.js";
+
+// New Models
+import DrillingToolItems from "../../modules/drillingTools/drillingToolItems.model.js";
+import PurchaseOrder from "../../modules/inventory/models/purchaseOrder.model.js";
+import PurchaseOrderItem from "../../modules/inventory/models/purchaseOrderItem.model.js";
+import ServiceHistory from "../../modules/service/models/serviceHistory.model.js";
+import ServiceItem from "../../modules/service/models/serviceItem.model.js";
 
 export const defineAssociations = () => {
+
   // ========== EMPLOYEE MODULE RELATIONSHIPS ==========
   EmployeeList.hasMany(EmployeeAttendance, {
     foreignKey: "employeeId",
@@ -40,17 +45,8 @@ export const defineAssociations = () => {
     as: "compressor",
   });
 
-  Machine.hasMany(DailyEntry, { foreignKey: "vehicleId", as: "dailyEntries" }); // DB column kept as vehicleId
-  DailyEntry.belongsTo(Machine, { foreignKey: "vehicleId", as: "machine" }); // Changed alias to machine
-
-  Machine.hasMany(Service, { foreignKey: "vehicleId", as: "services" }); // DB column kept as vehicleId
-  Service.belongsTo(Machine, { foreignKey: "vehicleId", as: "machine" }); // Changed alias to machine
-
-  Compressor.hasMany(Service, { foreignKey: "compressorId", as: "services" });
-  Service.belongsTo(Compressor, {
-    foreignKey: "compressorId",
-    as: "compressor",
-  });
+  Machine.hasMany(DailyEntry, { foreignKey: "machineId", as: "dailyEntries", onDelete: 'CASCADE' });
+  DailyEntry.belongsTo(Machine, { foreignKey: "machineId", as: "machine", onDelete: 'CASCADE' });
 
   // ========== DAILY ENTRY RELATIONSHIPS ==========
   Site.hasMany(DailyEntry, { foreignKey: "siteId", as: "dailyEntries" });
@@ -74,75 +70,84 @@ export const defineAssociations = () => {
     as: "employees",
   });
 
-  // ========== PO / SUPPLIER / ITEM RELATIONSHIPS ==========
-  Supplier.hasMany(Po, { foreignKey: "supplierId", as: "pos" });
-  Po.belongsTo(Supplier, { foreignKey: "supplierId", as: "supplier" });
-
-  // Address relationships
-  Address.hasMany(Po, { foreignKey: "addressId", as: "pos" });
-  Po.belongsTo(Address, { foreignKey: "addressId", as: "address" });
-
-  // Shipping address relationship
-  Address.hasMany(Po, { foreignKey: "shippingAddressId", as: "shippingPos" });
-  Po.belongsTo(Address, { foreignKey: "shippingAddressId", as: "shippingAddress" });
-
-  Po.belongsToMany(Item, {
-    through: PoItem,
-    foreignKey: "poId",
-    otherKey: "itemId",
-    as: "items",
-  });
-  Item.belongsToMany(Po, {
-    through: PoItem,
-    foreignKey: "itemId",
-    otherKey: "poId",
-    as: "pos",
-  });
-
-  Po.hasMany(PoItem, { foreignKey: "poId", as: "poItems" });
-  PoItem.belongsTo(Po, { foreignKey: "poId", as: "po" });
-
-  Item.hasMany(PoItem, { foreignKey: "itemId", as: "poItems" });
-  PoItem.belongsTo(Item, { foreignKey: "itemId", as: "item" });
-
-  // ========== STOCK TRANSACTION RELATIONSHIPS ==========
-  Item.hasMany(StockTransaction, { foreignKey: "itemId", as: "stockTransactions" });
-  StockTransaction.belongsTo(Item, { foreignKey: "itemId", as: "item" });
-
-
   // ========== EMPLOYEE ATTENDANCE RELATIONSHIPS ==========
   Site.hasMany(EmployeeAttendance, { foreignKey: "siteId", as: "attendances" });
   EmployeeAttendance.belongsTo(Site, { foreignKey: "siteId", as: "site" });
 
   Machine.hasMany(EmployeeAttendance, {
-    foreignKey: "vehicleId", // DB column kept
+    foreignKey: "machineId",
     as: "attendances",
   });
   EmployeeAttendance.belongsTo(Machine, {
-    foreignKey: "vehicleId", // DB column kept
-    as: "machine", // Changed alias to machine
+    foreignKey: "machineId",
+    as: "machine",
   });
 
+  // ========== INVENTORY RELATIONSHIPS ==========
+  // Purchase (Simple / Legacy)
+  Purchase.belongsTo(Spares, { foreignKey: "spareId", as: "spare" });
+  Purchase.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
+  Purchase.belongsTo(Supplier, { foreignKey: "supplierId", as: "supplier" });
 
-  // ========== ITEM SERVICE RELATIONSHIPS ==========
-  // ItemService tracks item fitting/usage
-  Item.hasMany(ItemService, { foreignKey: "itemId", as: "itemServices" });
-  ItemService.belongsTo(Item, { foreignKey: "itemId", as: "item" });
+  Spares.hasMany(Purchase, { foreignKey: "spareId", as: "purchases" });
+  DrillingTools.hasMany(Purchase, { foreignKey: "drillingToolId", as: "purchases" });
+  Supplier.hasMany(Purchase, { foreignKey: "supplierId", as: "purchases" });
 
-  DailyEntry.hasMany(ItemService, { foreignKey: "dailyEntryId", as: "itemServices" });
-  ItemService.belongsTo(DailyEntry, { foreignKey: "dailyEntryId", as: "dailyEntry" });
+  // SiteStock
+  SiteStock.belongsTo(Site, { foreignKey: "siteId", as: "site" });
+  SiteStock.belongsTo(Spares, { foreignKey: "spareId", as: "spare" });
+  SiteStock.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
 
-  Machine.hasMany(ItemService, { foreignKey: "vehicleId", as: "itemServices" });
-  ItemService.belongsTo(Machine, { foreignKey: "vehicleId", as: "machine" });
+  Site.hasMany(SiteStock, { foreignKey: "siteId", as: "stocks" });
+  Spares.hasMany(SiteStock, { foreignKey: "spareId", as: "siteStocks" });
+  DrillingTools.hasMany(SiteStock, { foreignKey: "drillingToolId", as: "siteStocks" });
 
-  Compressor.hasMany(ItemService, { foreignKey: "compressorId", as: "itemServices" });
-  ItemService.belongsTo(Compressor, { foreignKey: "compressorId", as: "compressor" });
+  // ========== NEW PO SYSTEM RELATIONSHIPS ==========
+  // PurchaseOrder
+  PurchaseOrder.belongsTo(Supplier, { foreignKey: "supplierId", as: "supplier" });
+  Supplier.hasMany(PurchaseOrder, { foreignKey: "supplierId", as: "purchaseOrders" });
 
-  // Service relationships with Item (deprecated, now using ItemService)
-  Item.hasMany(Service, { foreignKey: "itemId", as: "services" });
-  Service.belongsTo(Item, { foreignKey: "itemId", as: "item" });
+  PurchaseOrder.hasMany(PurchaseOrderItem, { foreignKey: "purchaseOrderId", as: "items" });
+  PurchaseOrderItem.belongsTo(PurchaseOrder, { foreignKey: "purchaseOrderId", as: "purchaseOrder" });
 
-  // ========== USER RELATIONSHIPS ==========
-  // User model relationships (if needed for createdBy/updatedBy tracking)
-  // Note: These are typically handled by commonFields, but can be explicit if needed
+  // PurchaseOrderItem
+  PurchaseOrderItem.belongsTo(Spares, { foreignKey: "spareId", as: "spare" });
+  PurchaseOrderItem.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
+
+  // ========== DRILLING TOOL INSTANCES RELATIONSHIPS ==========
+  DrillingToolItems.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "catalogItem" });
+  DrillingTools.hasMany(DrillingToolItems, { foreignKey: "drillingToolId", as: "instances" });
+
+  DrillingToolItems.belongsTo(Site, { foreignKey: "siteId", as: "site" });
+  Site.hasMany(DrillingToolItems, { foreignKey: "siteId", as: "drillingTools" });
+
+  DrillingToolItems.belongsTo(Machine, { foreignKey: "fittedMachineId", as: "machine" });
+  Machine.hasMany(DrillingToolItems, { foreignKey: "fittedMachineId", as: "fittedDrillingTools" });
+
+  DrillingToolItems.belongsTo(Compressor, { foreignKey: "fittedCompressorId", as: "compressor" });
+  Compressor.hasMany(DrillingToolItems, { foreignKey: "fittedCompressorId", as: "fittedDrillingTools" });
+
+  // ========== SERVICE HISTORY RELATIONSHIPS ==========
+  ServiceHistory.belongsTo(Machine, { foreignKey: "machineId", as: "machine" });
+  Machine.hasMany(ServiceHistory, { foreignKey: "machineId", as: "serviceHistory" });
+
+  ServiceHistory.belongsTo(Compressor, { foreignKey: "compressorId", as: "compressor" });
+  Compressor.hasMany(ServiceHistory, { foreignKey: "compressorId", as: "serviceHistory" });
+
+  ServiceHistory.belongsTo(Site, { foreignKey: "siteId", as: "site" });
+  Site.hasMany(ServiceHistory, { foreignKey: "siteId", as: "serviceHistory" });
+
+  ServiceHistory.hasMany(ServiceItem, { foreignKey: "serviceHistoryId", as: "items" });
+  ServiceItem.belongsTo(ServiceHistory, { foreignKey: "serviceHistoryId", as: "serviceHistory" });
+
+  // ServiceItem
+  ServiceItem.belongsTo(Spares, { foreignKey: "spareId", as: "spare" });
+  ServiceItem.belongsTo(DrillingToolItems, { foreignKey: "drillingToolItemId", as: "drillingToolItem" });
+
+  // PurchaseOrder Address Associations
+  PurchaseOrder.belongsTo(Address, { foreignKey: "addressId", as: "address" });
+  PurchaseOrder.belongsTo(Address, { foreignKey: "shippingAddressId", as: "shippingAddress" });
+
+  // PurchaseOrder Address Associations
+
 };

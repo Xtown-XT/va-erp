@@ -24,7 +24,7 @@ const { Option } = Select;
  * 
  * Props:
  * - serviceType: 'machine' or 'compressor'
- * - vehicleId: ID of the machine (for machine service)
+ * - machineId: ID of the machine (for machine service)
  * - compressorId: ID of the compressor (for compressor service)
  * - itemTypeName: Name of the item type (e.g., machine number or compressor name)
  * - currentRPM: Current RPM reading
@@ -35,7 +35,7 @@ const { Option } = Select;
  */
 const DailyEntryServiceSection = ({
   serviceType = "machine", // 'machine' or 'compressor'
-  vehicleId,
+  machineId,
   compressorId,
   itemTypeName,
   currentRPM = 0,
@@ -54,7 +54,7 @@ const DailyEntryServiceSection = ({
 
   // Fetch currently fitted items
   const { data: fittedItems = [], isLoading: fittedLoading } = useFittedItems(
-    vehicleId,
+    machineId,
     compressorId
   );
 
@@ -159,18 +159,18 @@ const DailyEntryServiceSection = ({
     },
     ...(serviceType === "compressor"
       ? [
-          {
-            title: "Meter Run",
-            dataIndex: "fittedMeter",
-            key: "meterRun",
-            render: (fittedMeter) => {
-              const meterRun = fittedMeter
-                ? Math.max(0, currentMeter - fittedMeter)
-                : 0;
-              return truncateToFixed(meterRun, 2) + " m";
-            },
+        {
+          title: "Meter Run",
+          dataIndex: "fittedMeter",
+          key: "meterRun",
+          render: (fittedMeter) => {
+            const meterRun = fittedMeter
+              ? Math.max(0, currentMeter - fittedMeter)
+              : 0;
+            return truncateToFixed(meterRun, 2) + " m";
           },
-        ]
+        },
+      ]
       : []),
     {
       title: "Quantity",

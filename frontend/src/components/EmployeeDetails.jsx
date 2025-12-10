@@ -44,7 +44,7 @@ const EmployeeDetails = () => {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [dailyEntries, setDailyEntries] = useState([]);
   const [sites, setSites] = useState([]);
-  const [vehicles, setVehicles] = useState([]);
+  const [machines, setMachines] = useState([]);
   const [statistics, setStatistics] = useState({
     totalDaysWorked: 0,
     totalPresent: 0,
@@ -53,21 +53,21 @@ const EmployeeDetails = () => {
     totalAdvanceTaken: 0,
     currentBalance: 0,
     uniqueSites: 0,
-    uniqueVehicles: 0,
+    uniqueMachines: 0,
   });
 
   // Fetch employee details
   const fetchEmployeeDetails = async () => {
     setLoading(true);
     try {
-      const [sitesRes, vehiclesRes] = await Promise.all([
+      const [sitesRes, machinesRes] = await Promise.all([
         api.get("/api/sites"),
-        api.get("/api/vehicles"),
+        api.get("/api/machines"),
       ]);
       const sitesData = sitesRes.data.data || [];
-      const vehiclesData = vehiclesRes.data.data || [];
+      const machinesData = machinesRes.data.data || [];
       setSites(sitesData);
-      setVehicles(vehiclesData);
+      setMachines(machinesData);
 
       // Try history endpoint first
       try {
@@ -95,7 +95,7 @@ const EmployeeDetails = () => {
             totalAdvanceTaken: emp.advancedAmount || 0,
             currentBalance: emp.remainingAmount || 0,
             uniqueSites: 0,
-            uniqueVehicles: 0,
+            uniqueMachines: 0,
           });
         } else {
           throw historyErr;
@@ -201,7 +201,7 @@ const EmployeeDetails = () => {
                     <td>${record.workStatus || 'N/A'}</td>
                     <td>₹${record.salary || 0}</td>
                     <td>${sites.find(s => s.id === record.siteId)?.siteName || 'N/A'}</td>
-                    <td>${vehicles.find(v => v.id === record.vehicleId)?.vehicleNumber || 'N/A'}</td>
+                    <td>${machines.find(v => v.id === record.machineId)?.machineNumber || 'N/A'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -261,11 +261,11 @@ const EmployeeDetails = () => {
     },
     {
       title: "Machine",
-      dataIndex: "vehicleId",
-      key: "vehicle",
-      render: (vehicleId) => {
-        const vehicle = vehicles.find(v => v.id === vehicleId);
-        return vehicle ? `${vehicle.vehicleNumber} (${vehicle.vehicleType})` : "-";
+      dataIndex: "machineId",
+      key: "machine",
+      render: (machineId) => {
+        const machine = machines.find(v => v.id === machineId);
+        return machine ? `${machine.machineNumber} (${machine.machineType})` : "-";
       },
     },
   ];
@@ -293,10 +293,10 @@ const EmployeeDetails = () => {
     },
     {
       title: "Machine",
-      key: "vehicle",
+      key: "machine",
       render: (_, record) => {
-        const vehicle = vehicles.find(v => v.id === record.vehicleId);
-        return vehicle ? `${vehicle.vehicleNumber} (${vehicle.vehicleType})` : "-";
+        const machine = machines.find(v => v.id === record.machineId);
+        return machine ? `${machine.machineNumber} (${machine.machineType})` : "-";
       },
     },
     {
@@ -445,7 +445,7 @@ const EmployeeDetails = () => {
           <Card>
             <Statistic
               title="Attendance %"
-              value={statistics.totalDaysWorked > 0 
+              value={statistics.totalDaysWorked > 0
                 ? ((statistics.totalPresent / (statistics.totalPresent + statistics.totalAbsent)) * 100).toFixed(1)
                 : 0}
               suffix="%"
@@ -470,7 +470,7 @@ const EmployeeDetails = () => {
           <Card>
             <Statistic
               title="Machines Used"
-              value={statistics.uniqueVehicles}
+              value={statistics.uniqueMachines}
               prefix={<CarOutlined />}
               valueStyle={{ color: "#722ed1" }}
             />
@@ -506,7 +506,7 @@ const EmployeeDetails = () => {
               columns={attendanceColumns}
               dataSource={attendanceRecords}
               rowKey="id"
-              pagination={{ 
+              pagination={{
                 pageSize: 10,
                 showSizeChanger: true,
                 pageSizeOptions: ['10', '20', '50']
@@ -521,11 +521,11 @@ const EmployeeDetails = () => {
                 columns={dailyEntryColumns}
                 dataSource={dailyEntries}
                 rowKey="id"
-                pagination={{ 
-                pageSize: 10,
-                showSizeChanger: true,
-                pageSizeOptions: ['10', '20', '50']
-              }}
+                pagination={{
+                  pageSize: 10,
+                  showSizeChanger: true,
+                  pageSizeOptions: ['10', '20', '50']
+                }}
                 scroll={{ x: 800 }}
               />
             ) : (
@@ -555,9 +555,9 @@ const EmployeeDetails = () => {
                         <strong>Site:</strong> {sites.find(s => s.id === record.siteId)?.siteName || "N/A"}
                       </p>
                     )}
-                    {record.vehicleId && (
+                    {record.machineId && (
                       <p>
-                        <strong>Machine:</strong> {vehicles.find(v => v.id === record.vehicleId)?.vehicleNumber || "N/A"}
+                        <strong>Machine:</strong> {machines.find(v => v.id === record.machineId)?.machineNumber || "N/A"}
                       </p>
                     )}
                   </Timeline.Item>
@@ -588,16 +588,16 @@ const EmployeeDetails = () => {
                 <Card title="Machine Usage" size="small">
                   <List
                     dataSource={[...new Set([
-                      ...attendanceRecords.map(a => a.vehicleId),
-                      ...dailyEntries.map(e => e.vehicleId)
+                      ...attendanceRecords.map(a => a.machineId),
+                      ...dailyEntries.map(e => e.machineId)
                     ].filter(Boolean))]}
-                    renderItem={vehicleId => {
-                      const vehicle = vehicles.find(v => v.id === vehicleId);
-                      const count = attendanceRecords.filter(a => a.vehicleId === vehicleId).length +
-                                   dailyEntries.filter(e => e.vehicleId === vehicleId).length;
+                    renderItem={machineId => {
+                      const machine = machines.find(v => v.id === machineId);
+                      const count = attendanceRecords.filter(a => a.machineId === machineId).length +
+                        dailyEntries.filter(e => e.machineId === machineId).length;
                       return (
                         <List.Item>
-                          <Text>{vehicle?.vehicleNumber || "Unknown"}</Text>
+                          <Text>{machine?.machineNumber || "Unknown"}</Text>
                           <Tag>{count} times</Tag>
                         </List.Item>
                       );

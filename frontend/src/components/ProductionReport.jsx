@@ -63,7 +63,7 @@ const ProductionReport = () => {
       // Build URL with all selected filters (AND logic - all filters must match)
       // Use server-side pagination with page and limit
       let url = `/api/dailyEntries?page=${pagination.current}&limit=${pagination.pageSize}`;
-      
+
       // Date range is always required
       if (startDate && endDate) {
         url += `&startDate=${startDate}&endDate=${endDate}`;
@@ -72,17 +72,17 @@ const ProductionReport = () => {
       } else if (endDate) {
         url += `&endDate=${endDate}`;
       }
-      
+
       // Add site filter if selected
       if (selectedSite) {
         url += `&siteId=${selectedSite}`;
       }
-      
+
       // Add machine filter if selected
       if (selectedMachine) {
-        url += `&vehicleId=${selectedMachine}`;
+        url += `&machineId=${selectedMachine}`;
       }
-      
+
       // Add employee filter if selected
       if (selectedEmployee) {
         url += `&employeeId=${selectedEmployee}`;
@@ -101,17 +101,17 @@ const ProductionReport = () => {
 
       // Calculate production metrics
       const calculations = calculateProductionMetrics(entries);
-      
+
       // Sort dailyData by date in ascending order
       const sortedDailyData = [...calculations.dailyData].sort((a, b) => {
         const dateA = dayjs(a.date);
         const dateB = dayjs(b.date);
         return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0;
       });
-      
+
       setProductionData(sortedDailyData);
       setTotals(calculations.totals);
-      
+
       // Reset services loaded state when data changes
       setServicesLoaded(false);
     } catch (err) {
@@ -225,15 +225,15 @@ const ProductionReport = () => {
 
     const dailyData = entries.map(entry => {
 
-      const vehicleHSD = parseFloat(entry.vehicleHSD) || 0;
+      const machineHSD = parseFloat(entry.machineHSD) || 0;
       const meter = parseFloat(entry.meter) || 0;
-      const vehicleRPM = (parseFloat(entry.vehicleClosingRPM) || 0) - (parseFloat(entry.vehicleOpeningRPM) || 0);
+      const machineRPM = (parseFloat(entry.machineClosingRPM) || 0) - (parseFloat(entry.machineOpeningRPM) || 0);
       const compressorRPM = (parseFloat(entry.compressorClosingRPM) || 0) - (parseFloat(entry.compressorOpeningRPM) || 0);
       const holes = parseFloat(entry.noOfHoles) || 0;
       const compressorHSD = parseFloat(entry.compressorHSD) || 0;
 
 
-      const machineTypeSrc = (entry.machine?.vehicleType) || (entry.vehicle?.vehicleType) || (machines.find(m => m.id === entry.vehicleId)?.vehicleType) || '';
+      const machineTypeSrc = (entry.machine?.machineType) || (machines.find(m => m.id === entry.machineId)?.machineType) || '';
       const machineType = machineTypeSrc.toString().trim().toLowerCase();
       const isCrawler = machineType === 'crawler' || machineType.includes('crawler');
       const isCamper = machineType === 'camper' || machineType.includes('camper') || machineType.includes('truck');
@@ -244,10 +244,10 @@ const ProductionReport = () => {
       let crawlerRPM = 0;
 
       if (isCrawler) {
-        crawlerHSD = vehicleHSD;
-        crawlerRPM = vehicleRPM;
+        crawlerHSD = machineHSD;
+        crawlerRPM = machineRPM;
       } else if (isCamper) {
-        camperHSD = vehicleHSD;
+        camperHSD = machineHSD;
       }
 
 
@@ -454,29 +454,29 @@ const ProductionReport = () => {
   // Fetch services on-demand (lazy-loaded) to improve performance
   const fetchServicesForEntries = async () => {
     if (servicesLoaded || loadingServices) return;
-    
+
     setLoadingServices(true);
     try {
       const startDate = dateRange[0]?.format('YYYY-MM-DD');
       const endDate = dateRange[1]?.format('YYYY-MM-DD');
-      
-      // Collect unique vehicle and compressor IDs from current production data
-      const vehicleIds = [...new Set(productionData.map(e => e.vehicleId).filter(Boolean))];
+
+      // Collect unique machine and compressor IDs from current production data
+      const machineIds = [...new Set(productionData.map(e => e.machineId).filter(Boolean))];
       const compressorIds = [...new Set(productionData.map(e => e.compressorId).filter(Boolean))];
-      
+
       let allServices = [];
-      
-      // Fetch services for vehicles
-      for (const vehicleId of vehicleIds) {
+
+      // Fetch services for machines
+      for (const machineId of machineIds) {
         try {
-          const vehicleServicesRes = await api.get(`/api/services?vehicleId=${vehicleId}&limit=1000`);
-          const vehicleServices = vehicleServicesRes.data.data || [];
-          allServices = [...allServices, ...vehicleServices];
+          const machineServicesRes = await api.get(`/api/services?machineId=${machineId}&limit=1000`);
+          const machineServices = machineServicesRes.data.data || [];
+          allServices = [...allServices, ...machineServices];
         } catch (err) {
-          console.warn(`Could not fetch services for vehicle ${vehicleId}:`, err);
+          console.warn(`Could not fetch services for machine ${machineId}:`, err);
         }
       }
-      
+
       // Fetch services for compressors
       for (const compressorId of compressorIds) {
         try {
@@ -487,36 +487,36 @@ const ProductionReport = () => {
           console.warn(`Could not fetch services for compressor ${compressorId}:`, err);
         }
       }
-      
+
       // Filter services by date range
       allServices = allServices.filter(service => {
         if (!service.serviceDate) return false;
         const serviceDate = dayjs(service.serviceDate).format('YYYY-MM-DD');
         return serviceDate >= startDate && serviceDate <= endDate;
       });
-      
+
       // Match services to entries by date, vehicleId, and compressorId
       const updatedProductionData = productionData.map(entry => {
         const entryDate = entry.date ? dayjs(entry.date).format('YYYY-MM-DD') : null;
         const matchedServices = allServices.filter(service => {
           const serviceDate = service.serviceDate ? dayjs(service.serviceDate).format('YYYY-MM-DD') : null;
-          
+
           // Match if service date matches entry date AND
-          // (vehicleId matches OR compressorId matches)
+          // (machineId matches OR compressorId matches)
           if (serviceDate === entryDate) {
-            const vehicleMatch = service.vehicleId && entry.vehicleId && service.vehicleId === entry.vehicleId;
+            const machineMatch = service.machineId && entry.machineId && service.machineId === entry.machineId;
             const compressorMatch = service.compressorId && entry.compressorId && service.compressorId === entry.compressorId;
-            return vehicleMatch || compressorMatch;
+            return machineMatch || compressorMatch;
           }
           return false;
         });
-        
+
         return {
           ...entry,
           services: matchedServices
         };
       });
-      
+
       setProductionData(updatedProductionData);
       setServicesLoaded(true);
     } catch (err) {
@@ -530,32 +530,32 @@ const ProductionReport = () => {
   // Export to PDF
   const exportToPDF = async () => {
     setLoading(true);
-    
+
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
       let url = `/api/dailyEntries?startDate=${startDate}&endDate=${endDate}&limit=10000`;
       if (selectedSite) url += `&siteId=${selectedSite}`;
-      if (selectedMachine) url += `&vehicleId=${selectedMachine}`;
+      if (selectedMachine) url += `&machineId=${selectedMachine}`;
       if (selectedEmployee) url += `&employeeId=${selectedEmployee}`;
 
       const res = await api.get(url);
       let entries = res.data.data || [];
-      
+
       // Fetch machines, compressors, and sites for PDF (if not already available)
       let pdfMachines = machines;
       let pdfCompressors = compressors;
       let pdfSites = sites;
-      
+
       if (machines.length === 0) {
         try {
-          const machinesRes = await api.get('/api/vehicles?limit=1000');
+          const machinesRes = await api.get('/api/machines?limit=1000');
           pdfMachines = machinesRes.data.data || [];
         } catch (err) {
           console.warn('Could not fetch machines for PDF:', err);
         }
       }
-      
+
       if (compressors.length === 0) {
         try {
           const compressorsRes = await api.get('/api/compressors?limit=1000');
@@ -564,7 +564,7 @@ const ProductionReport = () => {
           console.warn('Could not fetch compressors for PDF:', err);
         }
       }
-      
+
       if (sites.length === 0) {
         try {
           const sitesRes = await api.get('/api/sites?limit=1000');
@@ -575,23 +575,23 @@ const ProductionReport = () => {
       }
 
       // Fetch services for PDF export
-      const pdfVehicleIds = [...new Set(entries.map(e => e.vehicleId).filter(Boolean))];
+      const pdfMachineIds = [...new Set(entries.map(e => e.machineId).filter(Boolean))];
       const pdfCompressorIds = [...new Set(entries.map(e => e.compressorId).filter(Boolean))];
-      
+
       let pdfAllServices = [];
-      
+
       try {
-        // Fetch services for vehicles
-        for (const vehicleId of pdfVehicleIds) {
+        // Fetch services for machines
+        for (const machineId of pdfMachineIds) {
           try {
-            const vehicleServicesRes = await api.get(`/api/services?vehicleId=${vehicleId}&limit=1000`);
-            const vehicleServices = vehicleServicesRes.data.data || [];
-            pdfAllServices = [...pdfAllServices, ...vehicleServices];
+            const machineServicesRes = await api.get(`/api/services?machineId=${machineId}&limit=1000`);
+            const machineServices = machineServicesRes.data.data || [];
+            pdfAllServices = [...pdfAllServices, ...machineServices];
           } catch (err) {
-            console.warn(`Could not fetch services for vehicle ${vehicleId}:`, err);
+            console.warn(`Could not fetch services for machine ${machineId}:`, err);
           }
         }
-        
+
         // Fetch services for compressors
         for (const compressorId of pdfCompressorIds) {
           try {
@@ -602,28 +602,28 @@ const ProductionReport = () => {
             console.warn(`Could not fetch services for compressor ${compressorId}:`, err);
           }
         }
-        
+
         // Filter services by date range
         pdfAllServices = pdfAllServices.filter(service => {
           if (!service.serviceDate) return false;
           const serviceDate = dayjs(service.serviceDate).format('YYYY-MM-DD');
           return serviceDate >= startDate && serviceDate <= endDate;
         });
-        
+
         // Match services to entries
         entries = entries.map(entry => {
           const entryDate = entry.date ? dayjs(entry.date).format('YYYY-MM-DD') : null;
           const matchedServices = pdfAllServices.filter(service => {
             const serviceDate = service.serviceDate ? dayjs(service.serviceDate).format('YYYY-MM-DD') : null;
-            
+
             if (serviceDate === entryDate) {
-              const vehicleMatch = service.vehicleId && entry.vehicleId && service.vehicleId === entry.vehicleId;
+              const machineMatch = service.machineId && entry.machineId && service.machineId === entry.machineId;
               const compressorMatch = service.compressorId && entry.compressorId && service.compressorId === entry.compressorId;
-              return vehicleMatch || compressorMatch;
+              return machineMatch || compressorMatch;
             }
             return false;
           });
-          
+
           return {
             ...entry,
             site: entry.site, // Preserve site object
@@ -635,127 +635,127 @@ const ProductionReport = () => {
         entries = entries.map(entry => ({ ...entry, site: entry.site, services: [] }));
       }
 
-    const { dailyData, totals } = calculateProductionMetrics(entries);
-    
-    // Sort dailyData by date in ascending order
-    const sortedDailyData = [...dailyData].sort((a, b) => {
-      const dateA = dayjs(a.date);
-      const dateB = dayjs(b.date);
-      return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0;
-    });
+      const { dailyData, totals } = calculateProductionMetrics(entries);
 
-    const printWindow = window.open("", "_blank");
-    const reportTitle = selectedSiteName ? 'Daily Production Report - ' + selectedSiteName : 'Daily Production Report';
-    
-    // Build HTML string to avoid TypeScript template literal parsing issues
-    const periodStart = dateRange[0].format("DD/MM/YYYY");
-    const periodEnd = dateRange[1].format("DD/MM/YYYY");
-    const siteName = selectedSiteName || 'All Sites';
-    const generatedDate = new Date().toLocaleDateString();
-    
-    let htmlContent = '<html><head><title>' + reportTitle + '</title>' +
-      '<style>' +
-      'body { font-family: Arial, sans-serif; margin: 20px; }' +
-      '.header { text-align: center; margin-bottom: 20px; position: relative; }' +
-      '.header h1 { margin: 0; font-size: 24px; }' +
-      '.header p { margin: 5px 0; }' +
-      '.generated-on { position: absolute; top: 0; right: 0; font-size: 12px; }' +
-      'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
-      'th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; }' +
-      'th { background-color: #f2f2f2; }' +
-      '.total-row { background-color: #f9f9f9; font-weight: bold; }' +
-      '</style></head><body>' +
-      '<div class="header">' +
-      '<h1>Daily Production Report</h1>' +
-      '<p>Period: ' + periodStart + ' to ' + periodEnd + '</p>' +
-      '<p>Site: ' + siteName + '</p>' +
-      '<p class="generated-on">Generated on: ' + generatedDate + '</p>' +
-      '</div>' +
-      '<table><thead><tr>' +
-      '<th>Date</th><th>Shift</th><th>Site</th><th>Meter</th>' +
-      '<th>Crawler HSD</th><th>Comp HSD</th><th>Camper HSD</th><th>Total HSD</th>' +
-      '<th>Crawler RPM</th><th>Comp RPM</th><th>HSD/MTR</th><th>MTR/RPM</th>' +
-      '<th>Crawler HSD/Crawler RPM</th><th>Comp HSD/Comp RPM</th>' +
-      '<th>Number of Holes</th><th>Depth Avg</th>' +
-      '</tr></thead><tbody>';
-    
-    // Build table rows
-    sortedDailyData.forEach((entry) => {
-      const services = entry.services || [];
-      const servicesText = services.length > 0 
-        ? services.map((service) => {
-            const serviceTypeLabel = service.serviceType === 'vehicle' ? 'Vehicle' : 
-                                   service.serviceType === 'compressor' ? 'Compressor' : 'Item';
+      // Sort dailyData by date in ascending order
+      const sortedDailyData = [...dailyData].sort((a, b) => {
+        const dateA = dayjs(a.date);
+        const dateB = dayjs(b.date);
+        return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0;
+      });
+
+      const printWindow = window.open("", "_blank");
+      const reportTitle = selectedSiteName ? 'Daily Production Report - ' + selectedSiteName : 'Daily Production Report';
+
+      // Build HTML string to avoid TypeScript template literal parsing issues
+      const periodStart = dateRange[0].format("DD/MM/YYYY");
+      const periodEnd = dateRange[1].format("DD/MM/YYYY");
+      const siteName = selectedSiteName || 'All Sites';
+      const generatedDate = new Date().toLocaleDateString();
+
+      let htmlContent = '<html><head><title>' + reportTitle + '</title>' +
+        '<style>' +
+        'body { font-family: Arial, sans-serif; margin: 20px; }' +
+        '.header { text-align: center; margin-bottom: 20px; position: relative; }' +
+        '.header h1 { margin: 0; font-size: 24px; }' +
+        '.header p { margin: 5px 0; }' +
+        '.generated-on { position: absolute; top: 0; right: 0; font-size: 12px; }' +
+        'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
+        'th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; }' +
+        'th { background-color: #f2f2f2; }' +
+        '.total-row { background-color: #f9f9f9; font-weight: bold; }' +
+        '</style></head><body>' +
+        '<div class="header">' +
+        '<h1>Daily Production Report</h1>' +
+        '<p>Period: ' + periodStart + ' to ' + periodEnd + '</p>' +
+        '<p>Site: ' + siteName + '</p>' +
+        '<p class="generated-on">Generated on: ' + generatedDate + '</p>' +
+        '</div>' +
+        '<table><thead><tr>' +
+        '<th>Date</th><th>Shift</th><th>Site</th><th>Meter</th>' +
+        '<th>Crawler HSD</th><th>Comp HSD</th><th>Camper HSD</th><th>Total HSD</th>' +
+        '<th>Crawler RPM</th><th>Comp RPM</th><th>HSD/MTR</th><th>MTR/RPM</th>' +
+        '<th>Crawler HSD/Crawler RPM</th><th>Comp HSD/Comp RPM</th>' +
+        '<th>Number of Holes</th><th>Depth Avg</th>' +
+        '</tr></thead><tbody>';
+
+      // Build table rows
+      sortedDailyData.forEach((entry) => {
+        const services = entry.services || [];
+        const servicesText = services.length > 0
+          ? services.map((service) => {
+            const serviceTypeLabel = service.serviceType === 'machine' ? 'Machine' :
+              service.serviceType === 'compressor' ? 'Compressor' : 'Item';
             const serviceName = service.serviceName || 'Unnamed Service';
             return serviceTypeLabel + ': ' + serviceName;
           }).join(', ')
-        : 'None';
-      // Get site name - try site object first, then fallback to sites array lookup
-      let siteName = entry.site?.siteName;
-      if (!siteName && entry.siteId) {
-        const site = pdfSites.find(s => s.id === entry.siteId);
-        siteName = site?.siteName;
-      }
-      siteName = siteName || '-';
-      const shiftText = String(entry.shift || 1);
-      const dateStr = dayjs(entry.date).format("DD/MM/YYYY");
-      const meter = truncateToFixed(entry.meter || 0, 2);
-      const crawlerHSD = Math.round(entry.crawlerHSD || 0);
-      const compressorHSD = Math.round(entry.compressorHSD || 0);
-      const camperHSD = Math.round(entry.camperHSD || 0);
-      const totalHSD = Math.round(entry.totalHSD || 0);
-      const crawlerRPM = truncateToFixed(entry.crawlerRPM || 0, 2);
-      const compressorRPM = truncateToFixed(entry.compressorRPM || 0, 2);
-      const hsdMtr = truncateToFixed(entry.hsdMtr || 0, 2);
-      const mtrRPM = truncateToFixed(entry.mtrRPM || 0, 2);
-      const crawlerHsdPerRpm = entry.crawlerHsdPerRpm > 0 ? truncateToFixed(entry.crawlerHsdPerRpm, 2) : '-';
-      const compHsdPerRpm = entry.compHsdPerRpm > 0 ? truncateToFixed(entry.compHsdPerRpm, 2) : '-';
-      const noOfHoles = entry.noOfHoles || 0;
-      const depthAvg = truncateToFixed(entry.depthAvg || 0, 2);
-      
-      htmlContent += '<tr>' +
-        '<td>' + dateStr + '</td>' +
-        '<td>' + shiftText + '</td>' +
-        '<td>' + siteName + '</td>' +
-        '<td>' + meter + '</td>' +
-        '<td>' + crawlerHSD + '</td>' +
-        '<td>' + compressorHSD + '</td>' +
-        '<td>' + camperHSD + '</td>' +
-        '<td>' + totalHSD + '</td>' +
-        '<td>' + crawlerRPM + '</td>' +
-        '<td>' + compressorRPM + '</td>' +
-        '<td>' + hsdMtr + '</td>' +
-        '<td>' + mtrRPM + '</td>' +
-        '<td>' + crawlerHsdPerRpm + '</td>' +
-        '<td>' + compHsdPerRpm + '</td>' +
-        '<td>' + noOfHoles + '</td>' +
-        '<td>' + depthAvg + '</td>' +
-        '</tr>';
-    });
-    
-    // Build totals row
-    htmlContent += '</tbody><tfoot><tr class="total-row">' +
-      '<td>Total</td><td></td><td></td>' +
-      '<td>' + truncateToFixed(totals.totalMeter || 0, 2) + '</td>' +
-      '<td>' + Math.round(totals.totalCrawlerHSD || 0) + '</td>' +
-      '<td>' + Math.round(totals.totalCompressorHSD || 0) + '</td>' +
-      '<td>' + Math.round(totals.totalCamperHSD || 0) + '</td>' +
-      '<td>' + Math.round(totals.totalTotalHSD || 0) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalCrawlerRPM || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalCompressorRPM || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalHsdMtr || 0, 2) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalMtrRPM || 0, 2) + '</td>' +
-      '<td>' + (totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-') + '</td>' +
-      '<td>' + (totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-') + '</td>' +
-      '<td>' + (totals.totalHoles || 0) + '</td>' +
-      '<td>' + truncateToFixed(totals.totalDepthAvg || 0, 2) + '</td>' +
-      '</tr></tfoot></table>';
-    
-    // Maintenance section removed as per user request
-    
-    htmlContent += '</body></html>';
-    
-    printWindow.document.write(htmlContent);
+          : 'None';
+        // Get site name - try site object first, then fallback to sites array lookup
+        let siteName = entry.site?.siteName;
+        if (!siteName && entry.siteId) {
+          const site = pdfSites.find(s => s.id === entry.siteId);
+          siteName = site?.siteName;
+        }
+        siteName = siteName || '-';
+        const shiftText = String(entry.shift || 1);
+        const dateStr = dayjs(entry.date).format("DD/MM/YYYY");
+        const meter = truncateToFixed(entry.meter || 0, 2);
+        const crawlerHSD = Math.round(entry.crawlerHSD || 0);
+        const compressorHSD = Math.round(entry.compressorHSD || 0);
+        const camperHSD = Math.round(entry.camperHSD || 0);
+        const totalHSD = Math.round(entry.totalHSD || 0);
+        const crawlerRPM = truncateToFixed(entry.crawlerRPM || 0, 2);
+        const compressorRPM = truncateToFixed(entry.compressorRPM || 0, 2);
+        const hsdMtr = truncateToFixed(entry.hsdMtr || 0, 2);
+        const mtrRPM = truncateToFixed(entry.mtrRPM || 0, 2);
+        const crawlerHsdPerRpm = entry.crawlerHsdPerRpm > 0 ? truncateToFixed(entry.crawlerHsdPerRpm, 2) : '-';
+        const compHsdPerRpm = entry.compHsdPerRpm > 0 ? truncateToFixed(entry.compHsdPerRpm, 2) : '-';
+        const noOfHoles = entry.noOfHoles || 0;
+        const depthAvg = truncateToFixed(entry.depthAvg || 0, 2);
+
+        htmlContent += '<tr>' +
+          '<td>' + dateStr + '</td>' +
+          '<td>' + shiftText + '</td>' +
+          '<td>' + siteName + '</td>' +
+          '<td>' + meter + '</td>' +
+          '<td>' + crawlerHSD + '</td>' +
+          '<td>' + compressorHSD + '</td>' +
+          '<td>' + camperHSD + '</td>' +
+          '<td>' + totalHSD + '</td>' +
+          '<td>' + crawlerRPM + '</td>' +
+          '<td>' + compressorRPM + '</td>' +
+          '<td>' + hsdMtr + '</td>' +
+          '<td>' + mtrRPM + '</td>' +
+          '<td>' + crawlerHsdPerRpm + '</td>' +
+          '<td>' + compHsdPerRpm + '</td>' +
+          '<td>' + noOfHoles + '</td>' +
+          '<td>' + depthAvg + '</td>' +
+          '</tr>';
+      });
+
+      // Build totals row
+      htmlContent += '</tbody><tfoot><tr class="total-row">' +
+        '<td>Total</td><td></td><td></td>' +
+        '<td>' + truncateToFixed(totals.totalMeter || 0, 2) + '</td>' +
+        '<td>' + Math.round(totals.totalCrawlerHSD || 0) + '</td>' +
+        '<td>' + Math.round(totals.totalCompressorHSD || 0) + '</td>' +
+        '<td>' + Math.round(totals.totalCamperHSD || 0) + '</td>' +
+        '<td>' + Math.round(totals.totalTotalHSD || 0) + '</td>' +
+        '<td>' + truncateToFixed(totals.totalCrawlerRPM || 0, 2) + '</td>' +
+        '<td>' + truncateToFixed(totals.totalCompressorRPM || 0, 2) + '</td>' +
+        '<td>' + truncateToFixed(totals.totalHsdMtr || 0, 2) + '</td>' +
+        '<td>' + truncateToFixed(totals.totalMtrRPM || 0, 2) + '</td>' +
+        '<td>' + (totals.totalCrawlerHsdPerRpm > 0 ? truncateToFixed(totals.totalCrawlerHsdPerRpm, 2) : '-') + '</td>' +
+        '<td>' + (totals.totalCompHsdPerRpm > 0 ? truncateToFixed(totals.totalCompHsdPerRpm, 2) : '-') + '</td>' +
+        '<td>' + (totals.totalHoles || 0) + '</td>' +
+        '<td>' + truncateToFixed(totals.totalDepthAvg || 0, 2) + '</td>' +
+        '</tr></tfoot></table>';
+
+      // Maintenance section removed as per user request
+
+      htmlContent += '</body></html>';
+
+      printWindow.document.write(htmlContent);
       printWindow.document.close();
       printWindow.print();
     } catch (err) {
@@ -768,7 +768,7 @@ const ProductionReport = () => {
 
   const exportToExcel = async () => {
     setLoading(true);
-    
+
     try {
       const startDate = dateRange[0].format('YYYY-MM-DD');
       const endDate = dateRange[1].format('YYYY-MM-DD');
@@ -779,21 +779,21 @@ const ProductionReport = () => {
 
       const res = await api.get(url);
       let entries = res.data.data || [];
-      
+
       // Fetch machines, compressors, and sites for Excel (if not already available)
       let excelMachines = machines;
       let excelCompressors = compressors;
       let excelSites = sites;
-      
+
       if (machines.length === 0) {
         try {
-          const machinesRes = await api.get('/api/vehicles?limit=1000');
+          const machinesRes = await api.get('/api/machines?limit=1000');
           excelMachines = machinesRes.data.data || [];
         } catch (err) {
           console.warn('Could not fetch machines for Excel:', err);
         }
       }
-      
+
       if (compressors.length === 0) {
         try {
           const compressorsRes = await api.get('/api/compressors?limit=1000');
@@ -802,7 +802,7 @@ const ProductionReport = () => {
           console.warn('Could not fetch compressors for Excel:', err);
         }
       }
-      
+
       if (sites.length === 0) {
         try {
           const sitesRes = await api.get('/api/sites?limit=1000');
@@ -813,7 +813,7 @@ const ProductionReport = () => {
       }
 
       const { dailyData, totals } = calculateProductionMetrics(entries);
-      
+
       // Sort dailyData by date in ascending order
       const sortedDailyData = [...dailyData].sort((a, b) => {
         const dateA = dayjs(a.date);
@@ -938,7 +938,7 @@ const ProductionReport = () => {
 
       // Write file
       XLSX.writeFile(wb, filename);
-      
+
       message.success("Excel file exported successfully");
     } catch (err) {
       console.error("Error exporting to Excel", err);
@@ -1277,108 +1277,108 @@ const ProductionReport = () => {
         {servicesLoaded ? (
           productionData.some(entry => entry.services && entry.services.length > 0) ? (
             <Table
-            dataSource={productionData.filter(entry => entry.services && entry.services.length > 0)}
-            rowKey="id"
-            pagination={false}
-            size="small"
-            columns={[
-              {
-                title: "Date",
-                dataIndex: "date",
-                key: "date",
-                render: (date) => dayjs(date).format("DD/MM/YYYY"),
-              },
-              {
-                title: "Shift",
-                dataIndex: "shift",
-                key: "shift",
-                width: 80,
-                render: (shift) => shift || 1,
-              },
-              {
-                title: "Site",
-                dataIndex: ["site", "siteName"],
-                key: "site",
-                width: 150,
-                render: (value, record) => {
-                  // Try site object first, then fallback to sites array lookup
-                  if (record.site?.siteName) {
-                    return record.site.siteName;
-                  }
-                  if (record.siteId) {
-                    const site = sites.find(s => s.id === record.siteId);
-                    return site?.siteName || '-';
-                  }
-                  return '-';
+              dataSource={productionData.filter(entry => entry.services && entry.services.length > 0)}
+              rowKey="id"
+              pagination={false}
+              size="small"
+              columns={[
+                {
+                  title: "Date",
+                  dataIndex: "date",
+                  key: "date",
+                  render: (date) => dayjs(date).format("DD/MM/YYYY"),
                 },
-              },
-              {
-                title: "Machine",
-                key: "machine",
-                render: (_, record) => {
-                  const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
-                  if (!machine) return '-';
-                  const name = machine.vehicleType || 'Machine';
-                  const number = machine.vehicleNumber || '';
-                  return number ? name + ' (' + number + ')' : name;
-                }
-              },
-              {
-                title: "Comp",
-                key: "compressor",
-                render: (_, record) => {
-                  if (!record.compressorId) return '-';
-                  const compressor = compressors.find(c => c.id === record.compressorId);
-                  return compressor?.compressorName || '-';
-                }
-              },
-              {
-                title: "Services",
-                key: "services",
-                render: (_, record) => {
-                  const services = record.services || [];
-                  if (services.length === 0) return <Text type="secondary">None</Text>;
-                  
-                  return (
-                    <div>
-                      {services.map((service, index) => {
-                        const serviceTypeLabel = service.serviceType === 'vehicle' ? 'Vehicle' : 
-                                               service.serviceType === 'compressor' ? 'Compressor' : 'Item';
-                        const serviceName = service.serviceName || 'Unnamed Service';
-                        return (
-                          <div key={index} style={{ marginBottom: '4px' }}>
-                            <Text>
-                              <Text strong>{serviceTypeLabel}:</Text> {serviceName}
-                              {service.nextServiceRPM && (
-                                <Text type="secondary" style={{ marginLeft: '12px' }}>
-                                  | Next Service: {truncateToFixed(service.nextServiceRPM, 2)} RPM
-                                </Text>
-                              )}
-                            </Text>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                }
-              },
-              {
-                title: "Vehicle Next Service",
-                key: "vehicleNextService",
-                render: (_, record) => {
-                  const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
-                  return machine?.nextServiceRPM ? truncateToFixed(machine.nextServiceRPM, 2) + ' RPM' : '-';
-                }
-              },
-              {
-                title: "Comp Next Service",
-                key: "compressorNextService",
-                render: (_, record) => {
-                  if (!record.compressorId) return '-';
-                  const compressor = compressors.find(c => c.id === record.compressorId);
-                  return compressor?.nextServiceRPM ? truncateToFixed(compressor.nextServiceRPM, 2) + ' RPM' : '-';
-                }
-              },
+                {
+                  title: "Shift",
+                  dataIndex: "shift",
+                  key: "shift",
+                  width: 80,
+                  render: (shift) => shift || 1,
+                },
+                {
+                  title: "Site",
+                  dataIndex: ["site", "siteName"],
+                  key: "site",
+                  width: 150,
+                  render: (value, record) => {
+                    // Try site object first, then fallback to sites array lookup
+                    if (record.site?.siteName) {
+                      return record.site.siteName;
+                    }
+                    if (record.siteId) {
+                      const site = sites.find(s => s.id === record.siteId);
+                      return site?.siteName || '-';
+                    }
+                    return '-';
+                  },
+                },
+                {
+                  title: "Machine",
+                  key: "machine",
+                  render: (_, record) => {
+                    const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
+                    if (!machine) return '-';
+                    const name = machine.vehicleType || 'Machine';
+                    const number = machine.vehicleNumber || '';
+                    return number ? name + ' (' + number + ')' : name;
+                  }
+                },
+                {
+                  title: "Comp",
+                  key: "compressor",
+                  render: (_, record) => {
+                    if (!record.compressorId) return '-';
+                    const compressor = compressors.find(c => c.id === record.compressorId);
+                    return compressor?.compressorName || '-';
+                  }
+                },
+                {
+                  title: "Services",
+                  key: "services",
+                  render: (_, record) => {
+                    const services = record.services || [];
+                    if (services.length === 0) return <Text type="secondary">None</Text>;
+
+                    return (
+                      <div>
+                        {services.map((service, index) => {
+                          const serviceTypeLabel = service.serviceType === 'vehicle' ? 'Vehicle' :
+                            service.serviceType === 'compressor' ? 'Compressor' : 'Item';
+                          const serviceName = service.serviceName || 'Unnamed Service';
+                          return (
+                            <div key={index} style={{ marginBottom: '4px' }}>
+                              <Text>
+                                <Text strong>{serviceTypeLabel}:</Text> {serviceName}
+                                {service.nextServiceRPM && (
+                                  <Text type="secondary" style={{ marginLeft: '12px' }}>
+                                    | Next Service: {truncateToFixed(service.nextServiceRPM, 2)} RPM
+                                  </Text>
+                                )}
+                              </Text>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  }
+                },
+                {
+                  title: "Vehicle Next Service",
+                  key: "vehicleNextService",
+                  render: (_, record) => {
+                    const machine = record.vehicle || machines.find(m => m.id === record.vehicleId);
+                    return machine?.nextServiceRPM ? truncateToFixed(machine.nextServiceRPM, 2) + ' RPM' : '-';
+                  }
+                },
+                {
+                  title: "Comp Next Service",
+                  key: "compressorNextService",
+                  render: (_, record) => {
+                    if (!record.compressorId) return '-';
+                    const compressor = compressors.find(c => c.id === record.compressorId);
+                    return compressor?.nextServiceRPM ? truncateToFixed(compressor.nextServiceRPM, 2) + ' RPM' : '-';
+                  }
+                },
               ]}
             />
           ) : (
@@ -1429,9 +1429,9 @@ const ProductionReport = () => {
                 <Col span={6}>
                   <Text strong>Site:</Text>
                   <div>
-                    {selectedEntry.site?.siteName || 
-                     sites.find(s => s.id === selectedEntry.siteId)?.siteName || 
-                     '-'}
+                    {selectedEntry.site?.siteName ||
+                      sites.find(s => s.id === selectedEntry.siteId)?.siteName ||
+                      '-'}
                   </div>
                 </Col>
               </Row>
@@ -1443,16 +1443,16 @@ const ProductionReport = () => {
                 <Col span={12}>
                   <Text strong>Machine:</Text>
                   <div>
-                    {selectedEntry.vehicle ? 
+                    {selectedEntry.vehicle ?
                       `${selectedEntry.vehicle.vehicleType} (${selectedEntry.vehicle.vehicleNumber})` :
-                      machines.find(m => m.id === selectedEntry.vehicleId) ? 
-                        `${machines.find(m => m.id === selectedEntry.vehicleId).vehicleType} (${machines.find(m => m.id === selectedEntry.vehicleId).vehicleNumber})` :
+                      machines.find(m => m.id === selectedEntry.machineId) ?
+                        `${machines.find(m => m.id === selectedEntry.machineId).machineType} (${machines.find(m => m.id === selectedEntry.machineId).machineNumber})` :
                         '-'
                     }
                   </div>
                   <div style={{ marginTop: 8 }}>
                     <Text type="secondary" style={{ fontSize: '12px' }}>
-                      Opening: {truncateToFixed(selectedEntry.vehicleOpeningRPM || 0, 2)} | 
+                      Opening: {truncateToFixed(selectedEntry.vehicleOpeningRPM || 0, 2)} |
                       Closing: {truncateToFixed(selectedEntry.vehicleClosingRPM || 0, 2)}
                     </Text>
                   </div>
@@ -1460,7 +1460,7 @@ const ProductionReport = () => {
                 <Col span={12}>
                   <Text strong>Compressor:</Text>
                   <div>
-                    {selectedEntry.compressorId ? 
+                    {selectedEntry.compressorId ?
                       (compressors.find(c => c.id === selectedEntry.compressorId)?.compressorName || '-') :
                       '-'
                     }
@@ -1468,7 +1468,7 @@ const ProductionReport = () => {
                   {selectedEntry.compressorId && (
                     <div style={{ marginTop: 8 }}>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
-                        Opening: {truncateToFixed(selectedEntry.compressorOpeningRPM || 0, 2)} | 
+                        Opening: {truncateToFixed(selectedEntry.compressorOpeningRPM || 0, 2)} |
                         Closing: {truncateToFixed(selectedEntry.compressorClosingRPM || 0, 2)}
                       </Text>
                     </div>

@@ -44,11 +44,11 @@ const EmployeeAttendance = sequelize.define(
         key: "id",
       },
     },
-    vehicleId: {
+    machineId: {
       type: DataTypes.UUID,
       allowNull: true,
       references: {
-        model: "vehicle",
+        model: "machine",
         key: "id",
       },
     },

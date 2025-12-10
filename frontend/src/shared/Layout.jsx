@@ -5,44 +5,139 @@ import { Typography } from "antd";
 import vaLogo from "../assets/VA.png";
 import lightLogo from "../assets/hi.jpg";
 import { getUserRole, getUsername, isTownAdmin } from "../service/auth";
-import { MdDashboard } from "react-icons/md";
+import ServiceAlerts from "../components/ServiceAlerts";
+// import { MdDashboard } from "react-icons/md";
 import { TbReport } from "react-icons/tb";
-import { FaUsers, FaList, FaWpforms, FaClipboardList, FaShoppingCart, FaBox, FaCog, FaWarehouse, FaTruck, FaCompressArrowsAlt, FaChartBar, FaTags, FaMapMarkerAlt, FaAddressBook, FaUsersCog } from 'react-icons/fa';
-import { FaShop } from "react-icons/fa6";
-
-const { Text } = Typography;
+import {
+  FaUsersCog,
+  FaEdit,
+  FaMapMarkerAlt,
+  FaTruck,
+  FaTractor,
+  FaWind,
+  FaTag,
+  FaAddressBook,
+  FaCogs,
+  FaTools,
+  FaWarehouse,
+  FaFileInvoiceDollar,
+  FaWrench,
+  FaUserFriends,
+  FaUserClock
+} from "react-icons/fa";
 
 const navArray = [
-  { icon: <MdDashboard />, label: "Dashboard", path: "/dashboard" },
   {
-    icon: <FaUsers />,
-    label: "Employee",
+    label: "Dashboard",
+    path: "/dashboard",
+    icon: <TbReport />, // Using Report icon for now, or could use another if available
+  },
+  {
+    label: "Daily Entry",
+    path: "/daily-entry",
+    icon: <FaEdit />,
+  },
+
+  {
+    label: "Purchase Orders",
+    path: "/purchase-orders",
+    icon: <FaFileInvoiceDollar />,
+  },
+  {
+    label: "Inventory",
+    path: "/inventory",
+    icon: <FaWarehouse />,
+  },
+  {
+    label: "Employees",
+    icon: <FaUserFriends />,
     children: [
-      { icon: <FaList  />, label: "List", path: "/employee/list" },
-      { icon: <FaUsers />,label: "Attendance", path: "/employee/attendance" },
+      {
+        label: "Attendance",
+        path: "/employee/attendance",
+        icon: <FaUserClock />,
+      },
+      {
+        label: "Employee List",
+        path: "/employee/list",
+        icon: <FaUserFriends />,
+      },
     ],
   },
-  { icon: <FaClipboardList />, label: "Daily Entry", path: "/daily-entry" },
-  { icon: <TbReport />, label: "Production Report", path: "/reports/production" },
-  { icon: <FaBox />, label: "Item Management", path: "/item-management" },
-  { icon: <FaShoppingCart />, label: "Purchase Order", path: "/purchase-order" },
   {
-    icon: <TbReport />,
+    label: "Machines",
+    path: "/machine",
+    icon: <FaTractor />,
+  },
+  {
+    label: "Compressors",
+    path: "/compressor",
+    icon: <FaWind />,
+  },
+  {
+    label: "Sites",
+    path: "/site",
+    icon: <FaMapMarkerAlt />,
+  },
+  {
+    label: "Suppliers",
+    path: "/supplier",
+    icon: <FaTruck />,
+  },
+
+  {
+    label: "Spares",
+    path: "/spares",
+    icon: <FaCogs />,
+  },
+  {
+    label: "Drilling Tools",
+    path: "/drilling-tools",
+    icon: <FaTools />,
+  },
+  {
+    label: "Brand",
+    path: "/brand",
+    icon: <FaTag />,
+  },
+  {
+    label: "Address",
+    path: "/address",
+    icon: <FaAddressBook />,
+  },
+  {
     label: "Reports",
+    path: "/reports",
+    icon: <TbReport />,
     children: [
-      { icon: <TbReport />, label: "Production", path: "/reports/production" },
-      { icon: <TbReport />, label: "Production Detailed", path: "/reports/production-detailed" },
-      { icon: <FaWarehouse />, label: "Inventory", path: "/reports/inventory" },
-      { icon: <FaCog />, label: "Service Usage", path: "/reports/service-usage" },
-    ],
+      {
+        label: "Drilling Tools Report",
+        path: "/reports/service-usage",
+        icon: <TbReport />
+      },
+      {
+        label: "Spares Usage Report",
+        path: "/reports/spares-summary",
+        icon: <TbReport />
+      },
+      {
+        label: "Production",
+        path: "/reports/production",
+        icon: <TbReport />
+      },
+      {
+        label: "Daily Report",
+        path: "/reports/daily",
+        icon: <TbReport />
+      }
+    ]
   },
-  { icon: <FaTruck />, label: "Machine", path: "/vehicle" },
-  { icon: <FaCompressArrowsAlt />, label: "Compressor", path: "/compressor" },
-  { icon: <FaTags />, label: "Brand", path: "/brand" },
-  { icon: <FaMapMarkerAlt />, label: "Site", path: "/site" },
-  { icon: <FaShop />, label: "Supplier", path: "/supplier" },
-  { icon: <FaAddressBook />, label: "Address", path: "/address" },
-  { icon: <FaUsersCog />, label: "User Management", path: "/user-management", adminOnly: true },
+  {
+    icon: <FaUsersCog />,
+    label: "User Management",
+    path: "/user-management",
+    adminOnly: true
+  },
 ];
 
 export default function Layout() {
@@ -110,6 +205,7 @@ export default function Layout() {
         className="dev"
         >Developed by <a href="https://instagram.com/last_autumnleaf/">:)</a> aravindh</span> */}
         <div className="relative pr-6 flex items-center gap-3 text-white/90">
+          <ServiceAlerts />
           <span className="hidden sm:inline-block text-sm opacity-90">
             {getUsername() || "User"}
           </span>
@@ -152,7 +248,7 @@ export default function Layout() {
 
             <div className="flex flex-col space-y-1">
               {filteredNavArray.map((item) => (
-                
+
                 <button
                   key={item.label}
                   className={`
@@ -168,24 +264,24 @@ export default function Layout() {
                     {item.icon && <span className="text-lg">{item.icon}</span>}
                     <span>{item.label}</span>
                   </span>
-                  
-                  {item.children 
-                  && (
-                    <svg
-                      className={`w-4 h-4 transition-transform ${activeMenu === item.label ? "rotate-90" : ""
-                        }`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  )}
+
+                  {item.children
+                    && (
+                      <svg
+                        className={`w-4 h-4 transition-transform ${activeMenu === item.label ? "rotate-90" : ""
+                          }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                    )}
                 </button>
               ))}
             </div>
@@ -208,29 +304,29 @@ export default function Layout() {
                   {activeMenu}
                 </h3>
               </div>
-              
+
               <div className="flex flex-col space-y-1">
                 {filteredNavArray
                   .find((x) => x.label === activeMenu)
                   ?.children?.map((sub) => (
                     <div >
-                      
+
                       <button
-                      key={sub.label}
-                      className={`
+                        key={sub.label}
+                        className={`
                         w-full flex gap-2 items-center text-left px-4 py-2.5 rounded-lg text-sm transition-all duration-200
                         ${isActiveRoute(sub.path)
-                          ? "bg-purple-100 text-purple-700 font-medium"
-                          : "text-gray-600 hover:bg-gray-100 hover:text-purple-600"
-                        }
+                            ? "bg-purple-100 text-purple-700 font-medium"
+                            : "text-gray-600 hover:bg-gray-100 hover:text-purple-600"
+                          }
                       `}
-                      onClick={() => handleSubNavClick(sub.path)}
-                    >
-                      {sub.icon}
-                      {sub.label}
-                    </button>
+                        onClick={() => handleSubNavClick(sub.path)}
+                      >
+                        {sub.icon}
+                        {sub.label}
+                      </button>
                     </div>
-                    
+
                   ))}
               </div>
             </div>

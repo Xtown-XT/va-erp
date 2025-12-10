@@ -17,7 +17,7 @@ router.post(
   DailyEntryController.create
 );
 router.get("/generate-ref", authorize("read"), DailyEntryController.generateRef);
-router.get("/fitted-drilling-tools/:compressorId", authorize("read"), DailyEntryController.getFittedDrillingTools);
+router.get("/fitted-drilling-tools", authorize("read"), DailyEntryController.getFittedDrillingTools);
 router.get("/", authorize("read"), DailyEntryController.getAll);
 router.get("/:id", authorize("read"), DailyEntryController.getById);
 router.put(
@@ -30,7 +30,7 @@ router.delete(
   "/:id",
   authorize("delete"),
   validate(deleteDailyEntrySchema),
-  DailyEntryController.softDelete
+  DailyEntryController.hardDelete
 );
 router.delete(
   "/:id/hard",

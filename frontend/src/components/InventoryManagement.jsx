@@ -1,488 +1,304 @@
-// import { useState, useEffect } from "react";
-// import {
-//   Card,
-//   Table,
-//   Button,
-//   Input,
-//   Space,
-//   Typography,
-//   Tag,
-//   Row,
-//   Col,
-//   Statistic,
-//   message,
-//   Modal,
-//   Form,
-//   Select,
-//   InputNumber,
-// } from "antd";
-// import {
-//   ReloadOutlined,
-//   PlusOutlined,
-// } from "@ant-design/icons";
-// import api from "../service/api";
-
-// const { Title, Text } = Typography;
-
-// const InventoryManagement = () => {
-//   const [loading, setLoading] = useState(false);
-//   const [items, setItems] = useState([]);
-//   const [stockData, setStockData] = useState([]);
-//   const [searchTerm, setSearchTerm] = useState("");
-//   const [showAddForm, setShowAddForm] = useState(false);
-//   const [addForm] = Form.useForm();
-//   const [itemInstances, setItemInstances] = useState([]);
-
-//   // Fetch all data
-//   const fetchData = async () => {
-//     setLoading(true);
-//     try {
-//       const [itemsRes, instancesRes] = await Promise.all([
-//         api.get("/api/items"),
-//         api.get("/api/itemInstances")
-//       ]);
-
-//       const items = itemsRes.data.data || [];
-//       const instances = instancesRes.data.data || [];
-
-//       setItems(items);
-//       setItemInstances(instances);
-//       setStockData(items); // Items now have stock field directly
-//     } catch (err) {
-//       console.error("Error fetching inventory data", err);
-//       message.error("Error fetching inventory data");
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Handle adding item instance
-//   const handleAddStock = async (values) => {
-//     try {
-//       const { itemId, quantity, nextServiceRPM, notes } = values;
-
-//       const payload = {
-//         itemId,
-//         quantity,
-//         nextServiceRPM: nextServiceRPM ? parseInt(nextServiceRPM) : null,
-//         notes
-//       };
-
-//       const response = await api.post("/api/stockTransactions/add-stock", payload);
-//       message.success(response.data.message);
-//       setShowAddForm(false);
-//       addForm.resetFields();
-//       fetchData();
-//     } catch (err) {
-//       console.error("Error adding stock", err);
-//       message.error("Error adding stock");
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchData();
-//   }, []);
-
-//   // Stock columns
-//   const stockColumns = [
-//     {
-//       title: "Item Name",
-//       dataIndex: "itemName",
-//       key: "itemName",
-//       render: (text, record) => (
-//         <div>
-//           <Text strong>{text}</Text>
-//           <br />
-//           <Text type="secondary" style={{ fontSize: '12px' }}>
-//             {record.partNumber}
-//           </Text>
-//         </div>
-//       ),
-//     },
-//     {
-//       title: "Stock Available",
-//       dataIndex: "stock",
-//       key: "stock",
-//       render: (value) => (
-//         <Text strong style={{
-//           color: value > 0 ? '#52c41a' : '#ff4d4f',
-//           fontSize: '16px'
-//         }}>
-//           {value || 0}
-//         </Text>
-//       ),
-//     },
-//     {
-//       title: "Unit Price",
-//       dataIndex: "purchaseRate",
-//       key: "purchaseRate",
-//       render: (value) => `₹${value || 0}`,
-//     },
-//     {
-//       title: "GST %",
-//       dataIndex: "gst",
-//       key: "gst",
-//       render: (value) => `${value || 0}%`,
-//     },
-//     {
-//       title: "Can Be Fitted",
-//       dataIndex: "canBeFitted",
-//       key: "canBeFitted",
-//       render: (value) => (
-//         <Tag color={value ? "blue" : "default"}>
-//           {value ? "Yes" : "No"}
-//         </Tag>
-//       ),
-//     },
-//   ];
-
-
-//   // Calculate summary statistics
-//   const calculateSummary = () => {
-//     const totalItems = stockData.length;
-//     const totalStock = stockData.reduce((sum, item) => sum + (item.stock || 0), 0);
-//     const itemsInStock = stockData.filter(item => (item.stock || 0) > 0).length;
-//     const itemsOutOfStock = stockData.filter(item => (item.stock || 0) === 0).length;
-
-//     return {
-//       totalItems,
-//       totalStock,
-//       itemsInStock,
-//       itemsOutOfStock,
-//     };
-//   };
-
-//   const summary = calculateSummary();
-
-
-//   return (
-//     <div className="space-y-6">
-//       {/* Header */}
-//       <div className="flex justify-between items-center">
-//         <div>
-//           <Title level={2} className="mb-2">Inventory Management</Title>
-//           <Text type="secondary">Track stock levels and transactions</Text>
-//         </div>
-//         <Space>
-//           <Button
-//             icon={<ReloadOutlined />}
-//             onClick={fetchData}
-//             loading={loading}
-//           >
-//             Refresh
-//           </Button>
-//         </Space>
-//       </div>
-
-//       {/* Summary Statistics */}
-//       <Row gutter={[16, 16]}>
-//         <Col xs={24} md={12} lg={6}>
-//           <Card>
-//             <Statistic
-//               title="Total Items"
-//               value={summary.totalItems}
-//               valueStyle={{ color: '#1890ff' }}
-//             />
-//           </Card>
-//         </Col>
-//         <Col xs={24} md={12} lg={6}>
-//           <Card>
-//             <Statistic
-//               title="Total Stock"
-//               value={summary.totalStock}
-//               valueStyle={{ color: '#1890ff' }}
-//             />
-//           </Card>
-//         </Col>
-//         <Col xs={24} md={12} lg={6}>
-//           <Card>
-//             <Statistic
-//               title="Items In Stock"
-//               value={summary.itemsInStock}
-//               valueStyle={{ color: '#52c41a' }}
-//             />
-//           </Card>
-//         </Col>
-//         <Col xs={24} md={12} lg={6}>
-//           <Card>
-//             <Statistic
-//               title="Items Out of Stock"
-//               value={summary.itemsOutOfStock}
-//               valueStyle={{ color: '#ff4d4f' }}
-//             />
-//           </Card>
-//         </Col>
-//       </Row>
-
-//       {/* Stock Table */}
-//       <Card>
-//         <div className="mb-4 flex justify-between items-center">
-//           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-//             <Input.Search
-//               placeholder="Search items..."
-//               value={searchTerm}
-//               onChange={(e) => setSearchTerm(e.target.value)}
-//               style={{ maxWidth: 300 }}
-//             />
-//             <Button
-//               onClick={() => setSearchTerm('')}
-//               disabled={!searchTerm}
-//             >
-//               Clear Filters
-//             </Button>
-//           </div>
-//         </div>
-//         <Table
-//           columns={stockColumns}
-//           dataSource={stockData.filter(item =>
-//             item.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-//             item.partNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-//           )}
-//           rowKey="id"
-//           loading={loading}
-//           pagination={{ pageSize: 20 }}
-//           scroll={{ x: 800 }}
-//         />
-//       </Card>
-
-//       {/* Add Stock flow removed: handled via Item page and auto on PO receive */}
-//     </div>
-//   );
-// };
-
-// export default InventoryManagement;
-
-import { useState, useEffect } from "react";
-import {
-  Card,
-  Table,
-  Button,
-  Input,
-  Space,
-  Typography,
-  Tag,
-  Row,
-  Col,
-  Statistic,
-  message,
-} from "antd";
-import { MdOutlineInventory2, MdInventory } from "react-icons/md";
-import { ReloadOutlined, ToolOutlined, DatabaseOutlined, InboxOutlined, DropboxOutlined } from "@ant-design/icons";
+import React, { useState, useEffect } from "react";
+import { Table, Card, Tag, Spin, message, Button, Modal, Form, Select, Radio, InputNumber, Space, Input } from "antd";
+import { ReloadOutlined, PlusOutlined } from "@ant-design/icons";
 import api from "../service/api";
-import { truncateToFixed } from "../utils/textUtils";
-
-const { Title, Text } = Typography;
 
 const InventoryManagement = () => {
   const [loading, setLoading] = useState(false);
-  const [stockData, setStockData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-    total: 0,
-    showSizeChanger: true,
-    pageSizeOptions: ['10', '20', '50'],
-  });
+  const [activeTab, setActiveTab] = useState('view'); // 'view' or 'add'
 
-  const [summary, setSummary] = useState({
-    totalItems: 0,
-    totalStock: 0,
-    itemsInStock: 0,
-    itemsOutOfStock: 0,
-  });
+  // Stock Data
+  const [siteStock, setSiteStock] = useState([]);
+  const [totals, setTotals] = useState({ totalSpares: 0, totalTools: 0 });
 
-  // ✅ Fetch paginated items
-  const fetchPaginatedData = async (page = 1, limit = 10) => {
+  // Dropdown Data
+  const [sites, setSites] = useState([]);
+  const [spares, setSpares] = useState([]);
+  const [tools, setTools] = useState([]);
+
+  // Form
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
+  const [itemType, setItemType] = useState('spare'); // 'spare' or 'tool'
+
+  useEffect(() => {
+    fetchSiteWiseStock();
+    // Fetch dropdown data
+    api.get('/api/sites').then(res => setSites(res.data.data)).catch(console.error);
+    api.get('/api/spares').then(res => setSpares(res.data.data)).catch(console.error);
+    api.get('/api/drilling-tools').then(res => setTools(res.data.data)).catch(console.error);
+  }, []);
+
+  const fetchSiteWiseStock = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/items?page=${page}&limit=${limit}`);
-      setStockData(res.data.data || []);
-
-      setPagination((prev) => ({
-        ...prev,
-        current: res.data.page || page,
-        total: res.data.total || 0,
-        pageSize: res.data.limit || limit,
-      }));
-    } catch (err) {
-      console.error("Error fetching inventory data", err);
-      message.error("Error fetching inventory data");
+      const response = await api.get('/api/inventory/stock/sitewise');
+      if (response.data.success) {
+        setSiteStock(response.data.data.sites);
+        setTotals(response.data.data.totals);
+      }
+    } catch (error) {
+      console.error('Error fetching stock:', error);
+      message.error('Failed to load stock data');
     } finally {
       setLoading(false);
     }
   };
 
-  // ✅ Fetch overall summary (all items without pagination)
-  const fetchSummary = async () => {
+  const handleStockSubmit = async (values) => {
+    setSubmitting(true);
     try {
-      const res = await api.get("/api/items?limit=1000"); // fetch all data with high limit
-      const items = res.data.data || [];
+      const payload = {
+        siteId: values.siteId,
+        mode: values.mode, // 'add' or 'set'
+        // For tools, quantity is handled in backend (effectively 1 per SN)
+        quantity: itemType === 'tool' ? 1 : values.quantity,
+        spareId: itemType === 'spare' ? values.itemId : null,
+        drillingToolId: itemType === 'tool' ? values.itemId : null,
+        serialNumber: itemType === 'tool' ? values.serialNumber : null,
+        initialRPM: itemType === 'tool' ? values.initialRPM : null,
+        initialMeter: itemType === 'tool' ? values.initialMeter : null,
+      };
 
-      const totalItems = items.length;
-      const totalStock = items.reduce((sum, i) => sum + (i.stock || 0), 0);
-      const itemsInStock = items.filter((i) => (i.stock || 0) > 0).length;
-      const itemsOutOfStock = items.filter((i) => (i.stock || 0) === 0).length;
+      await api.post('/api/inventory/stock/update', payload);
+      message.success(itemType === 'tool' ? "Tool Instance Added Successfully" : "Stock Updated Successfully");
 
-      setSummary({
-        totalItems,
-        totalStock,
-        itemsInStock,
-        itemsOutOfStock,
-      });
-    } catch (err) {
-      console.error("Error fetching summary", err);
+      form.resetFields();
+      setItemType('spare'); // Reset to default
+      setActiveTab('view'); // Switch back to view
+      fetchSiteWiseStock();
+    } catch (error) {
+      message.error(error.response?.data?.message || "Failed to update stock");
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  useEffect(() => {
-    fetchPaginatedData(pagination.current, pagination.pageSize);
-    fetchSummary(); // ✅ Fetch summary once
-  }, []);
+  // Expandable row for tools
+  const expandedRowRender = (record) => {
+    const toolColumns = [
+      { title: 'Tool Name', dataIndex: 'name', key: 'name' },
+      { title: 'Part Number', dataIndex: 'partNumber', key: 'partNumber' },
+      { title: 'Quantity', dataIndex: 'quantity', key: 'quantity' },
+      {
+        title: 'Total RPM',
+        dataIndex: 'totalRPM',
+        key: 'totalRPM',
+        render: (rpm) => rpm || '-'
+      },
+      {
+        title: 'Total Meter',
+        dataIndex: 'totalMeter',
+        key: 'totalMeter',
+        render: (meter) => meter || '-'
+      },
+      {
+        title: 'Price',
+        dataIndex: 'price',
+        key: 'price',
+        render: (price) => price ? `₹${price}` : '-'
+      }
+    ];
 
-  // ✅ Handle pagination change
-  const handleTableChange = (pagination) => {
-    fetchPaginatedData(pagination.current, pagination.pageSize);
+    return (
+      <div className="pl-8">
+        <h4 className="font-semibold mb-2">Drilling Tools</h4>
+        {record.tools.length > 0 ? (
+          <Table
+            columns={toolColumns}
+            dataSource={record.tools}
+            pagination={false}
+            size="small"
+            rowKey="id"
+          />
+        ) : (
+          <p className="text-gray-500">No tools in stock</p>
+        )}
+
+        <h4 className="font-semibold mt-4 mb-2">Spares</h4>
+        {record.spares.length > 0 ? (
+          <Table
+            columns={[
+              { title: 'Spare Name', dataIndex: 'name', key: 'name' },
+              { title: 'Part Number', dataIndex: 'partNumber', key: 'partNumber' },
+              { title: 'Category', dataIndex: 'category', key: 'category' },
+              { title: 'Quantity', dataIndex: 'quantity', key: 'quantity' }
+            ]}
+            dataSource={record.spares}
+            pagination={false}
+            size="small"
+            rowKey="id"
+          />
+        ) : (
+          <p className="text-gray-500">No spares in stock</p>
+        )}
+      </div>
+    );
   };
 
-  const stockColumns = [
+  const columns = [
     {
-      title: "Item Name",
-      dataIndex: "itemName",
-      key: "itemName",
-      render: (text, record) => (
-        <div>
-          <Text strong>{text}</Text>
-          <br />
-          <Text type="secondary" style={{ fontSize: "12px" }}>
-            {record.partNumber}
-          </Text>
-        </div>
-      ),
+      title: 'Site Name',
+      dataIndex: 'siteName',
+      key: 'siteName',
+      sorter: (a, b) => a.siteName.localeCompare(b.siteName),
+      render: (text) => <span className="font-medium">{text}</span>
     },
     {
-      title: "Stock Available",
-      dataIndex: "stock",
-      key: "stock",
-      render: (value) => (
-        <Text
-          strong
-          style={{
-            color: value > 0 ? "#52c41a" : "#ff4d4f",
-            fontSize: "16px",
-          }}
-        >
-          {value || 0}
-        </Text>
-      ),
+      title: 'Spares Count',
+      dataIndex: 'sparesCount',
+      key: 'sparesCount',
+      render: (count) => <Tag color="blue">{count}</Tag>
     },
     {
-      title: "Unit Price",
-      dataIndex: "purchaseRate",
-      key: "purchaseRate",
-      render: (value) => `₹${truncateToFixed(value || 0, 2)}`,
-    },
-    {
-      title: "GST %",
-      dataIndex: "gst",
-      key: "gst",
-      render: (value) => `${value || 0}%`,
-    },
-    {
-      title: "Can Be Fitted",
-      dataIndex: "canBeFitted",
-      key: "canBeFitted",
-      render: (value) => (
-        <Tag color={value ? "blue" : "default"}>{value ? "Yes" : "No"}</Tag>
-      ),
-    },
+      title: 'Tools Count',
+      dataIndex: 'toolsCount',
+      key: 'toolsCount',
+      render: (count) => <Tag color="green">{count}</Tag>
+    }
   ];
 
+  // Summary row
+  const summaryRow = () => (
+    <Table.Summary fixed>
+      <Table.Summary.Row className="bg-gray-100 font-bold">
+        <Table.Summary.Cell index={0}>
+          <span className="font-bold">TOTAL</span>
+        </Table.Summary.Cell>
+        <Table.Summary.Cell index={1}>
+          <Tag color="blue" className="font-bold">{totals.totalSpares}</Tag>
+        </Table.Summary.Cell>
+        <Table.Summary.Cell index={2}>
+          <Tag color="green" className="font-bold">{totals.totalTools}</Tag>
+        </Table.Summary.Cell>
+      </Table.Summary.Row>
+    </Table.Summary>
+  );
+
   return (
-    <div className="space-y-2">
-      {/* ✅ Summary cards now show total data (not page data) */}
-      <Row gutter={[8, 8]}>
-        <Col xs={24} md={12} lg={6}>
-          <Card bodyStyle={{ padding: '12px' }}>
-            
-            <Statistic
-              title="Total Items"
-              prefix={<ToolOutlined style={{ fontSize: '22px', color: '#1890ff', marginRight: '5px', marginTop: "5px" }} />}
-              value={summary.totalItems}
-              valueStyle={{ color: "#1890ff" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} md={12} lg={6}>
-          <Card bodyStyle={{ padding: '12px' }}>
-            <Statistic
-              title="Total Stock"
-              value={summary.totalStock}
-              prefix={<DatabaseOutlined style={{ fontSize: '22px', color: '#52c41a', marginRight: '5px', marginTop: "5px" }}/>}
-              valueStyle={{ color: "#1890ff" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} md={12} lg={6}>
-          <Card bodyStyle={{ padding: '12px' }}>
-            <Statistic
-              title="Items In Stock"
-              value={summary.itemsInStock}
-              prefix={<InboxOutlined style={{ fontSize: '22px', color: '#52c41a', marginRight: '5px', marginTop: "5px" }}/>}
-              valueStyle={{ color: "#52c41a" }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} md={12} lg={6}>
-          <Card bodyStyle={{ padding: '12px' }}>
-            <Statistic
-              title="Items Out of Stock"
-              value={summary.itemsOutOfStock}
-              prefix={<DropboxOutlined style={{ fontSize: '22px', color: '#ff4d4f', marginRight: '5px', marginTop: "5px" }}/>}
-              valueStyle={{ color: "#ff4d4f" }}
-            />
-          </Card>
-        </Col>
-      </Row>
+    <div className="p-4">
+      <Card
+        title="Inventory Management"
+        tabList={[
+          { key: 'view', tab: 'View Stock' },
+          { key: 'add', tab: 'Add Items' }
+        ]}
+        activeTabKey={activeTab}
+        onTabChange={key => {
+          setActiveTab(key);
+          if (key === 'view') fetchSiteWiseStock();
+        }}
+        extra={
+          activeTab === 'view' && (
+            <button
+              onClick={fetchSiteWiseStock}
+              className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded hover:bg-gray-200"
+            >
+              <ReloadOutlined spin={loading} />
 
-      {/* Filters */}
-      <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
-        <Row gutter={8} align="middle">
-          <Col xs={24} sm={12} md={8}>
-            <Input.Search
-              placeholder="Search items..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              size="small"
+            </button>
+          )
+        }
+      >
+        {activeTab === 'view' ? (
+          <Spin spinning={loading}>
+            <Table
+              columns={columns}
+              dataSource={siteStock}
+              rowKey="siteId"
+              expandable={{
+                expandedRowRender,
+                rowExpandable: (record) => record.tools.length > 0 || record.spares.length > 0
+              }}
+              pagination={{ pageSize: 50 }}
+              summary={summaryRow}
             />
-          </Col>
-          <Col xs={24} sm={12} md={3}>
-            <Button onClick={() => setSearchTerm("")} disabled={!searchTerm} size="small" className="w-full">
-              Clear
-            </Button>
-          </Col>
-        </Row>
-      </Card>
+          </Spin>
+        ) : (
+          <div className="max-w-2xl mx-auto">
+            <Form
+              form={form}
+              layout="vertical"
+              onFinish={handleStockSubmit}
+              initialValues={{ mode: 'add', quantity: 0 }}
+            >
+              <Card type="inner" title="Add New Inventory Item">
+                <Form.Item name="siteId" label="Select Site" rules={[{ required: true }]}>
+                  <Select placeholder="Choose destination site">
+                    {sites.map(s => <Select.Option key={s.id} value={s.id}>{s.siteName}</Select.Option>)}
+                  </Select>
+                </Form.Item>
 
-      {/* Table */}
-      <Card bodyStyle={{ padding: '12px' }}>
+                <div className="mb-4">
+                  <label className="block mb-2 font-medium">What are you adding?</label>
+                  <Radio.Group
+                    value={itemType}
+                    onChange={e => {
+                      setItemType(e.target.value);
+                      form.setFieldsValue({ itemId: null });
+                    }}
+                    buttonStyle="solid"
+                  >
+                    <Radio.Button value="spare">Spare Part</Radio.Button>
+                    <Radio.Button value="tool">Drilling Tool</Radio.Button>
+                  </Radio.Group>
+                </div>
 
-        <Table
-          columns={stockColumns}
-          dataSource={stockData.filter(
-            (item) =>
-              item.itemName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-              item.partNumber?.toLowerCase().includes(searchTerm.toLowerCase())
-          )}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            ...pagination,
-            showTotal: (total, range) =>
-              `${range[0]}-${range[1]} of ${total} items`,
-          }}
-          onChange={handleTableChange}
-        />
+                <Form.Item
+                  name="itemId"
+                  label={itemType === 'spare' ? "Select Spare Part" : "Select Drilling Tool Type"}
+                  rules={[{ required: true }]}
+                >
+                  <Select showSearch placeholder="Search Item" optionFilterProp="children">
+                    {itemType === 'spare'
+                      ? spares.map(s => <Select.Option key={s.id} value={s.id}>{s.name} ({s.partNumber})</Select.Option>)
+                      : tools.map(t => <Select.Option key={t.id} value={t.id}>{t.name} ({t.partNumber})</Select.Option>)
+                    }
+                  </Select>
+                </Form.Item>
+
+                {itemType === 'spare' ? (
+                  // Spare Part Fields
+                  <>
+                    <Form.Item name="mode" label="Action">
+                      <Radio.Group>
+                        <Radio value="add">Add to Stock</Radio>
+                        <Radio value="set">Set Exact Count</Radio>
+                      </Radio.Group>
+                    </Form.Item>
+
+                    <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}>
+                      <InputNumber className="w-full" placeholder="Enter quantity" />
+                    </Form.Item>
+                  </>
+                ) : (
+                  // Drilling Tool Fields
+                  <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                    <Tag color="blue" className="mb-4">Drilling Tool Instance</Tag>
+                    <p className="text-xs text-gray-500 mb-4">Adding a drilling tool creates a specific instance with a Serial Number. Quantity is always 1.</p>
+
+                    <Form.Item name="serialNumber" label="Serial Number (Required)" rules={[{ required: true, message: "Serial Number is required for tools" }]}>
+                      <Input placeholder="e.g. SN-001" />
+                    </Form.Item>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <Form.Item name="initialRPM" label="Initial RPM">
+                        <InputNumber style={{ width: '100%' }} min={0} placeholder="0" />
+                      </Form.Item>
+                      <Form.Item name="initialMeter" label="Initial Meter">
+                        <InputNumber style={{ width: '100%' }} min={0} placeholder="0" />
+                      </Form.Item>
+                    </div>
+                  </div>
+                )}
+
+                <Button type="primary" htmlType="submit" block loading={submitting} size="large" icon={<PlusOutlined />}>
+                  {itemType === 'tool' ? 'Create Tool Instance' : 'Update Stock'}
+                </Button>
+              </Card>
+            </Form>
+          </div>
+        )}
       </Card>
     </div>
   );

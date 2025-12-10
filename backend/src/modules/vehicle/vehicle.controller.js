@@ -1,5 +1,5 @@
 import Machine from "./vehicle.model.js";
-import ItemService from "../itemService/itemService.model.js";
+// import ItemService from "../itemService/itemService.model.js";
 import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
 
@@ -17,27 +17,29 @@ class MachineController extends BaseController {
     try {
       const { id } = req.params;
       const username = req.user?.username || 'system';
-      
+
+      /*
       // Mark all fitted items for this machine as removed in ItemService
       await ItemService.update(
-        { 
+        {
           status: 'removed',
           removedDate: new Date().toISOString().split('T')[0],
           updatedBy: username
         },
-        { 
-          where: { 
+        {
+          where: {
             vehicleId: id,
             status: 'fitted'
-          } 
+          }
         }
       );
+      */
 
       // Continue with normal soft delete - call service directly
       const userData = {
         deletedBy: username,
       };
-      
+
       const item = await this.service.softDelete(id, userData);
       if (!item) {
         return res.status(404).json({
@@ -59,21 +61,23 @@ class MachineController extends BaseController {
     try {
       const { id } = req.params;
       const username = req.user?.username || 'system';
-      
+
+      /*
       // Mark all fitted items for this machine as removed in ItemService
       await ItemService.update(
-        { 
+        {
           status: 'removed',
           removedDate: new Date().toISOString().split('T')[0],
           updatedBy: username
         },
-        { 
-          where: { 
+        {
+          where: {
             vehicleId: id,
             status: 'fitted'
-          } 
+          }
         }
       );
+      */
 
       // Continue with normal hard delete - call service directly
       const item = await this.service.hardDelete(id);
@@ -121,7 +125,7 @@ class MachineController extends BaseController {
       const sortedRows = rowsArray.sort((a, b) => {
         const numA = extractNumber(a.vehicleNumber);
         const numB = extractNumber(b.vehicleNumber);
-        
+
         if (numA !== numB) {
           return numA - numB;
         }

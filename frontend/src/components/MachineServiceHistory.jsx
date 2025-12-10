@@ -24,7 +24,7 @@ import dayjs from "dayjs";
 const { Title, Text } = Typography;
 
 const MachineServiceHistory = () => {
-  const { vehicleId } = useParams(); // Route param kept for compatibility
+  const { machineId } = useParams();
   const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [machine, setMachine] = useState(null);
@@ -32,17 +32,17 @@ const MachineServiceHistory = () => {
 
   useEffect(() => {
     fetchMachineServiceHistory();
-  }, [vehicleId]);
+  }, [machineId]);
 
   const fetchMachineServiceHistory = async () => {
     setLoading(true);
     try {
       // Fetch machine details
-      const machineRes = await api.get(`/api/vehicles/${vehicleId}`); // API route kept
+      const machineRes = await api.get(`/api/machines/${machineId}`);
       setMachine(machineRes.data.data);
 
       // Fetch service history
-      const servicesRes = await api.get(`/api/services?machineId=${vehicleId}&serviceType=machine`); // Changed to machineId and machine
+      const servicesRes = await api.get(`/api/services?machineId=${machineId}&serviceType=machine`);
       setServices(servicesRes.data.data || []);
     } catch (err) {
       console.error("Error fetching machine service history", err);
@@ -56,7 +56,7 @@ const MachineServiceHistory = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Machine Service History - ${machine?.vehicleNumber}</title>
+          <title>Machine Service History - ${machine?.machineNumber}</title>
           <style>
             body { font-family: Arial, sans-serif; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -67,8 +67,8 @@ const MachineServiceHistory = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Service History - ${machine?.vehicleNumber}</h1>
-            <p>Machine Type: ${machine?.vehicleType}</p>
+            <h1>Service History - ${machine?.machineNumber}</h1>
+            <p>Machine Type: ${machine?.machineType}</p>
             <p>Generated on: ${new Date().toLocaleDateString()}</p>
           </div>
           <table>
@@ -86,11 +86,11 @@ const MachineServiceHistory = () => {
                   <td>${service.serviceDate ? dayjs(service.serviceDate).format("YYYY-MM-DD") : "-"}</td>
                   <td>${service.serviceName || "N/A"}</td>
                   <td>${service.serviceRPM ? truncateToFixed(service.serviceRPM, 2) : "-"}</td>
-                  <td>${service.serviceType === "machine" && service.machine ? 
-                    `${service.machine.vehicleNumber} (${service.machine.vehicleType})` : // Changed alias 
-                    service.serviceType === "compressor" && service.compressor ? 
-                    `${service.compressor.compressorName}` : 
-                    "-"}</td>
+                  <td>${service.serviceType === "machine" && service.machine ?
+        `${service.machine.machineNumber} (${service.machine.machineType})` :
+        service.serviceType === "compressor" && service.compressor ?
+          `${service.compressor.compressorName}` :
+          "-"}</td>
                 </tr>
               `).join("")}
             </tbody>
@@ -126,7 +126,7 @@ const MachineServiceHistory = () => {
       key: "servicedItem",
       render: (_, record) => {
         if (record.serviceType === "machine" && record.machine) {
-          return `${record.machine.vehicleNumber} (${record.machine.vehicleType})`; // Changed alias
+          return `${record.machine.machineNumber} (${record.machine.machineType})`;
         } else if (record.serviceType === "compressor" && record.compressor) {
           return `${record.compressor.compressorName}`;
         }
@@ -136,9 +136,9 @@ const MachineServiceHistory = () => {
   ];
 
   const totalServices = services.length;
-  const lastService = services[0]; // Assuming sorted by date desc
+  // const lastService = services[0]; // unused
   const nextServiceRPM = machine?.nextServiceRPM || 0;
-  const currentRPM = machine?.vehicleRPM || 0; // DB column kept
+  const currentRPM = machine?.machineRPM || 0;
   const remainingRPM = nextServiceRPM ? Math.max(0, nextServiceRPM - currentRPM) : 0;
 
   return (
@@ -203,7 +203,7 @@ const MachineServiceHistory = () => {
           dataSource={services}
           rowKey="id"
           loading={loading}
-          pagination={{ 
+          pagination={{
             pageSize: 10,
             showSizeChanger: true,
             pageSizeOptions: ['10', '20', '50']

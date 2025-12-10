@@ -11,15 +11,20 @@ const Machine = sequelize.define(
       primaryKey: true,
     },
     vehicleType: {
-      type: DataTypes.STRING, // crawler, camper, truck, etc. (kept for DB compatibility)
+      type: DataTypes.STRING, // crawler, camper, truck, etc.
       allowNull: false,
-      field: "vehicleType", // Explicitly map to DB column
+      field: "vehicleType",
     },
     vehicleNumber: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-      field: "vehicleNumber", // Explicitly map to DB column
+      field: "vehicleNumber",
+    },
+    vehicleRPM: {
+      type: DataTypes.DOUBLE,
+      allowNull: true,
+      field: "vehicleRPM",
     },
     status: {
       type: DataTypes.ENUM("active", "inactive"),
@@ -34,14 +39,14 @@ const Machine = sequelize.define(
         key: "id",
       },
     },
-    vehicleRPM: {
-      type: DataTypes.DOUBLE,
-      allowNull: true,
-      field: "vehicleRPM", // Explicitly map to DB column
-    },
     nextServiceRPM: {
       type: DataTypes.DOUBLE,
       allowNull: true,
+    },
+    serviceCycleRpm: {
+      type: DataTypes.INTEGER,
+      defaultValue: 250,
+      comment: "RPM interval for service notification",
     },
     compressorId: {
       type: DataTypes.UUID,

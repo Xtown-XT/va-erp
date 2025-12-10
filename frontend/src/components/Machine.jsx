@@ -47,7 +47,7 @@ const Machine = () => {
   const fetchMachines = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/vehicles?page=${page}&limit=${limit}`); // API route kept for compatibility
+      const res = await api.get(`/api/machines?page=${page}&limit=${limit}`);
       setMachines(res.data.data || []);
 
       // Update pagination state
@@ -111,8 +111,8 @@ const Machine = () => {
 
       // Build payload with only defined values
       const payload = {
-        vehicleType: values.vehicleType,
-        vehicleNumber: values.vehicleNumber,
+        machineType: values.machineType,
+        machineNumber: values.machineNumber,
         brandId: values.brandId,
       };
 
@@ -121,13 +121,17 @@ const Machine = () => {
         payload.status = values.status;
       }
 
-      if (values.vehicleRPM !== undefined && values.vehicleRPM !== null && values.vehicleRPM !== '') {
-        payload.vehicleRPM = Number(values.vehicleRPM);
+      if (values.machineRPM !== undefined && values.machineRPM !== null && values.machineRPM !== '') {
+        payload.machineRPM = Number(values.machineRPM);
       }
 
-      if (values.nextServiceRPM !== undefined && values.nextServiceRPM !== null && values.nextServiceRPM !== '') {
-        payload.nextServiceRPM = Number(values.nextServiceRPM);
+
+
+      if (values.serviceCycleRpm !== undefined && values.serviceCycleRpm !== null && values.serviceCycleRpm !== '') {
+        payload.serviceCycleRpm = Number(values.serviceCycleRpm);
       }
+
+
 
       // Always include compressorId - send null if cleared (for updates)
       if (editingId) {
@@ -152,10 +156,10 @@ const Machine = () => {
       }
 
       if (editingId) {
-        await api.put(`/api/vehicles/${editingId}`, payload); // API route kept
+        await api.put(`/api/machines/${editingId}`, payload);
         message.success("Machine updated successfully");
       } else {
-        const res = await api.post("/api/vehicles", payload); // API route kept
+        const res = await api.post("/api/machines", payload);
         setMachines([res.data.data, ...machines]);
         message.success("Machine created successfully");
       }
@@ -179,12 +183,12 @@ const Machine = () => {
     // Use setTimeout to ensure form is mounted before setting values
     setTimeout(() => {
       form.setFieldsValue({
-        vehicleType: record.vehicleType || undefined,
-        vehicleNumber: record.vehicleNumber || undefined,
+        machineType: record.machineType || undefined,
+        machineNumber: record.machineNumber || undefined,
         status: record.status || undefined,
         brandId: record.brandId || record.brand?.id || undefined,
-        vehicleRPM: record.vehicleRPM ?? undefined,
-        nextServiceRPM: record.nextServiceRPM ?? undefined,
+        machineRPM: record.machineRPM ?? undefined,
+        serviceCycleRpm: record.serviceCycleRpm ?? 250,
         compressorId: record.compressorId || record.compressor?.id || undefined,
         siteId: record.siteId || record.site?.id || undefined,
       });
@@ -199,10 +203,10 @@ const Machine = () => {
   // Handle hard delete
   const handleDelete = async (id) => {
     try {
-      await api.delete(`/api/vehicles/${id}/hard`); // API route kept
+      await api.delete(`/api/machines/${id}/hard`);
       setMachines(machines.filter((machine) => machine.id !== id));
     } catch (err) {
-      console.error("Error deleting vehicle", {
+      console.error("Error deleting machine", {
         status: err.response?.status,
         data: err.response?.data,
       });
@@ -212,7 +216,7 @@ const Machine = () => {
   // PDF Export
   const exportToPDF = async () => {
 
-    const res = await api.get("/api/vehicles?page=1&limit=1000"); // API route kept
+    const res = await api.get("/api/machines?page=1&limit=1000");
     const allMachines = res.data.data || []
 
     const printWindow = window.open("", "_blank");
@@ -247,9 +251,9 @@ const Machine = () => {
             </thead>
             <tbody>
               ${allMachines
-            // (machines || [])
+        // (machines || [])
         .filter((m) =>
-          m.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase()) // DB column kept
+          m.machineNumber?.toLowerCase().includes(searchTerm.toLowerCase())
         )
         .map(
           (machine) => {
@@ -264,10 +268,10 @@ const Machine = () => {
 
             return `
                     <tr>
-                      <td>${machine.vehicleType}</td>
-                      <td>${machine.vehicleNumber}</td>
+                      <td>${machine.machineType}</td>
+                      <td>${machine.machineNumber}</td>
                       <td>${brandName}</td>
-                      <td>${machine.vehicleRPM || '-'}</td>
+                      <td>${machine.machineRPM || '-'}</td>
                       <td>${machine.nextServiceRPM || '-'}</td>
                       <td>${compressorName}</td>
                       <td>${machine.status}</td>
@@ -286,8 +290,8 @@ const Machine = () => {
 
   // Table columns
   const columns = [
-    { title: "Machine Type", dataIndex: "vehicleType", key: "vehicleType" },
-    { title: "Machine Number", dataIndex: "vehicleNumber", key: "vehicleNumber" },
+    { title: "Machine Type", dataIndex: "machineType", key: "machineType" },
+    { title: "Machine Number", dataIndex: "machineNumber", key: "machineNumber" },
     {
       title: "Brand",
       key: "brandName",
@@ -304,7 +308,7 @@ const Machine = () => {
         return brand ? brand.brandName : "-";
       }
     },
-    { title: "Machine RPM", dataIndex: "vehicleRPM", key: "vehicleRPM" },
+    { title: "Machine RPM", dataIndex: "machineRPM", key: "machineRPM" },
     { title: "Next Service RPM", dataIndex: "nextServiceRPM", key: "nextServiceRPM", render: (value) => value || "-" },
     {
       title: "Compressor",
@@ -344,7 +348,7 @@ const Machine = () => {
         const colors = { active: "green", inactive: "red" };
         return <Tag color={colors[status] || "default"}>
           {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}
-          
+
         </Tag>;
       },
     },
@@ -366,13 +370,13 @@ const Machine = () => {
       render: (_, record) => (
         <Space>
           {canEdit() && (
-            <Button 
+            <Button
               type="button"
-              icon={<EditOutlined />} 
+              icon={<EditOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
                 handleEdit(record);
-              }} 
+              }}
             />
           )}
           {canDelete() && (
@@ -395,7 +399,7 @@ const Machine = () => {
         <Row gutter={4} align="middle">
           <Col xs={24} sm={6} md={5}>
             <Input.Search
-              placeholder="Search by vehicle number"
+              placeholder="Search by machine number"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               size="small"
@@ -465,7 +469,7 @@ const Machine = () => {
           <Form layout="vertical" form={form} onFinish={handleSubmit}>
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
-                name="vehicleType"
+                name="machineType"
                 label="Machine Type"
                 rules={[{ required: true }]}
               >
@@ -476,7 +480,7 @@ const Machine = () => {
                 </Select>
               </Form.Item>
               <Form.Item
-                name="vehicleNumber"
+                name="machineNumber"
                 label="Machine Number"
                 rules={[{ required: true }]}
               >
@@ -498,18 +502,21 @@ const Machine = () => {
                 </Select>
               </Form.Item>
               <Form.Item
-                name="vehicleRPM"
+                name="machineRPM"
                 label="Machine RPM"
               >
                 <InputNumber className="w-full" min={0} step={0.1} precision={1} />
               </Form.Item>
+
               <Form.Item
-                name="nextServiceRPM"
-                label="Next Service RPM"
-                tooltip="Enter the RPM at which the next service is due"
+                name="serviceCycleRpm"
+                label="Service Cycle (RPM)"
+                tooltip="RPM interval for regular service alerts"
+                initialValue={250}
               >
-                <InputNumber className="w-full" min={0} step={0.1} precision={1} placeholder="e.g., 1000" />
+                <InputNumber className="w-full" min={1} step={1} placeholder="e.g., 250" />
               </Form.Item>
+
               <Form.Item
                 name="compressorId"
                 label="Compressor"
@@ -549,7 +556,7 @@ const Machine = () => {
             </div>
             <Form.Item>
               <Button type="primary" htmlType="submit">
-                {editingId ? "Update Machine" : "Add Machine"}
+                {editingId ? "Update Machine" : "Update Machine"}
               </Button>
             </Form.Item>
           </Form>
@@ -562,7 +569,7 @@ const Machine = () => {
         columns={columns}
         dataSource={(machines || []).filter((m) => {
 
-          const searchMatch = m.vehicleNumber?.toLowerCase().includes(searchTerm.toLowerCase()); // DB column kept
+          const searchMatch = m.machineNumber?.toLowerCase().includes(searchTerm.toLowerCase());
 
           const statusMatch = statusFilter
             ? m.status?.toLowerCase() === statusFilter.toLowerCase()
@@ -575,7 +582,7 @@ const Machine = () => {
         loading={loading}
         pagination={{
           ...pagination,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} vehicles`
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} machines`
         }}
         onChange={handleTableChange}
       />

@@ -1,39 +1,12 @@
-import { Router } from "express";
-import { ServiceController } from "./service.controller.js";
-import { validate } from "../../shared/middlewares/validate.js";
-import { authorize } from "../../shared/middlewares/auth.js";
-import {
-  createServiceSchema,
-  updateServiceSchema,
-  deleteServiceSchema,
-} from "./service.zod.js";
+import express from "express";
+import serviceController from "./service.controller.js";
 
-const router = Router();
+const router = express.Router();
 
-router.post(
-  "/",
-  authorize("create"),
-  validate(createServiceSchema),
-  ServiceController.create
-);
-router.get("/", authorize("read"), ServiceController.getAll);
-router.get("/history", authorize("read"), ServiceController.getServiceHistory);
-router.get("/:id", authorize("read"), ServiceController.getById);
-router.put(
-  "/:id",
-  authorize("update"),
-  validate(updateServiceSchema),
-  ServiceController.update
-);
-router.delete(
-  "/:id",
-  authorize("delete"),
-  validate(deleteServiceSchema),
-  ServiceController.softDelete
-);
-router.delete("/:id/hard", authorize("delete"), ServiceController.hardDelete);
-router.post("/:id/restore", authorize("update"), ServiceController.restore);
-
-// Service Alerts routes (moved to separate route file - see server.js)
+router.post("/", serviceController.createServiceEntry); // Alias for legacy/direct calls
+router.post("/entry", serviceController.createServiceEntry);
+router.get("/history", serviceController.getServiceHistory);
+router.get("/notifications", serviceController.getNotifications);
+router.get("/alerts", serviceController.getServiceAlerts);
 
 export default router;
