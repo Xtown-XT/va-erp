@@ -204,7 +204,7 @@ export class EmployeeAttendanceController extends BaseController {
   upsertAttendance = async (req, res, next) => {
     const transaction = await EmployeeAttendance.sequelize.transaction();
     try {
-      const { employeeId, date, presence, workStatus, salary, siteId, vehicleId } = req.body;
+      const { employeeId, date, presence, workStatus, salary, siteId, machineId } = req.body;
       const username = (req.user && (req.user.username || req.user.name)) || "system";
 
       // Check if attendance already exists for this employee on this date
@@ -223,7 +223,7 @@ export class EmployeeAttendanceController extends BaseController {
           workStatus: workStatus !== undefined ? workStatus : (existingAttendance.workStatus || 'working'),
           salary: salary !== undefined ? salary : (existingAttendance.salary || 0),
           siteId: siteId !== undefined ? siteId : existingAttendance.siteId,
-          vehicleId: vehicleId !== undefined ? vehicleId : existingAttendance.vehicleId,
+          machineId: machineId !== undefined ? machineId : existingAttendance.machineId,
           updatedBy: username,
         };
 
@@ -255,7 +255,7 @@ export class EmployeeAttendanceController extends BaseController {
           workStatus: workStatus !== undefined ? workStatus : 'working',
           salary: salary !== undefined ? salary : 0,
           siteId: siteId || null,
-          vehicleId: vehicleId || null,
+          machineId: machineId || null,
           createdBy: username,
         };
 
@@ -313,7 +313,7 @@ export class EmployeeAttendanceController extends BaseController {
       // Process all records in batch
       for (const record of records) {
         try {
-          const { employeeId, date, presence, workStatus, salary, siteId, vehicleId } = record;
+          const { employeeId, date, presence, workStatus, salary, siteId, machineId } = record;
 
           if (!employeeId || !date) {
             errors.push({ employeeId, error: "employeeId and date are required" });
@@ -333,7 +333,7 @@ export class EmployeeAttendanceController extends BaseController {
               workStatus: workStatus !== undefined ? workStatus : (existingAttendance.workStatus || 'working'),
               salary: salary !== undefined ? salary : (existingAttendance.salary || 0),
               siteId: siteId !== undefined ? siteId : existingAttendance.siteId,
-              vehicleId: vehicleId !== undefined ? vehicleId : existingAttendance.vehicleId,
+              machineId: machineId !== undefined ? machineId : existingAttendance.machineId,
               updatedBy: username,
             };
 
@@ -365,7 +365,7 @@ export class EmployeeAttendanceController extends BaseController {
               workStatus: workStatus !== undefined ? workStatus : 'working',
               salary: salary !== undefined ? salary : 0,
               siteId: siteId || null,
-              vehicleId: vehicleId || null,
+              machineId: machineId || null,
               createdBy: username,
             };
 

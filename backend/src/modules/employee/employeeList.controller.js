@@ -81,7 +81,7 @@ class EmployeeListCustomController extends BaseController {
             as: 'attendances',
             include: [
               { model: Site, as: 'site' },
-              { model: Vehicle, as: 'vehicle' }
+              { model: Machine, as: 'machine' }
             ],
             order: [['date', 'DESC']]
           }
@@ -117,8 +117,8 @@ class EmployeeListCustomController extends BaseController {
             attributes: ['id', 'siteName', 'location']
           },
           {
-            model: Vehicle,
-            as: 'vehicle',
+            model: Machine,
+            as: 'machine',
             attributes: ['id', 'machineNumber', 'machineType']
           },
           {
@@ -158,13 +158,13 @@ class EmployeeListCustomController extends BaseController {
           date: entry.date,
           refNo: entry.refNo,
           site: entry.site?.siteName || 'N/A',
-          machine: entry.vehicle?.vehicleNumber || 'N/A',
-          machineType: entry.vehicle?.machineType || 'N/A',
+          machine: entry.machine?.machineNumber || 'N/A',
+          machineType: entry.machine?.machineType || 'N/A',
           compressor: entry.compressor?.compressorName || 'N/A',
           role: empData.role || 'N/A',
           shift: empData.shift || 1,
-          vehicleOpeningRPM: entry.vehicleOpeningRPM,
-          vehicleClosingRPM: entry.vehicleClosingRPM,
+          machineOpeningRPM: entry.machineOpeningRPM,
+          machineClosingRPM: entry.machineClosingRPM,
           compressorOpeningRPM: entry.compressorOpeningRPM,
           compressorClosingRPM: entry.compressorClosingRPM,
           noOfHoles: entry.noOfHoles || 0

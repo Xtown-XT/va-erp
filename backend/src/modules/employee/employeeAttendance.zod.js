@@ -20,7 +20,7 @@ export const createEmployeeAttendanceSchema = z.object({
     .default(0),
   date: dateYYYYMMDD,
   siteId: z.string().uuid("Invalid site ID format").nullable().optional(),
-  vehicleId: z.string().uuid("Invalid vehicle ID format").nullable().optional(),
+  machineId: z.string().uuid("Invalid machine ID format").nullable().optional(),
 });
 
 export const updateEmployeeAttendanceSchema = createEmployeeAttendanceSchema.partial();
