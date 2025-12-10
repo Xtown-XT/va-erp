@@ -3,6 +3,9 @@ import sequelize from "../../config/db.js";
 import PurchaseOrder from "../inventory/models/purchaseOrder.model.js";
 import DailyEntry from "../dailyEntry/dailyEntry.model.js";
 import EmployeeAttendance from "../employee/employeeAttendance.model.js";
+import Site from "../site/site.model.js";
+import Machine from "../machine/machine.model.js";
+import EmployeeList from "../employee/employeeList.model.js";
 
 export const DashboardController = {
     getStats: async (req, res, next) => {
@@ -45,10 +48,12 @@ export const DashboardController = {
             const productionStats = await DailyEntry.findAll({
                 where: productionWhere,
                 attributes: [
+
                     [sequelize.fn('SUM', sequelize.col('meter')), 'totalMeter'],
                     [sequelize.fn('SUM', sequelize.col('noOfHoles')), 'totalHoles'],
                     // Diesel is sum of machineHSD + compressorHSD + dieselUsed
-                    [sequelize.literal('SUM(COALESCE("machineHSD", 0) + COALESCE("compressorHSD", 0) + COALESCE("dieselUsed", 0))'), 'totalDiesel']
+                    // MySQL requires backticks for columns in literals if not using ANSI_QUOTES
+                    [sequelize.literal('SUM(COALESCE(`machineHSD`, 0) + COALESCE(`compressorHSD`, 0) + COALESCE(`dieselUsed`, 0))'), 'totalDiesel']
                 ],
                 raw: true
             });
@@ -67,6 +72,27 @@ export const DashboardController = {
                 }
             });
 
+            // 4. New Operational Stats (Sites, Machines, Workers)
+            // These generally reflect CURRENT state, not filtered by date, unless we track history.
+            // For now, we return current active counts.
+            const totalSites = await Site.count({ where: { siteStatus: true } });
+            const totalMachines = await Machine.count({ where: { status: 'active' } });
+            const totalWorkers = await EmployeeList.count({ where: { status: 'active' } });
+
+            // 5. Financials
+            // Total Salary Paid (sum of salary in attendance for the period)
+            const totalSalaryPaid = await EmployeeAttendance.sum('salary', {
+                where: {
+                    ...laborWhere,
+                    presence: 'present'
+                }
+            });
+
+            // Total Pending Advance (Current state from EmployeeList)
+            const totalPendingAdvance = await EmployeeList.sum('advancedAmount', {
+                where: { status: 'active' }
+            });
+
             res.json({
                 success: true,
                 data: {
@@ -76,12 +102,19 @@ export const DashboardController = {
                         receivedValue: parseFloat(poStats[0]?.receivedValue || 0)
                     },
                     production: {
-                        totalMeter: parseFloat(productionStats[0]?.totalMeter || 0),
+                        totalMeter: Math.round(parseFloat(productionStats[0]?.totalMeter || 0)),
                         totalHoles: parseFloat(productionStats[0]?.totalHoles || 0),
                         totalDiesel: parseFloat(productionStats[0]?.totalDiesel || 0)
                     },
                     labor: {
-                        totalManDays: laborStats
+                        totalManDays: laborStats,
+                        totalWorkers,
+                        totalSalaryPaid: totalSalaryPaid || 0,
+                        totalPendingAdvance: totalPendingAdvance || 0
+                    },
+                    operations: {
+                        totalSites,
+                        totalMachines
                     }
                 }
             });

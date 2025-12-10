@@ -6,7 +6,9 @@ import {
   ThunderboltOutlined,
   FireOutlined,
   TeamOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  EnvironmentOutlined,
+  CarOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api from '../service/api';
@@ -70,17 +72,75 @@ const Dashboard = () => {
     }
   };
 
-  const StatCard = ({ title, value, prefix, suffix, color, icon }) => (
-    <Card bordered={false} className="shadow-sm hover:shadow-md transition-shadow h-full">
-      <Statistic
-        title={<Space>{icon && <span style={{ color }}>{icon}</span>} {title}</Space>}
-        value={value}
-        precision={2}
-        valueStyle={{ color: color || '#3f8600' }}
-        prefix={prefix}
-        suffix={suffix}
-      />
-    </Card>
+  // Custom Compact Card Component
+  // Mimics a clean, "shadcn-like" aesthetic with a circular icon and compact text.
+  const StatCard = ({ title, value, prefix, suffix, color, icon, secondaryText }) => (
+    <div style={{
+      background: '#fff',
+      borderRadius: '12px',
+      border: '1px solid #e5e7eb', // subtle border
+      padding: '16px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '16px',
+      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+      height: '100%',
+      minHeight: '100px'
+    }}>
+      {/* Icon Circle */}
+      <div style={{
+        flexShrink: 0,
+        width: '48px',
+        height: '48px',
+        borderRadius: '50%',
+        background: color ? `${color}15` : '#f3f4f6', // 10% opacity of color or gray
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: color || '#6b7280',
+        fontSize: '20px'
+      }}>
+        {icon || prefix}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <div style={{
+          fontSize: '13px',
+          color: '#6b7280',
+          fontWeight: 500,
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: '4px',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
+        }}>
+          {title}
+        </div>
+
+        <div style={{
+          fontSize: '24px',
+          fontWeight: 700,
+          color: '#111827',
+          lineHeight: '1.2',
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: '4px'
+        }}>
+          {/* We handle prefix manually in the icon circle primarily, but if passed explicitly as text: */}
+          {!icon && prefix}
+          <span title={value}>{value}</span>
+          {suffix && <span style={{ fontSize: '14px', color: '#9ca3af', fontWeight: 500 }}>{suffix}</span>}
+        </div>
+
+        {secondaryText && (
+          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+            {secondaryText}
+          </div>
+        )}
+      </div>
+    </div>
   );
 
   // Helper for large numbers
@@ -127,104 +187,125 @@ const Dashboard = () => {
       <Spin spinning={loading}>
         {stats && (
           <div className="flex flex-col gap-6">
+
+            {/* Operations Overview Row */}
+            <div>
+              <Title level={4}><ShoppingOutlined /> Operations Overview</Title>
+              <Row gutter={[16, 16]}>
+                <Col xs={24} sm={8}>
+                  <StatCard
+                    title="Active Sites"
+                    value={stats.operations?.totalSites || 0}
+                    icon={<EnvironmentOutlined />}
+                    color="#1890ff"
+                  />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <StatCard
+                    title="Active Machines"
+                    value={stats.operations?.totalMachines || 0}
+                    icon={<CarOutlined />}
+                    color="#faad14"
+                  />
+                </Col>
+                <Col xs={24} sm={8}>
+                  <StatCard
+                    title="Total Workforce"
+                    value={stats.labor?.totalWorkers || 0}
+                    icon={<TeamOutlined />}
+                    color="#52c41a"
+                    secondaryText="Active employees"
+                  />
+                </Col>
+              </Row>
+            </div>
+
             {/* Financials Row */}
             <div>
-              <Title level={4}><DollarCircleOutlined /> Financials (Purchase Orders)</Title>
+              <Title level={4}><DollarCircleOutlined /> Financials</Title>
               <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card>
-                    <Statistic
-                      title="Total PO Value (Expense)"
-                      value={stats.po.totalValue}
-                      formatter={val => formatCurrency(val)}
-                      valueStyle={{ color: '#cf1322' }}
-                      prefix={<DollarCircleOutlined />}
-                    />
-                    <Text type="secondary" className="text-xs">
-                      Total value of all raised POs in selected period
-                    </Text>
-                  </Card>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="PO Value Created"
+                    value={formatCurrency(stats.po.totalValue)}
+                    icon={<DollarCircleOutlined />}
+                    color="#cf1322"
+                    secondaryText="Total Expenses Raised"
+                  />
                 </Col>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card>
-                    <Statistic
-                      title="Value Received"
-                      value={stats.po.receivedValue}
-                      formatter={val => formatCurrency(val)}
-                      valueStyle={{ color: '#3f8600' }}
-                    />
-                    <Text type="secondary" className="text-xs">
-                      Value of goods mark as "Received"
-                    </Text>
-                  </Card>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="PO Value Received"
+                    value={formatCurrency(stats.po.receivedValue)}
+                    icon={<DollarCircleOutlined />}
+                    color="#3f8600"
+                    secondaryText="Goods Received"
+                  />
                 </Col>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card>
-                    <Statistic
-                      title="Total POs Created"
-                      value={stats.po.count}
-                      prefix={<FileTextOutlined />}
-                    />
-                  </Card>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="Salaries Paid"
+                    value={formatCurrency(stats.labor?.totalSalaryPaid || 0)}
+                    icon={<TeamOutlined />}
+                    color="#096dd9"
+                    secondaryText="From Attendance"
+                  />
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="Pending Advances"
+                    value={formatCurrency(stats.labor?.totalPendingAdvance || 0)}
+                    icon={<DollarCircleOutlined />}
+                    color="#d48806"
+                    secondaryText="Outstanding Amount"
+                  />
                 </Col>
               </Row>
             </div>
 
             {/* Production Row */}
             <div>
-              <Title level={4}><ThunderboltOutlined /> Production & Operations</Title>
+              <Title level={4}><ThunderboltOutlined /> Production</Title>
               <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card>
-                    <Statistic
-                      title="Total Meters Drilled"
-                      value={stats.production.totalMeter}
-                      suffix="m"
-                      valueStyle={{ color: '#1890ff' }}
-                    />
-                  </Card>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="Meters Drilled"
+                    value={stats.production.totalMeter}
+                    suffix="m"
+                    icon={<ThunderboltOutlined />}
+                    color="#1890ff"
+                  />
                 </Col>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card>
-                    <Statistic
-                      title="Total Holes Drilled"
-                      value={stats.production.totalHoles}
-                      prefix="#"
-                    />
-                  </Card>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="Holes Drilled"
+                    value={stats.production.totalHoles}
+                    icon={<EnvironmentOutlined />}
+                    color="#722ed1"
+                  />
                 </Col>
-                <Col xs={24} sm={12} lg={8}>
-                  <Card>
-                    <Statistic
-                      title="Total Diesel Consumed"
-                      value={stats.production.totalDiesel}
-                      suffix="Liters"
-                      prefix={<FireOutlined />}
-                      valueStyle={{ color: '#d46b08' }}
-                    />
-                  </Card>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="Diesel Consumed"
+                    value={stats.production.totalDiesel}
+                    suffix="L"
+                    icon={<FireOutlined />}
+                    color="#d46b08"
+                  />
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <StatCard
+                    title="Total Man-Days"
+                    value={stats.labor.totalManDays}
+                    suffix="days"
+                    icon={<TeamOutlined />}
+                    color="#eb2f96"
+                    secondaryText="Total Daily Attendance"
+                  />
                 </Col>
               </Row>
             </div>
 
-            {/* Labor Row */}
-            <div>
-              <Title level={4}><TeamOutlined /> Workforce</Title>
-              <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} lg={6}>
-                  <Card>
-                    <Statistic
-                      title="Total Man-Days"
-                      value={stats.labor.totalManDays}
-                      suffix="days"
-                    />
-                    <Text type="secondary" className="text-xs">
-                      Total attendance days recorded
-                    </Text>
-                  </Card>
-                </Col>
-              </Row>
-            </div>
           </div>
         )}
       </Spin>
