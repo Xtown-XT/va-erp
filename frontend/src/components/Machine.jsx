@@ -19,9 +19,11 @@ import {
   FilePdfOutlined,
   EditOutlined,
   DeleteOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import api from "../service/api";
 import { canEdit, canDelete, canCreate } from "../service/auth";
+import MaintenanceModal from "./MaintenanceModal"; // Import
 
 const Machine = () => {
   const [form] = Form.useForm();
@@ -33,6 +35,9 @@ const Machine = () => {
   const [brands, setBrands] = useState([]);
   const [compressors, setCompressors] = useState([]);
   const [sites, setSites] = useState([]);
+  const [maintenanceModalVisible, setMaintenanceModalVisible] = useState(false);
+  const [selectedMachineForMaintenance, setSelectedMachineForMaintenance] = useState(null);
+
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
@@ -125,13 +130,7 @@ const Machine = () => {
         payload.machineRPM = Number(values.machineRPM);
       }
 
-
-
-      if (values.serviceCycleRpm !== undefined && values.serviceCycleRpm !== null && values.serviceCycleRpm !== '') {
-        payload.serviceCycleRpm = Number(values.serviceCycleRpm);
-      }
-
-
+      // Legacy Service fields removed from UI
 
       // Always include compressorId - send null if cleared (for updates)
       if (editingId) {
@@ -188,7 +187,7 @@ const Machine = () => {
         status: record.status || undefined,
         brandId: record.brandId || record.brand?.id || undefined,
         machineRPM: record.machineRPM ?? undefined,
-        serviceCycleRpm: record.serviceCycleRpm ?? 250,
+        // Service fields removed
         compressorId: record.compressorId || record.compressor?.id || undefined,
         siteId: record.siteId || record.site?.id || undefined,
       });
@@ -244,7 +243,6 @@ const Machine = () => {
                 <th>Machine Number</th>
                 <th>Brand</th>
                 <th>Machine RPM</th>
-                <th>Next Service RPM</th>
                 <th>Compressor</th>
                 <th>Status</th>
               </tr>
@@ -272,7 +270,6 @@ const Machine = () => {
                       <td>${machine.machineNumber}</td>
                       <td>${brandName}</td>
                       <td>${machine.machineRPM || '-'}</td>
-                      <td>${machine.nextServiceRPM || '-'}</td>
                       <td>${compressorName}</td>
                       <td>${machine.status}</td>
                     </tr>`;
@@ -309,7 +306,7 @@ const Machine = () => {
       }
     },
     { title: "Machine RPM", dataIndex: "machineRPM", key: "machineRPM" },
-    { title: "Next Service RPM", dataIndex: "nextServiceRPM", key: "nextServiceRPM", render: (value) => value || "-" },
+    // Legacy Next Service RPM column removed
     {
       title: "Compressor",
       key: "compressorName",
@@ -353,22 +350,21 @@ const Machine = () => {
       },
     },
     {
-      title: "Created By",
-      dataIndex: "createdBy",
-      key: "createdBy",
-      render: (createdBy) => createdBy || "-",
-    },
-    {
-      title: "Updated By",
-      dataIndex: "updatedBy",
-      key: "updatedBy",
-      render: (updatedBy) => updatedBy || "-",
-    },
-    {
       title: "Actions",
       key: "actions",
       render: (_, record) => (
         <Space>
+          <Button
+            icon={<ToolOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedMachineForMaintenance(record);
+              setMaintenanceModalVisible(true);
+            }}
+            title="Maintenance"
+          >
+            Maint.
+          </Button>
           {canEdit() && (
             <Button
               type="button"
@@ -508,14 +504,7 @@ const Machine = () => {
                 <InputNumber className="w-full" min={0} step={0.1} precision={1} />
               </Form.Item>
 
-              <Form.Item
-                name="serviceCycleRpm"
-                label="Service Cycle (RPM)"
-                tooltip="RPM interval for regular service alerts"
-                initialValue={250}
-              >
-                <InputNumber className="w-full" min={1} step={1} placeholder="e.g., 250" />
-              </Form.Item>
+              {/* Legacy Service Cycle field removed */}
 
               <Form.Item
                 name="compressorId"
@@ -585,6 +574,15 @@ const Machine = () => {
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} machines`
         }}
         onChange={handleTableChange}
+      />
+
+      <MaintenanceModal
+        visible={maintenanceModalVisible}
+        onClose={() => setMaintenanceModalVisible(false)}
+        asset={selectedMachineForMaintenance}
+        assetType="machine"
+        sites={sites}
+        onSuccess={fetchMachines}
       />
     </div>
   );

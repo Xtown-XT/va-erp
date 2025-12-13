@@ -25,6 +25,7 @@ import api from "../service/api";
 import { canEdit, canDelete } from "../service/auth";
 import { useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
+import MaintenanceModal from "./MaintenanceModal"; // Import
 
 const CompressorManagement = () => {
   const navigate = useNavigate();
@@ -43,6 +44,9 @@ const CompressorManagement = () => {
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
+  const [maintenanceModalVisible, setMaintenanceModalVisible] = useState(false);
+  const [selectedCompressorForMaintenance, setSelectedCompressorForMaintenance] = useState(null);
+  const [sites, setSites] = useState([]);
 
   // Fetch compressors
   const fetchCompressors = async (page = 1, limit = 10, search = searchTerm) => {
@@ -69,8 +73,18 @@ const CompressorManagement = () => {
     }
   };
 
+  const fetchSites = async () => {
+    try {
+      const res = await api.get("/api/sites?limit=1000");
+      setSites(res.data.data || []);
+    } catch (err) {
+      console.error("Error fetching sites", err);
+    }
+  };
+
   useEffect(() => {
     fetchCompressors(pagination.current, pagination.pageSize);
+    fetchSites();
   }, []);
 
   // Handle pagination change
@@ -96,8 +110,6 @@ const CompressorManagement = () => {
         serialNumber: values.serialNumber || null,
         purchaseDate: values.purchaseDate ? values.purchaseDate.format("YYYY-MM-DD") : null,
         compressorRPM: values.compressorRPM ?? null,
-        serviceCycleRpm: values.serviceCycleRpm ?? 250,
-        engineServiceCycleRpm: values.engineServiceCycleRpm ?? 300,
       };
 
       if (editingId) {
@@ -124,8 +136,7 @@ const CompressorManagement = () => {
     form.setFieldsValue({
       ...record,
       purchaseDate: record.purchaseDate ? dayjs(record.purchaseDate) : null,
-      serviceCycleRpm: record.serviceCycleRpm ?? 250,
-      engineServiceCycleRpm: record.engineServiceCycleRpm ?? 300,
+      compressorRPM: record.compressorRPM ?? null
     });
   };
 
@@ -168,7 +179,6 @@ const CompressorManagement = () => {
               <tr>
                 <th>Compressor Name</th>
                 <th>Compressor RPM</th>
-                <th>Next Service RPM</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -182,7 +192,6 @@ const CompressorManagement = () => {
                 <tr>
                   <td>${compressor.compressorName}</td>
                   <td>${compressor.compressorRPM || 0}</td>
-                  <td>${compressor.nextServiceRPM || '-'}</td>
                   <td>${compressor.status}</td>
                 </tr>`
         )
@@ -230,21 +239,21 @@ const CompressorManagement = () => {
       render: (createdBy) => createdBy || "-",
     },
     {
-      title: "Updated By",
-      dataIndex: "updatedBy",
-      key: "updatedBy",
-      render: (updatedBy) => updatedBy || "-",
-    },
-    {
       title: "Actions",
       key: "actions",
       render: (_, record) => (
         <Space>
           <Button
             icon={<ToolOutlined />}
-            onClick={() => navigate(`/reports/compressor-service/${record.id}`)}
-            title="View Service History"
-          />
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedCompressorForMaintenance(record);
+              setMaintenanceModalVisible(true);
+            }}
+            title="Maintenance"
+          >
+            Maint.
+          </Button>
           {canEdit() && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           )}
@@ -378,22 +387,6 @@ const CompressorManagement = () => {
                   placeholder="Enter compressor RPM"
                 />
               </Form.Item>
-              <Form.Item
-                name="serviceCycleRpm"
-                label="Compressor Service Cycle (RPM)"
-                tooltip="RPM interval for compressor service alerts"
-                initialValue={250}
-              >
-                <InputNumber className="w-full" min={1} step={1} placeholder="e.g., 250" />
-              </Form.Item>
-              <Form.Item
-                name="engineServiceCycleRpm"
-                label="Engine Service Cycle (RPM)"
-                tooltip="RPM interval for engine service alerts"
-                initialValue={300}
-              >
-                <InputNumber className="w-full" min={1} step={1} placeholder="e.g., 300" />
-              </Form.Item>
             </div>
             <Form.Item>
               <Button type="primary" htmlType="submit">
@@ -428,6 +421,15 @@ const CompressorManagement = () => {
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} compressors`,
         }}
         onChange={handleTableChange}
+      />
+
+      <MaintenanceModal
+        visible={maintenanceModalVisible}
+        onClose={() => setMaintenanceModalVisible(false)}
+        asset={selectedCompressorForMaintenance}
+        assetType="compressor"
+        sites={sites}
+        onSuccess={() => fetchCompressors(pagination.current, pagination.pageSize, searchTerm)}
       />
     </div>
   );

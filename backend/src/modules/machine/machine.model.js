@@ -43,23 +43,39 @@ const Machine = sequelize.define(
             type: DataTypes.DOUBLE,
             allowNull: true,
             defaultValue: 0,
-            comment: "Last RPM when General/Hydraulic service was done",
+            comment: "@deprecated Use maintenanceConfig instead",
         },
         lastEngineServiceRPM: {
             type: DataTypes.DOUBLE,
             allowNull: true,
             defaultValue: 0,
-            comment: "Last RPM when Engine service was done",
+            comment: "@deprecated Use maintenanceConfig instead",
         },
         serviceCycleRpm: {
             type: DataTypes.INTEGER,
             defaultValue: 250,
-            comment: "Cycle for General/Hydraulic service",
+            comment: "@deprecated Use maintenanceConfig instead",
         },
         engineServiceCycleRpm: {
             type: DataTypes.INTEGER,
             defaultValue: 250,
-            comment: "Cycle for Engine service",
+            comment: "@deprecated Use maintenanceConfig instead",
+        },
+        /**
+         * maintenanceConfig: [
+         *   {
+         *     id: "uuid",
+         *     name: "Hydraulic Oil",
+         *     cycle: 3000,
+         *     lastServiceRPM: 1050,
+         *     alertThreshold: 50
+         *   }
+         * ]
+         */
+        maintenanceConfig: {
+            type: DataTypes.JSON,
+            allowNull: true,
+            defaultValue: [],
         },
 
         compressorId: {

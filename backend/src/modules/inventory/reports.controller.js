@@ -395,6 +395,67 @@ class ReportsController {
             });
         }
     };
+    // Service Summary Report: Sitewise aggregation of services
+    serviceSummarySitewise = async (req, res) => {
+        try {
+            const { startDate, endDate } = req.query;
+
+            if (!startDate || !endDate) {
+                return res.status(400).json({
+                    success: false,
+                    message: "startDate and endDate are required",
+                });
+            }
+
+            const results = await sequelize.query(`
+                SELECT 
+                    s.id as siteId,
+                    s.siteName,
+                    sh.serviceName,
+                    COUNT(sh.id) as serviceCount
+                FROM service_history sh
+                JOIN site s ON sh.siteId = s.id
+                WHERE sh.serviceDate BETWEEN :startDate AND :endDate
+                GROUP BY s.id, s.siteName, sh.serviceName
+                ORDER BY s.siteName, sh.serviceName
+            `, {
+                replacements: { startDate, endDate },
+                type: sequelize.QueryTypes.SELECT,
+            });
+
+            // Group by Site
+            const report = [];
+            const siteMap = {};
+
+            results.forEach(row => {
+                if (!siteMap[row.siteId]) {
+                    siteMap[row.siteId] = {
+                        siteId: row.siteId,
+                        siteName: row.siteName,
+                        services: []
+                    };
+                    report.push(siteMap[row.siteId]);
+                }
+                siteMap[row.siteId].services.push({
+                    serviceName: row.serviceName,
+                    count: parseInt(row.serviceCount) || 0
+                });
+            });
+
+            return res.json({
+                success: true,
+                data: report,
+                dateRange: { startDate, endDate },
+            });
+
+        } catch (error) {
+            console.error("Error generating service summary report:", error);
+            return res.status(500).json({
+                success: false,
+                message: error.message || "Failed to generate report",
+            });
+        }
+    };
 }
 
 export default new ReportsController();

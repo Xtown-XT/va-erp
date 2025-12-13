@@ -351,13 +351,21 @@ class DailyEntryCustomController extends BaseController {
   // Helper: Process generic service
   processService = async (params) => {
     const {
-      entityType, entityId, serviceType, date, currentRpm, siteId,
+      entityType, entityId, serviceName, date, currentRpm, siteId,
       spares = [], username, transaction, dailyEntryId
     } = params;
 
     const serviceHistory = await Service.create({
-      entityType, entityId, serviceType, date, currentRPM: currentRpm,
-      siteId, sparesUsed: spares, createdBy: username, dailyEntryId
+      entityType,
+      entityId,
+      serviceType: serviceName, // Use name as type string
+      serviceName: serviceName, // Redundant but clear
+      date,
+      currentRPM: currentRpm,
+      siteId,
+      sparesUsed: spares,
+      createdBy: username,
+      dailyEntryId
     }, { transaction });
 
     for (const item of spares) {
@@ -373,19 +381,33 @@ class DailyEntryCustomController extends BaseController {
       await stock.decrement('quantity', { by: item.quantity, transaction });
     }
 
+    // Update Maintenance Config
     if (entityType === 'MACHINE') {
       const machine = await Machine.findByPk(entityId, { transaction });
-      if (serviceType === 'GENERAL') {
-        await machine.update({ lastServiceRPM: currentRpm }, { transaction });
-      } else {
-        await machine.update({ lastEngineServiceRPM: currentRpm }, { transaction });
+      if (machine) {
+        let config = machine.maintenanceConfig || [];
+        if (!Array.isArray(config)) config = [];
+
+        const index = config.findIndex(c => c.name === serviceName);
+        if (index >= 0) {
+          config[index].lastServiceRPM = Number(currentRpm);
+          // Clone to trigger update
+          machine.set('maintenanceConfig', [...config]);
+          await machine.save({ transaction });
+        }
       }
     } else {
       const compressor = await Compressor.findByPk(entityId, { transaction });
-      if (serviceType === 'GENERAL') {
-        await compressor.update({ lastServiceRPM: currentRpm }, { transaction });
-      } else {
-        await compressor.update({ lastEngineServiceRPM: currentRpm }, { transaction });
+      if (compressor) {
+        let config = compressor.maintenanceConfig || [];
+        if (!Array.isArray(config)) config = [];
+
+        const index = config.findIndex(c => c.name === serviceName);
+        if (index >= 0) {
+          config[index].lastServiceRPM = Number(currentRpm);
+          compressor.set('maintenanceConfig', [...config]);
+          await compressor.save({ transaction });
+        }
       }
     }
     return serviceHistory;
@@ -553,7 +575,7 @@ class DailyEntryCustomController extends BaseController {
           await this.processService({
             entityType: 'MACHINE',
             entityId: machineId,
-            serviceType: 'GENERAL',
+            serviceName: req.body.machineServiceName || 'General Service',
             date: entry.date,
             currentRpm: maxClosingRPM,
             siteId,
@@ -564,10 +586,16 @@ class DailyEntryCustomController extends BaseController {
           });
         }
         if (req.body.machineEngineServiceDone) {
+          // If separate engine service logic is still needed, treat as another service call
+          // But new logic prefers just 'serviceName'.
+          // We will map 'machineEngineServiceDone' to a service call if 'machineEngineServiceName' is provided, 
+          // OR fallback to 'Engine Oil Service' for backward compat?
+          // Better: Frontend should just send `machineServiceDone` and the selected name.
+          // But to support existing frontend or mixed calls, let's keep it.
           await this.processService({
             entityType: 'MACHINE',
             entityId: machineId,
-            serviceType: 'ENGINE',
+            serviceName: req.body.machineEngineServiceName || 'Engine Service',
             date: entry.date,
             currentRpm: maxClosingRPM,
             siteId,
@@ -599,7 +627,7 @@ class DailyEntryCustomController extends BaseController {
             await this.processService({
               entityType: 'COMPRESSOR',
               entityId: compressorId,
-              serviceType: 'GENERAL',
+              serviceName: req.body.compressorServiceName || 'General Service',
               date: entry.date,
               currentRpm: maxClosingRPM,
               siteId,
@@ -613,7 +641,7 @@ class DailyEntryCustomController extends BaseController {
             await this.processService({
               entityType: 'COMPRESSOR',
               entityId: compressorId,
-              serviceType: 'ENGINE',
+              serviceName: req.body.compressorEngineServiceName || 'Engine Service',
               date: entry.date,
               currentRpm: maxClosingRPM,
               siteId,
@@ -781,7 +809,7 @@ class DailyEntryCustomController extends BaseController {
           await this.processService({
             entityType: 'MACHINE',
             entityId: effectiveMachineId,
-            serviceType: 'GENERAL',
+            serviceName: req.body.machineServiceName || 'General Service',
             date: existingEntry.date,
             currentRpm: existingEntry.machineClosingRPM,
             siteId,
@@ -795,7 +823,7 @@ class DailyEntryCustomController extends BaseController {
           await this.processService({
             entityType: 'MACHINE',
             entityId: effectiveMachineId,
-            serviceType: 'ENGINE',
+            serviceName: req.body.machineEngineServiceName || 'Engine Service',
             date: existingEntry.date,
             currentRpm: existingEntry.machineClosingRPM,
             siteId,
@@ -822,7 +850,7 @@ class DailyEntryCustomController extends BaseController {
           await this.processService({
             entityType: 'COMPRESSOR',
             entityId: effectiveCompressorId,
-            serviceType: 'GENERAL',
+            serviceName: req.body.compressorServiceName || 'General Service',
             date: existingEntry.date,
             currentRpm: existingEntry.compressorClosingRPM,
             siteId,
@@ -836,7 +864,7 @@ class DailyEntryCustomController extends BaseController {
           await this.processService({
             entityType: 'COMPRESSOR',
             entityId: effectiveCompressorId,
-            serviceType: 'ENGINE',
+            serviceName: req.body.compressorEngineServiceName || 'Engine Service',
             date: existingEntry.date,
             currentRpm: existingEntry.compressorClosingRPM,
             siteId,

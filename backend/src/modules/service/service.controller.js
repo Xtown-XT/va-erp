@@ -20,8 +20,8 @@ class ServiceController extends BaseController {
                 machineId,
                 compressorId,
                 serviceDate,
-                serviceName,
-                serviceType,
+                serviceName, // e.g., "Hydraulic Oil"
+                serviceType, // Keep for backward compatibility or general categorization if needed
                 remarks,
                 currentRpm,
                 usedItems, // Array of { itemType: 'spare'|'drillingTool', itemId: uuid, quantity: int }
@@ -34,12 +34,11 @@ class ServiceController extends BaseController {
                 compressorId: compressorId || null,
                 serviceDate,
                 serviceName,
-                serviceType,
-                remarks,
-                serviceType,
+                serviceType: serviceName || serviceType || 'General',
                 remarks,
                 currentRpm,
-                siteId: siteId || null
+                siteId: siteId || null,
+                sparesUsed: usedItems // Store raw used items JSON for quick reference
             }, { transaction: t });
 
             // Process Items
@@ -62,7 +61,7 @@ class ServiceController extends BaseController {
                         });
 
                         if (!stock || stock.quantity < item.quantity) {
-                            throw new Error(`Insufficient stock for spare: ${item.itemId}`);
+                            throw new Error(`Insufficient stock in site for spare ID: ${item.itemId}`);
                         }
                         await stock.decrement('quantity', { by: item.quantity, transaction: t });
                     } else if (item.itemType === 'drillingTool') {
@@ -78,10 +77,6 @@ class ServiceController extends BaseController {
                                 siteId: siteId, // It moves to the site of fitting (or stays)
                                 status: 'Fitted'
                             }, { transaction: t });
-
-                            // Check copyRpm logic
-                            const catalog = await DrillingTools.findByPk(toolInstance.drillingToolId);
-                            // Logic for RPM inheritance would likely be calculated at runtime or daily entry, but here we just link it.
                         }
                         // Similarly for compressor
                         if (compressorId) {
@@ -95,27 +90,48 @@ class ServiceController extends BaseController {
                 }
             }
 
-            // Update Last Service Info on Asset? (Optional, good for quick checks)
-            // Update Last Service Info and Next Service RPM (Fixed Interval Logic)
-            if (machineId && currentRpm) {
+            // Update Maintenance Config on Asset
+            if (machineId && currentRpm && serviceName) {
                 const machine = await Machine.findByPk(machineId, { transaction: t });
-                if (machine && machine.serviceCycleRpm) {
-                    const cycle = machine.serviceCycleRpm;
-                    const nextRPM = Math.ceil((currentRpm + 1) / cycle) * cycle;
-                    await machine.update({ nextServiceRPM: nextRPM }, { transaction: t });
+                if (machine) {
+                    let config = machine.maintenanceConfig || [];
+                    // Ensure config is an array (handle legacy null/undefined)
+                    if (!Array.isArray(config)) config = [];
+
+                    const configIndex = config.findIndex(c => c.name === serviceName);
+
+                    if (configIndex >= 0) {
+                        // Update existing service type
+                        config[configIndex].lastServiceRPM = Number(currentRpm);
+                        // We don't change the cycle, just the last service RPM
+                    } else {
+                        // Optional: Auto-create if not found? 
+                        // For now, let's assume it must exist, or we ignore it. 
+                        // But user said "user can create service names", so maybe we add it if it's new?
+                        // Let's safe-guard: if it doesn't exist in config, we don't track its next alert for now.
+                        // OR we add it with a default cycle? better to not pollute config with typos.
+                        // Checking if 'serviceCycleRpm' exists in payload could be useful for ad-hoc creation.
+                        // For now, only update if exists.
+                    }
+
+                    // Sequelize JSON update requirement: clone array to trigger change detection
+                    machine.set('maintenanceConfig', [...config]);
+                    await machine.save({ transaction: t });
                 }
             }
-            if (compressorId && currentRpm) {
+
+            if (compressorId && currentRpm && serviceName) {
                 const compressor = await Compressor.findByPk(compressorId, { transaction: t });
                 if (compressor) {
-                    if (serviceType === 'Compressor Service' && compressor.serviceCycleRpm) {
-                        const cycle = compressor.serviceCycleRpm;
-                        const nextRPM = Math.ceil((currentRpm + 1) / cycle) * cycle;
-                        await compressor.update({ nextServiceRPM: nextRPM }, { transaction: t });
-                    } else if (serviceType === 'Engine Service' && compressor.engineServiceCycleRpm) {
-                        const cycle = compressor.engineServiceCycleRpm;
-                        const nextRPM = Math.ceil((currentRpm + 1) / cycle) * cycle;
-                        await compressor.update({ nextEngineServiceRPM: nextRPM }, { transaction: t });
+                    let config = compressor.maintenanceConfig || [];
+                    if (!Array.isArray(config)) config = [];
+
+                    const configIndex = config.findIndex(c => c.name === serviceName);
+                    if (configIndex >= 0) {
+                        config[configIndex].lastServiceRPM = Number(currentRpm);
+                        // Sequelize JSON update
+                        compressor.set('maintenanceConfig', [...config]);
+                        await compressor.save({ transaction: t });
                     }
                 }
             }
@@ -152,106 +168,73 @@ class ServiceController extends BaseController {
         }
     };
 
-    getNotifications = async (req, res) => {
-        try {
-            const notifications = [];
-
-            // Check Machines
-            const machines = await Machine.findAll({
-                where: { status: 'active' },
-                attributes: ['id', 'machineNumber', 'machineRPM', 'serviceCycleRpm', 'nextServiceRPM']
-            });
-
-            for (const machine of machines) {
-                if (machine.nextServiceRPM && (machine.machineRPM >= machine.nextServiceRPM)) {
-                    notifications.push({
-                        type: 'Machine',
-                        id: machine.id,
-                        name: machine.machineNumber,
-                        message: `Service Due! Current RPM: ${machine.machineRPM}, Next Service: ${machine.nextServiceRPM}`,
-                        severity: 'high'
-                    });
-                }
-            }
-
-            // Check Compressors
-            const compressors = await Compressor.findAll({
-                where: { status: 'active' },
-                attributes: ['id', 'compressorName', 'compressorRPM', 'serviceCycleRpm', 'engineServiceCycleRpm', 'nextServiceRPM']
-            });
-
-            for (const comp of compressors) {
-                if (comp.nextServiceRPM && (comp.compressorRPM >= comp.nextServiceRPM)) {
-                    notifications.push({
-                        type: 'Compressor',
-                        id: comp.id,
-                        name: comp.compressorName,
-                        message: `Service Due! Current RPM: ${comp.compressorRPM}, Next Service: ${comp.nextServiceRPM}`,
-                        severity: 'high'
-                    });
-                }
-            }
-
-            return res.json({ success: true, message: "Fetched Notifications", data: notifications });
-        } catch (error) {
-            return res.status(500).json({ success: false, message: error.message });
-        }
-    };
-
-    // Get Service Alerts based on cycle RPM
+    // Get Service Alerts based on maintenanceConfig
     getServiceAlerts = async (req, res) => {
         try {
             const alerts = [];
 
             // Check Machines
             const machines = await Machine.findAll({
-                attributes: ['id', 'machineNumber', 'machineRPM', 'serviceCycleRpm'],
+                attributes: ['id', 'machineNumber', 'machineRPM', 'maintenanceConfig'],
                 where: { status: 'active' }
             });
 
             for (const machine of machines) {
                 const currentRPM = machine.machineRPM || 0;
-                // Service Alert: Trigger if Next Service exists AND current RPM is within 50 of target (or passed it)
-                if (machine.nextServiceRPM && (currentRPM >= machine.nextServiceRPM - 50)) {
-                    alerts.push({
-                        type: 'machine',
-                        assetId: machine.id,
-                        name: machine.machineNumber,
-                        message: `Machine service due at ${machine.nextServiceRPM} RPM (Current: ${currentRPM})`,
-                        severity: currentRPM >= machine.nextServiceRPM ? 'high' : 'medium'
-                    });
+                const config = machine.maintenanceConfig || [];
+
+                if (Array.isArray(config)) {
+                    for (const item of config) {
+                        if (!item.cycle) continue; // Skip if no cycle defined
+                        const lastService = item.lastServiceRPM || 0;
+                        const nextService = lastService + Number(item.cycle);
+                        const remaining = nextService - currentRPM;
+
+                        // Alert if within 50 RPM or Overdue
+                        if (remaining <= 50) {
+                            alerts.push({
+                                type: 'machine',
+                                assetId: machine.id,
+                                name: machine.machineNumber,
+                                serviceName: item.name,
+                                message: `Service '${item.name}' due at ${nextService} RPM (Current: ${currentRPM})`,
+                                severity: remaining <= 0 ? 'high' : 'medium',
+                                remainingRPM: remaining
+                            });
+                        }
+                    }
                 }
             }
 
             // Check Compressors
             const compressors = await Compressor.findAll({
-                attributes: ['id', 'compressorName', 'compressorRPM', 'serviceCycleRpm', 'engineServiceCycleRpm'],
+                attributes: ['id', 'compressorName', 'compressorRPM', 'maintenanceConfig'],
                 where: { status: 'active' }
             });
 
             for (const compressor of compressors) {
                 const currentRPM = compressor.compressorRPM || 0;
+                const config = compressor.maintenanceConfig || [];
 
-                // Compressor Service Alert
-                if (compressor.nextServiceRPM && (currentRPM >= compressor.nextServiceRPM - 50)) {
-                    alerts.push({
-                        type: 'compressor',
-                        assetId: compressor.id,
-                        name: compressor.compressorName,
-                        message: `Compressor service due at ${compressor.nextServiceRPM} RPM (Current: ${currentRPM})`,
-                        severity: currentRPM >= compressor.nextServiceRPM ? 'high' : 'medium'
-                    });
-                }
+                if (Array.isArray(config)) {
+                    for (const item of config) {
+                        if (!item.cycle) continue;
+                        const lastService = item.lastServiceRPM || 0;
+                        const nextService = lastService + Number(item.cycle);
+                        const remaining = nextService - currentRPM;
 
-                // Engine Service Alert
-                if (compressor.nextEngineServiceRPM && (currentRPM >= compressor.nextEngineServiceRPM - 50)) {
-                    alerts.push({
-                        type: 'compressor_engine',
-                        assetId: compressor.id,
-                        name: compressor.compressorName,
-                        message: `Compressor engine service due at ${compressor.nextEngineServiceRPM} RPM (Current: ${currentRPM})`,
-                        severity: currentRPM >= compressor.nextEngineServiceRPM ? 'high' : 'medium'
-                    });
+                        if (remaining <= 50) {
+                            alerts.push({
+                                type: 'compressor',
+                                assetId: compressor.id,
+                                name: compressor.compressorName,
+                                serviceName: item.name,
+                                message: `Service '${item.name}' due at ${nextService} RPM (Current: ${currentRPM})`,
+                                severity: remaining <= 0 ? 'high' : 'medium',
+                                remainingRPM: remaining
+                            });
+                        }
+                    }
                 }
             }
 
@@ -269,6 +252,51 @@ class ServiceController extends BaseController {
             });
         }
     };
+
+    // Helper to get machine maintenance status
+    getMaintenanceStatus = async (req, res) => {
+        try {
+            const { type, id } = req.params; // type: machine/compressor
+            let asset;
+
+            if (type === 'machine') {
+                asset = await Machine.findByPk(id, { attributes: ['id', 'machineNumber', 'machineRPM', 'maintenanceConfig'] });
+            } else if (type === 'compressor') {
+                asset = await Compressor.findByPk(id, { attributes: ['id', 'compressorName', 'compressorRPM', 'maintenanceConfig'] });
+            }
+
+            if (!asset) return res.status(404).json({ success: false, message: "Asset not found" });
+
+            const currentRPM = (type === 'machine' ? asset.machineRPM : asset.compressorRPM) || 0;
+            const config = asset.maintenanceConfig || [];
+            const statuses = [];
+
+            if (Array.isArray(config)) {
+                for (const item of config) {
+                    if (!item.cycle) continue;
+                    const lastService = item.lastServiceRPM || 0;
+                    const nextService = lastService + Number(item.cycle);
+                    const remaining = nextService - currentRPM;
+
+                    statuses.push({
+                        name: item.name,
+                        cycle: item.cycle,
+                        lastServiceRPM: lastService,
+                        nextServiceRPM: nextService,
+                        currentRPM: currentRPM,
+                        remaining: remaining,
+                        percentage: Math.min(100, Math.max(0, (remaining / item.cycle) * 100)), // Approximate health %
+                        status: remaining <= 0 ? 'Overdue' : (remaining <= 50 ? 'Due Soon' : 'OK')
+                    });
+                }
+            }
+
+            return res.json({ success: true, data: statuses });
+
+        } catch (error) {
+            return res.status(500).json({ success: false, message: error.message });
+        }
+    }
 }
 
 export default new ServiceController();

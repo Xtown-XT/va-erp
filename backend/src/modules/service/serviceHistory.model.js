@@ -19,7 +19,7 @@ const ServiceHistory = sequelize.define(
             allowNull: false,
         },
         serviceType: {
-            type: DataTypes.ENUM('GENERAL', 'ENGINE'),
+            type: DataTypes.STRING,
             allowNull: false,
         },
         date: {
