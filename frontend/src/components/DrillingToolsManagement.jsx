@@ -10,6 +10,7 @@ import {
     message,
     Card,
     Space,
+    Select,
 } from "antd";
 import {
     PlusOutlined,
@@ -29,12 +30,26 @@ const DrillingToolsManagement = () => {
     const [form] = Form.useForm();
     const [searchText, setSearchText] = useState("");
 
-    const fetchTools = async () => {
+    // Pagination state
+    const [pagination, setPagination] = useState({
+        current: 1,
+        pageSize: 20,
+        total: 0
+    });
+
+    const fetchTools = async (page = 1, pageSize = 20) => {
         setLoading(true);
         try {
-            const response = await api.get('/api/drilling-tools');
+            const search = searchText ? `&search=${encodeURIComponent(searchText)}` : '';
+            const response = await api.get(`/api/drilling-tools?page=${page}&limit=${pageSize}${search}`);
             if (response.data.success) {
                 setTools(response.data.data);
+                setPagination(prev => ({
+                    ...prev,
+                    current: page,
+                    pageSize: pageSize,
+                    total: response.data.total || 0
+                }));
             }
         } catch (error) {
             message.error("Failed to fetch drilling tools");
@@ -44,8 +59,20 @@ const DrillingToolsManagement = () => {
     };
 
     useEffect(() => {
-        fetchTools();
+        fetchTools(pagination.current, pagination.pageSize);
     }, []);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchTools(1, pagination.pageSize);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchText]);
+
+    const handleTableChange = (newPagination) => {
+        fetchTools(newPagination.current, newPagination.pageSize);
+    };
 
     const handleAdd = () => {
         setEditingTool(null);
@@ -63,7 +90,7 @@ const DrillingToolsManagement = () => {
         try {
             await api.delete(`/api/drilling-tools/${id}`);
             message.success("Tool deleted successfully");
-            fetchTools();
+            fetchTools(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error("Failed to delete tool");
         }
@@ -83,7 +110,7 @@ const DrillingToolsManagement = () => {
             setIsModalVisible(false);
             form.resetFields();
             setEditingTool(null);
-            fetchTools();
+            fetchTools(pagination.current, pagination.pageSize);
         } catch (error) {
             console.error('Error:', error.response?.data || error);
             message.error(error.response?.data?.message || "Operation failed");
@@ -91,11 +118,6 @@ const DrillingToolsManagement = () => {
             setSubmitting(false);
         }
     };
-
-    const filteredTools = tools.filter((tool) =>
-        tool.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        (tool.partNumber && tool.partNumber.toLowerCase().includes(searchText.toLowerCase()))
-    );
 
     const [instanceModalVisible, setInstanceModalVisible] = useState(false);
     const [selectedToolForInstance, setSelectedToolForInstance] = useState(null);
@@ -116,8 +138,6 @@ const DrillingToolsManagement = () => {
             message.success("Instance added successfully");
             setInstanceModalVisible(false);
             form.resetFields();
-            // Refetch tools or just show success? Instances might not show in main table.
-            // Ideally we should list instances.
         } catch (error) {
             message.error(error.response?.data?.message || "Failed to add instance");
         } finally {
@@ -136,21 +156,6 @@ const DrillingToolsManagement = () => {
             title: "Part Number",
             dataIndex: "partNumber",
             key: "partNumber",
-        },
-        {
-            title: "Category",
-            dataIndex: "category",
-            key: "category",
-        },
-        {
-            title: "Total RPM",
-            dataIndex: "totalRPM",
-            key: "totalRPM",
-        },
-        {
-            title: "Total Meter",
-            dataIndex: "totalMeter",
-            key: "totalMeter",
         },
         {
             title: "Base Price",
@@ -197,10 +202,16 @@ const DrillingToolsManagement = () => {
                 </div>
                 <Table
                     columns={columns}
-                    dataSource={filteredTools}
+                    dataSource={tools}
                     rowKey="id"
                     loading={loading}
-                    pagination={{ pageSize: 50 }}
+                    pagination={{
+                        current: pagination.current,
+                        pageSize: pagination.pageSize,
+                        total: pagination.total,
+                        showSizeChanger: true
+                    }}
+                    onChange={handleTableChange}
                 />
             </Card>
 
@@ -230,19 +241,13 @@ const DrillingToolsManagement = () => {
                         <Input />
                     </Form.Item>
 
-                    <Form.Item name="category" label="Category">
-                        <Input />
+                    <Form.Item name="copyRpm" label="RPM Source" initialValue="none">
+                        <Select>
+                            <Select.Option value="none">None (Manual/Fixed)</Select.Option>
+                            <Select.Option value="machine">Machine RPM</Select.Option>
+                            <Select.Option value="compressor">Compressor RPM</Select.Option>
+                        </Select>
                     </Form.Item>
-
-                    <div className="flex gap-4">
-                        <Form.Item name="totalRPM" label="Total RPM" className="flex-1">
-                            <InputNumber style={{ width: "100%" }} min={0} />
-                        </Form.Item>
-
-                        <Form.Item name="totalMeter" label="Total Meter" className="flex-1">
-                            <InputNumber style={{ width: "100%" }} min={0} />
-                        </Form.Item>
-                    </div>
 
                     <Form.Item name="price" label="Base Price">
                         <InputNumber style={{ width: "100%" }} min={0} />

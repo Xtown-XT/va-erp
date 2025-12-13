@@ -18,10 +18,11 @@ const Spares = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true,
         },
-        category: {
+        partNumber: {
             type: DataTypes.STRING,
             allowNull: true,
         },
+
         units: {
             type: DataTypes.ENUM('kg', 'litre', 'meters', 'nos', 'set', 'unit', 'kit'),
             allowNull: true,

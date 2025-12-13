@@ -14,6 +14,7 @@ import {
   Typography,
   Row,
   Col,
+  message, // Added message
 } from "antd";
 import {
   PlusOutlined,
@@ -31,6 +32,7 @@ import EmployeeWorkHistoryModal from "./EmployeeWorkHistoryModal";
 const EmployeeList = () => {
   const [form] = Form.useForm();
   const [employees, setEmployees] = useState([]);
+  const [sites, setSites] = useState([]); // State for sites
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -44,7 +46,7 @@ const EmployeeList = () => {
   });
 
   const [statusFilter, setStatusFilter] = useState(null);
-  
+
   // Work history modal state
   const [showWorkHistory, setShowWorkHistory] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -53,7 +55,11 @@ const EmployeeList = () => {
   const fetchEmployees = async (page = 1, limit = 10) => {
     setLoading(true);
     try {
-      const res = await api.get(`/api/employeeLists?page=${page}&limit=${limit}`);
+      // Include site association in attributes if backend supports it or just use flat fields
+      const search = searchTerm ? `&search=${encodeURIComponent(searchTerm)}` : '';
+      const status = statusFilter ? `&status=${encodeURIComponent(statusFilter)}` : '';
+
+      const res = await api.get(`/api/employeeLists?page=${page}&limit=${limit}${search}${status}`);
       setEmployees(res.data.data || []);
 
       // Update pagination state
@@ -71,13 +77,32 @@ const EmployeeList = () => {
     }
   };
 
+  // Fetch sites for dropdown
+  const fetchSites = async () => {
+    try {
+      const res = await api.get("/api/sites?page=1&limit=1000"); // Fetch all sites
+      setSites(res.data.data || []);
+    } catch (err) {
+      console.error("Error fetching sites", err);
+      message.error("Failed to load sites");
+    }
+  };
+
   // Handle pagination change
   const handleTableChange = (pagination) => {
     fetchEmployees(pagination.current, pagination.pageSize);
   };
 
+  // Debounce search
   useEffect(() => {
-    fetchEmployees();
+    const timer = setTimeout(() => {
+      fetchEmployees(1, pagination.pageSize);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchTerm, statusFilter]);
+
+  useEffect(() => {
+    fetchSites(); // Load sites on mount
   }, []);
 
   // Handle form submit (create or update)
@@ -96,26 +121,28 @@ const EmployeeList = () => {
         advancedAmount: (values.advancedAmount !== undefined && values.advancedAmount !== null && values.advancedAmount !== '')
           ? Number(values.advancedAmount)
           : null,
+        siteId: values.siteId || null, // Add siteId
+        dailySalary: values.dailySalary ? Number(values.dailySalary) : 0, // Add dailySalary
       };
 
       if (editingId) {
         payload.updatedBy = currentUser;
         await api.put(`/api/employeeLists/${editingId}`, payload);
-
+        message.success("Employee updated successfully");
       } else {
         payload.createdBy = currentUser;
         const res = await api.post("/api/employeeLists", payload);
-        setEmployees([res.data.data, ...employees]);
-
-
+        // setEmployees([res.data.data, ...employees]); // Don't manually add, refetch to respect sort/pagination
+        message.success("Employee created successfully");
       }
 
       setShowForm(false);
       setEditingId(null);
       form.resetFields();
-      fetchEmployees();
+      fetchEmployees(pagination.current, pagination.pageSize);
     } catch (err) {
       console.error("Error saving employee", err);
+      message.error("Error saving employee");
     }
   };
 
@@ -127,6 +154,8 @@ const EmployeeList = () => {
       ...record,
       joiningDate: record.joiningDate ? dayjs(record.joiningDate) : null,
       advancedAmount: record.advancedAmount || 0,
+      dailySalary: record.dailySalary || 0, // Set daily salary
+      siteId: record.siteId || null, // Set site
     });
   };
 
@@ -135,8 +164,10 @@ const EmployeeList = () => {
     try {
       await api.delete(`/api/employeeLists/${id}/hard`);
       setEmployees(employees.filter((emp) => emp.id !== id));
+      message.success("Employee deleted successfully");
     } catch (err) {
       console.error("Error deleting employee", err);
+      message.error("Error deleting employee");
     }
   };
 
@@ -149,7 +180,6 @@ const EmployeeList = () => {
 
   // PDF Export
   const exportToPDF = async () => {
-
     const res = await api.get("/api/employeeLists?page=1&limit=1000");
     const allEmployees = res.data.data || [];
 
@@ -176,9 +206,11 @@ const EmployeeList = () => {
               <tr>
                 <th>Emp ID</th>
                 <th>Name</th>
+                <th>Site</th>
                 <th>Designation</th>
                 <th>Phone</th>
                 <th>Joining Date</th>
+                <th>Daily Salary</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -189,18 +221,23 @@ const EmployeeList = () => {
           || e.empId?.toLowerCase().includes(searchTerm.toLowerCase())
         )
         .map(
-          (emp) => `
+          (emp) => {
+            const siteName = sites.find(s => s.id === emp.siteId)?.siteName || '-';
+            return `
                 <tr>
                   <td>${emp.empId}</td>
                   <td>${emp.name}</td>
+                  <td>${siteName}</td>
                   <td>${emp.designation || "-"}</td>
                   <td>${emp.phone || "-"}</td>
                   <td>${emp.joiningDate
-              ? dayjs(emp.joiningDate).format("YYYY-MM-DD")
-              : "-"
-            }</td>
+                ? dayjs(emp.joiningDate).format("YYYY-MM-DD")
+                : "-"
+              }</td>
+                  <td>₹${emp.dailySalary || 0}</td>
                   <td>${emp.status}</td>
                 </tr>`
+          }
         )
         .join("")}
             </tbody>
@@ -214,10 +251,28 @@ const EmployeeList = () => {
 
   // Table columns
   const columns = [
-    { title: "Emp ID", dataIndex: "empId", key: "empId" },
+    { title: "Emp ID", dataIndex: "empId", key: "empId", width: 100 },
     { title: "Name", dataIndex: "name", key: "name" },
+    {
+      title: "Site",
+      dataIndex: "siteId",
+      key: "siteId",
+      render: (siteId) => sites.find(s => s.id === siteId)?.siteName || '-',
+      width: 150
+    },
     { title: "Designation", dataIndex: "designation", key: "designation" },
     { title: "Phone", dataIndex: "phone", key: "phone" },
+    {
+      title: "Daily Salary",
+      dataIndex: "dailySalary",
+      key: "dailySalary",
+      render: (salary) => (
+        <Typography.Text>
+          ₹{truncateToFixed(salary || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+        </Typography.Text>
+      ),
+      width: 120
+    },
     {
       title: "Joining Date",
       dataIndex: "joiningDate",
@@ -234,28 +289,18 @@ const EmployeeList = () => {
           {status ? status.charAt(0).toUpperCase() + status.slice(1).toLowerCase() : "-"}
         </Tag>;
       },
+      width: 100
     },
     {
-      title: "Advanced Amount",
+      title: "Advanced",
       dataIndex: "advancedAmount",
       key: "advancedAmount",
       render: (amount) => (
-        <Typography.Text strong>
+        <Typography.Text strong type={amount > 0 ? "danger" : "secondary"}>
           ₹{truncateToFixed(amount || 0, 2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
         </Typography.Text>
       ),
-    },
-    {
-      title: "Created By",
-      dataIndex: "createdBy",
-      key: "createdBy",
-      render: (createdBy) => createdBy || "-",
-    },
-    {
-      title: "Updated By",
-      dataIndex: "updatedBy",
-      key: "updatedBy",
-      render: (updatedBy) => updatedBy || "-",
+      width: 120
     },
     {
       title: "Actions",
@@ -268,7 +313,6 @@ const EmployeeList = () => {
             onClick={() => handleViewWorkHistory(record)}
             title="View Work History"
           >
-            View
           </Button>
           {canEdit() && (
             <Button icon={<EditOutlined />} onClick={() => handleEdit(record)} />
@@ -362,7 +406,7 @@ const EmployeeList = () => {
       {showForm && (
         <Card className="mb-1" bodyStyle={{ padding: '8px' }}>
           <Form layout="vertical" form={form} onFinish={handleSubmit}>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <Form.Item
                 name="empId"
                 label="Employee ID"
@@ -373,6 +417,29 @@ const EmployeeList = () => {
               <Form.Item name="name" label="Name" rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
+
+              <Form.Item name="siteId" label="Site">
+                <Select
+                  placeholder="Select Site"
+                  allowClear
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {sites.map(site => (
+                    <Select.Option key={site.id} value={site.id}>{site.siteName}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+
+              <Form.Item name="dailySalary" label="Daily Salary (₹)" initialValue={0}>
+                <InputNumber
+                  className="w-full"
+                  min={0}
+                  step={100}
+                  precision={2}
+                />
+              </Form.Item>
+
               <Form.Item name="designation" label="Designation">
                 <Input />
               </Form.Item>
@@ -395,16 +462,16 @@ const EmployeeList = () => {
               >
                 <Input placeholder="Enter 10-digit phone number (optional)"
 
-                  maxLength={11} 
+                  maxLength={11}
                   onKeyPress={(e) => {
                     if (!/[0-9]/.test(e.key)) {
-                      e.preventDefault(); 
+                      e.preventDefault();
                     }
                   }}
                   onPaste={(e) => {
                     const pasteData = e.clipboardData.getData("Text");
                     if (!/^\d+$/.test(pasteData)) {
-                      e.preventDefault(); 
+                      e.preventDefault();
                     }
                   }}
                 />
@@ -469,19 +536,7 @@ const EmployeeList = () => {
       {/* Table */}
       <Table
         columns={columns}
-        dataSource={(employees || []).filter((e) => {
-          // Search filter
-          const searchMatch =
-            e.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            e.empId?.toLowerCase().includes(searchTerm.toLowerCase());
-
-          // Status filter
-          const statusMatch = statusFilter
-            ? e.status?.toLowerCase() === statusFilter.toLowerCase()
-            : true;
-
-          return searchMatch && statusMatch;
-        })}
+        dataSource={employees || []}
         rowKey="id"
         loading={loading}
         pagination={{
@@ -489,6 +544,7 @@ const EmployeeList = () => {
           showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} employees`
         }}
         onChange={handleTableChange}
+        scroll={{ x: 1000 }} // Enable horizontal scroll for table
       />
 
       {/* Work History Modal */}

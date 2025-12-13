@@ -118,13 +118,16 @@ const DailyEntry = () => {
       { id: Date.now() + 1, role: 'helper', employeeId: null }
     ],
     drillingTools: [],
-    machineServiceDone: false,
+    machineServiceDone: false, // General/Hydraulic
+    machineEngineServiceDone: false, // Engine
     machineServiceName: '',
-    machineSpares: [],
-    compressorServiceDone: false,
+    machineGeneralSpares: [],
+    machineEngineSpares: [],
+    compressorServiceDone: false, // General/Hydraulic
+    compressorEngineServiceDone: false, // Engine
     compressorServiceName: '',
-    compressorServiceType: null,
-    compressorSpares: []
+    compressorGeneralSpares: [],
+    compressorEngineSpares: []
   });
 
   const getInitialShift2Data = () => ({
@@ -146,12 +149,15 @@ const DailyEntry = () => {
     ],
     drillingTools: [], // Shift 2 usually doesn't do fitting? But structure should support it.
     machineServiceDone: false,
+    machineEngineServiceDone: false,
     machineServiceName: '',
-    machineSpares: [],
+    machineGeneralSpares: [],
+    machineEngineSpares: [],
     compressorServiceDone: false,
+    compressorEngineServiceDone: false,
     compressorServiceName: '',
-    compressorServiceType: null,
-    compressorSpares: []
+    compressorGeneralSpares: [],
+    compressorEngineSpares: []
   });
 
   // State
@@ -356,27 +362,7 @@ const DailyEntry = () => {
         compressorSpares: []
       })); // Reset machine related
 
-      // Fetch fitted tools for this machine
-      try {
-        const res = await api.get(`/api/drilling-tools/fitted/${machineId}`); // Assuming machineId is the identifier for fitted tools
-        if (res.data.success) {
-          setShift1Data(prev => ({
-            ...prev,
-            drillingTools: res.data.data.map(tool => ({
-              itemId: tool.id, // instance ID
-              itemName: tool.catalogItem?.name || `Tool ${tool.id}`,
-              serialNumber: tool.serialNumber,
-              action: 'update', // Implicit update
-              startingRPM: tool.currentRPM || 0,
-              startingMeter: tool.currentMeter || 0
-              // We don't set endingRPM/Meter yet, it's calculated dynamically
-            }))
-          }));
-        }
-      } catch (e) {
-        // console.error("Could not fetch fitted tools", e);
-        // Fail silently or just init empty
-      }
+
 
       // Clear compressor state first to prevent stale data
       setSelectedShift1Compressor(null);
@@ -789,17 +775,21 @@ const DailyEntry = () => {
       // Helper function to prepare drilling tools payload
       const prepareDrillingToolsPayload = (tools) => {
         return tools.map(tool => ({
+          toolId: tool.itemId, // Backend expects toolId for DrillingToolLog
           itemId: tool.itemId,
           itemName: tool.itemName,
           partNumber: tool.partNumber,
           quantity: tool.quantity || 1,
           itemServiceId: tool.itemServiceId,
-          action: tool.action || (tool.isExisting ? 'update' : 'fit'),
+          action: tool.action || (tool.isExisting ? 'update' : 'fit'), // 'INSTALL'/'REMOVE' mappings handled in backend or here? Backend expects 'INSTALL'/'REMOVE'. Frontend uses 'fit'/'remove'.
+          // Let's map 'fit' -> 'INSTALL', 'remove' -> 'REMOVE'
+          action: tool.action === 'fit' ? 'INSTALL' : (tool.action === 'remove' ? 'REMOVE' : 'UPDATE'),
           dailyRPM: dailyCompressorRPM,
-          dailyMeter: dailyMeter,
+          dailyMeter: dailyMeter, // Combined daily meter
           startingRPM: tool.startingRPM || 0,
           currentRPM: tool.currentRPM || 0,
-          addedDate: tool.addedDate || dateStr,
+          currentMachineMeter: 0, // Should be passed if available
+          date: tool.addedDate || dateStr,
         }));
       };
 
@@ -823,24 +813,28 @@ const DailyEntry = () => {
             compressorHSD: shift1Data.compressorHSD ?? 0,
             vehicleServiceDone: false,
             vehicleServiceName: null,
-            compressorServiceDone: false,
-            compressorServiceName: null,
-            compressorServiceType: null,
             noOfHoles: shift1Data.noOfHoles ?? 0,
             meter: shift1Data.meter ?? 0,
             employees: shift1Data.employees
               .filter(e => e.employeeId)
               .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
             notes: "",
-            // New spares structure
-            machineSpares: shift1Data.machineSpares,
-            compressorSpares: shift1Data.compressorSpares,
+            // New Service Structure
             drillingTools: prepareDrillingToolsPayload(shift1Data.drillingTools || []),
+
+            // Machine Services
             machineServiceDone: shift1Data.machineServiceDone,
+            machineEngineServiceDone: shift1Data.machineEngineServiceDone, // Engine
             machineServiceName: shift1Data.machineServiceName,
+            machineGeneralSpares: shift1Data.machineGeneralSpares,
+            machineEngineSpares: shift1Data.machineEngineSpares,
+
+            // Compressor Services
             compressorServiceDone: shift1Data.compressorServiceDone,
+            compressorEngineServiceDone: shift1Data.compressorEngineServiceDone, // Engine
             compressorServiceName: shift1Data.compressorServiceName,
-            compressorServiceType: shift1Data.compressorServiceType,
+            compressorGeneralSpares: shift1Data.compressorGeneralSpares,
+            compressorEngineSpares: shift1Data.compressorEngineSpares,
           });
 
           // Use update if editing, create if new
@@ -1702,110 +1696,117 @@ const DailyEntry = () => {
             {/* Service & Maintenance Implementation */}
             <Divider orientation="left" style={{ margin: '8px 0', fontSize: '12px' }}>Service & Maintenance</Divider>
             <div className="bg-gray-50 p-2 rounded mb-4" style={{ border: '1px solid #f0f0f0' }}>
-              {/* Machine Service */}
-              <Row gutter={16} align="middle" style={{ marginBottom: '8px' }}>
-                <Col span={6}>
-                  <Space>
-                    <Switch
-                      size="small"
-                      checked={shift1Data.machineServiceDone}
-                      onChange={(c) => setShift1Data(prev => ({ ...prev, machineServiceDone: c }))}
-                    />
-                    <Text strong style={{ fontSize: '11px' }}>Machine Service</Text>
-                  </Space>
-                </Col>
-                {shift1Data.machineServiceDone && (
-                  <>
-                    <Col span={8}>
-                      <Input
-                        size="small"
-                        placeholder="Service Name (e.g. 500H)"
-                        value={shift1Data.machineServiceName}
-                        onChange={e => setShift1Data(prev => ({ ...prev, machineServiceName: e.target.value }))}
-                        style={{ fontSize: '11px' }}
-                      />
-                    </Col>
-                    <Col span={10}>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                        {shift1Data.machineSpares.map((spare, idx) => (
-                          <Tag key={idx} closable onClose={() => {
-                            const newSpares = [...shift1Data.machineSpares];
-                            newSpares.splice(idx, 1);
-                            setShift1Data(prev => ({ ...prev, machineSpares: newSpares }));
-                          }} style={{ fontSize: '10px' }}>
-                            {spare.itemName} ({spare.quantity})
-                          </Tag>
-                        ))}
 
-                        <SparesDropdown
-                          type="machine"
-                          onAdd={(item) => {
-                            setShift1Data(prev => ({ ...prev, machineSpares: [...prev.machineSpares, item] }));
-                          }}
-                          onClose={() => { }}
-                        />
-                      </div>
-                    </Col>
-                  </>
-                )}
-              </Row>
+              {/* Machine Services */}
+              <div style={{ marginBottom: '8px', borderBottom: '1px dashed #e0e0e0', paddingBottom: '4px' }}>
+                <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Machine Services:</Text>
 
-              {/* Compressor Service */}
-              {shift1Data.compressorId && (
-                <Row gutter={16} align="middle">
+                {/* Machine General Service */}
+                <Row gutter={16} align="top" style={{ marginBottom: '4px' }}>
                   <Col span={6}>
                     <Space>
-                      <Switch
-                        size="small"
-                        checked={shift1Data.compressorServiceDone}
-                        onChange={(c) => setShift1Data(prev => ({ ...prev, compressorServiceDone: c }))}
-                      />
-                      <Text strong style={{ fontSize: '11px' }}>Compressor Service</Text>
+                      <Switch size="small" checked={shift1Data.machineServiceDone} onChange={(c) => setShift1Data(prev => ({ ...prev, machineServiceDone: c }))} />
+                      <Text style={{ fontSize: '11px' }}>General/Hydraulic</Text>
                     </Space>
                   </Col>
-                  {shift1Data.compressorServiceDone && (
-                    <>
-                      <Col span={8}>
-                        <Input
-                          size="small"
-                          placeholder="Service Name"
-                          value={shift1Data.compressorServiceName}
-                          onChange={e => setShift1Data(prev => ({ ...prev, compressorServiceName: e.target.value }))}
-                          style={{ fontSize: '11px', marginBottom: '2px' }}
-                        />
-                        <Select
-                          size="small"
-                          value={shift1Data.compressorServiceType}
-                          onChange={v => setShift1Data(prev => ({ ...prev, compressorServiceType: v }))}
-                          style={{ width: '100%', fontSize: '11px' }}
-                        >
-                          <Select.Option value="Compressor Service">Compressor Cycle</Select.Option>
-                          <Select.Option value="Engine Service">Engine Cycle</Select.Option>
-                        </Select>
-                      </Col>
-                      <Col span={10}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                          {shift1Data.compressorSpares.map((spare, idx) => (
-                            <Tag key={idx} closable onClose={() => {
-                              const newSpares = [...shift1Data.compressorSpares];
-                              newSpares.splice(idx, 1);
-                              setShift1Data(prev => ({ ...prev, compressorSpares: newSpares }));
-                            }} style={{ fontSize: '10px' }}>
-                              {spare.itemName} ({spare.quantity})
-                            </Tag>
-                          ))}
-                          <SparesDropdown
-                            type="compressor"
-                            onAdd={(item) => {
-                              setShift1Data(prev => ({ ...prev, compressorSpares: [...prev.compressorSpares, item] }));
-                            }}
-                            onClose={() => { }}
-                          />
-                        </div>
-                      </Col>
-                    </>
+                  {shift1Data.machineServiceDone && (
+                    <Col span={18}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                        <Text type="secondary" style={{ fontSize: '10px' }}>Spares:</Text>
+                        {shift1Data.machineGeneralSpares.map((spare, idx) => (
+                          <Tag key={idx} closable onClose={() => {
+                            const newSpares = [...shift1Data.machineGeneralSpares];
+                            newSpares.splice(idx, 1);
+                            setShift1Data(prev => ({ ...prev, machineGeneralSpares: newSpares }));
+                          }} style={{ fontSize: '10px' }}>{spare.itemName} ({spare.quantity})</Tag>
+                        ))}
+                        <SparesDropdown type="machine" onAdd={(item) => setShift1Data(prev => ({ ...prev, machineGeneralSpares: [...prev.machineGeneralSpares, item] }))} onClose={() => { }} />
+                      </div>
+                    </Col>
                   )}
                 </Row>
+
+                {/* Machine Engine Service */}
+                <Row gutter={16} align="top">
+                  <Col span={6}>
+                    <Space>
+                      <Switch size="small" checked={shift1Data.machineEngineServiceDone} onChange={(c) => setShift1Data(prev => ({ ...prev, machineEngineServiceDone: c }))} />
+                      <Text style={{ fontSize: '11px' }}>Engine Service</Text>
+                    </Space>
+                  </Col>
+                  {shift1Data.machineEngineServiceDone && (
+                    <Col span={18}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                        <Text type="secondary" style={{ fontSize: '10px' }}>Spares:</Text>
+                        {shift1Data.machineEngineSpares.map((spare, idx) => (
+                          <Tag key={idx} closable onClose={() => {
+                            const newSpares = [...shift1Data.machineEngineSpares];
+                            newSpares.splice(idx, 1);
+                            setShift1Data(prev => ({ ...prev, machineEngineSpares: newSpares }));
+                          }} style={{ fontSize: '10px' }}>{spare.itemName} ({spare.quantity})</Tag>
+                        ))}
+                        <SparesDropdown type="machine" onAdd={(item) => setShift1Data(prev => ({ ...prev, machineEngineSpares: [...prev.machineEngineSpares, item] }))} onClose={() => { }} />
+                      </div>
+                    </Col>
+                  )}
+                </Row>
+              </div>
+
+              {/* Compressor Services */}
+              {shift1Data.compressorId && (
+                <div>
+                  <Text strong style={{ fontSize: '11px', display: 'block', marginBottom: '4px' }}>Compressor Services:</Text>
+
+                  {/* Compressor General Service */}
+                  <Row gutter={16} align="top" style={{ marginBottom: '4px' }}>
+                    <Col span={6}>
+                      <Space>
+                        <Switch size="small" checked={shift1Data.compressorServiceDone} onChange={(c) => setShift1Data(prev => ({ ...prev, compressorServiceDone: c }))} />
+                        <Text style={{ fontSize: '11px' }}>General Service</Text>
+                      </Space>
+                    </Col>
+                    {shift1Data.compressorServiceDone && (
+                      <Col span={18}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                          <Text type="secondary" style={{ fontSize: '10px' }}>Spares:</Text>
+                          {shift1Data.compressorGeneralSpares.map((spare, idx) => (
+                            <Tag key={idx} closable onClose={() => {
+                              const newSpares = [...shift1Data.compressorGeneralSpares];
+                              newSpares.splice(idx, 1);
+                              setShift1Data(prev => ({ ...prev, compressorGeneralSpares: newSpares }));
+                            }} style={{ fontSize: '10px' }}>{spare.itemName} ({spare.quantity})</Tag>
+                          ))}
+                          <SparesDropdown type="compressor" onAdd={(item) => setShift1Data(prev => ({ ...prev, compressorGeneralSpares: [...prev.compressorGeneralSpares, item] }))} onClose={() => { }} />
+                        </div>
+                      </Col>
+                    )}
+                  </Row>
+
+                  {/* Compressor Engine Service */}
+                  <Row gutter={16} align="top">
+                    <Col span={6}>
+                      <Space>
+                        <Switch size="small" checked={shift1Data.compressorEngineServiceDone} onChange={(c) => setShift1Data(prev => ({ ...prev, compressorEngineServiceDone: c }))} />
+                        <Text style={{ fontSize: '11px' }}>Engine Service</Text>
+                      </Space>
+                    </Col>
+                    {shift1Data.compressorEngineServiceDone && (
+                      <Col span={18}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                          <Text type="secondary" style={{ fontSize: '10px' }}>Spares:</Text>
+                          {shift1Data.compressorEngineSpares.map((spare, idx) => (
+                            <Tag key={idx} closable onClose={() => {
+                              const newSpares = [...shift1Data.compressorEngineSpares];
+                              newSpares.splice(idx, 1);
+                              setShift1Data(prev => ({ ...prev, compressorEngineSpares: newSpares }));
+                            }} style={{ fontSize: '10px' }}>{spare.itemName} ({spare.quantity})</Tag>
+                          ))}
+                          <SparesDropdown type="compressor" onAdd={(item) => setShift1Data(prev => ({ ...prev, compressorEngineSpares: [...prev.compressorEngineSpares, item] }))} onClose={() => { }} />
+                        </div>
+                      </Col>
+                    )}
+                  </Row>
+                </div>
               )}
             </div>
             <div style={{ marginBottom: '4px' }}>

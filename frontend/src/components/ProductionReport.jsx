@@ -22,6 +22,7 @@ import {
   FileExcelOutlined,
   ReloadOutlined,
   EyeOutlined,
+  ArrowLeftOutlined,
 } from "@ant-design/icons";
 import * as XLSX from "xlsx";
 import api from "../service/api";
@@ -31,6 +32,7 @@ import dayjs from "dayjs";
 const { Title, Text } = Typography;
 
 const ProductionReport = () => {
+  const [viewMode, setViewMode] = useState('sites');
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState([dayjs().subtract(30, 'days'), dayjs()]);
   const [productionData, setProductionData] = useState([]);
@@ -999,11 +1001,50 @@ const ProductionReport = () => {
 
   // Fetch production data when filters or pagination change
   useEffect(() => {
-    fetchProductionData();
-  }, [dateRange, selectedSite, selectedMachine, selectedEmployee, pagination.current, pagination.pageSize]);
+    if (viewMode === 'report') {
+      fetchProductionData();
+    }
+  }, [viewMode, dateRange, selectedSite, selectedMachine, selectedEmployee, pagination.current, pagination.pageSize]);
+
+  if (viewMode === 'sites') {
+    return (
+      <div className="space-y-6 p-4">
+        <Title level={4}>Production Reports - Select Site</Title>
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {sites.map(site => (
+            <Card
+              key={site.id}
+              hoverable
+              onClick={() => {
+                setSelectedSite(site.id);
+                setSelectedSiteName(site.siteName);
+                setViewMode('report');
+              }}
+              className="text-center shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+            >
+              <Title level={5} style={{ margin: 0 }}>{site.siteName}</Title>
+              <Text type="secondary">{site.siteStatus || 'Active'}</Text>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
+      <Button
+        icon={<ArrowLeftOutlined />}
+        onClick={() => {
+          setViewMode('sites');
+          setSelectedSite(undefined);
+          setSelectedSiteName('');
+          setProductionData([]);
+        }}
+        className="mb-2"
+      >
+        Back to Sites
+      </Button>
       {/* Filters */}
       <Card className="mb-2" bodyStyle={{ padding: '8px' }}>
         <Row gutter={8} align="middle">

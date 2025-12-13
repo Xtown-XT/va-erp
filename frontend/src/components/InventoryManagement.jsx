@@ -52,16 +52,14 @@ const InventoryManagement = () => {
         siteId: values.siteId,
         mode: values.mode, // 'add' or 'set'
         // For tools, quantity is handled in backend (effectively 1 per SN)
-        quantity: itemType === 'tool' ? 1 : values.quantity,
+        quantity: values.quantity,
         spareId: itemType === 'spare' ? values.itemId : null,
         drillingToolId: itemType === 'tool' ? values.itemId : null,
-        serialNumber: itemType === 'tool' ? values.serialNumber : null,
-        initialRPM: itemType === 'tool' ? values.initialRPM : null,
-        initialMeter: itemType === 'tool' ? values.initialMeter : null,
       };
 
       await api.post('/api/inventory/stock/update', payload);
-      message.success(itemType === 'tool' ? "Tool Instance Added Successfully" : "Stock Updated Successfully");
+      await api.post('/api/inventory/stock/update', payload);
+      message.success("Stock Updated Successfully");
 
       form.resetFields();
       setItemType('spare'); // Reset to default
@@ -80,18 +78,6 @@ const InventoryManagement = () => {
       { title: 'Tool Name', dataIndex: 'name', key: 'name' },
       { title: 'Part Number', dataIndex: 'partNumber', key: 'partNumber' },
       { title: 'Quantity', dataIndex: 'quantity', key: 'quantity' },
-      {
-        title: 'Total RPM',
-        dataIndex: 'totalRPM',
-        key: 'totalRPM',
-        render: (rpm) => rpm || '-'
-      },
-      {
-        title: 'Total Meter',
-        dataIndex: 'totalMeter',
-        key: 'totalMeter',
-        render: (meter) => meter || '-'
-      },
       {
         title: 'Price',
         dataIndex: 'price',
@@ -257,43 +243,19 @@ const InventoryManagement = () => {
                   </Select>
                 </Form.Item>
 
-                {itemType === 'spare' ? (
-                  // Spare Part Fields
-                  <>
-                    <Form.Item name="mode" label="Action">
-                      <Radio.Group>
-                        <Radio value="add">Add to Stock</Radio>
-                        <Radio value="set">Set Exact Count</Radio>
-                      </Radio.Group>
-                    </Form.Item>
+                <Form.Item name="mode" label="Action">
+                  <Radio.Group>
+                    <Radio value="add">Add to Stock</Radio>
+                    <Radio value="set">Set Exact Count</Radio>
+                  </Radio.Group>
+                </Form.Item>
 
-                    <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}>
-                      <InputNumber className="w-full" placeholder="Enter quantity" />
-                    </Form.Item>
-                  </>
-                ) : (
-                  // Drilling Tool Fields
-                  <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
-                    <Tag color="blue" className="mb-4">Drilling Tool Instance</Tag>
-                    <p className="text-xs text-gray-500 mb-4">Adding a drilling tool creates a specific instance with a Serial Number. Quantity is always 1.</p>
-
-                    <Form.Item name="serialNumber" label="Serial Number (Required)" rules={[{ required: true, message: "Serial Number is required for tools" }]}>
-                      <Input placeholder="e.g. SN-001" />
-                    </Form.Item>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <Form.Item name="initialRPM" label="Initial RPM">
-                        <InputNumber style={{ width: '100%' }} min={0} placeholder="0" />
-                      </Form.Item>
-                      <Form.Item name="initialMeter" label="Initial Meter">
-                        <InputNumber style={{ width: '100%' }} min={0} placeholder="0" />
-                      </Form.Item>
-                    </div>
-                  </div>
-                )}
+                <Form.Item name="quantity" label="Quantity" rules={[{ required: true }]}>
+                  <InputNumber className="w-full" placeholder="Enter quantity" />
+                </Form.Item>
 
                 <Button type="primary" htmlType="submit" block loading={submitting} size="large" icon={<PlusOutlined />}>
-                  {itemType === 'tool' ? 'Create Tool Instance' : 'Update Stock'}
+                  Update Stock
                 </Button>
               </Card>
             </Form>

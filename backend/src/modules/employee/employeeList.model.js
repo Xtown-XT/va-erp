@@ -36,6 +36,21 @@ const EmployeeList = sequelize.define(
       allowNull: false,
       defaultValue: "active",
     },
+    // Foreign key for Site
+    siteId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: "site",
+        key: "id",
+      },
+    },
+    // Daily Salary
+    dailySalary: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0.00,
+    },
     // Advanced amount field
     advancedAmount: {
       type: DataTypes.DECIMAL(12, 2),

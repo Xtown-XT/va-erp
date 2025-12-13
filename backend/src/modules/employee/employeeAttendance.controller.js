@@ -291,7 +291,7 @@ export class EmployeeAttendanceController extends BaseController {
     }
   };
 
-  // Batch upsert attendance - processes multiple records in one transaction
+  // Batch upsert attendance - Optimized for performance
   upsertBatchAttendance = async (req, res, next) => {
     const transaction = await EmployeeAttendance.sequelize.transaction();
     try {
@@ -299,119 +299,120 @@ export class EmployeeAttendanceController extends BaseController {
       const username = (req.user && (req.user.username || req.user.name)) || "system";
 
       if (!Array.isArray(records) || records.length === 0) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
           message: "Records array is required and must not be empty"
         });
       }
 
-      let createdCount = 0;
-      let updatedCount = 0;
-      const results = [];
-      const errors = [];
+      const date = records[0].date;
+      const employeeIds = records.map(r => r.employeeId);
 
-      // Process all records in batch
+      // 1. Pre-fetch all relevant employees and existing attendance in parallel
+      const [employees, existingAttendances] = await Promise.all([
+        EmployeeList.findAll({
+          where: { id: employeeIds }, // Fetch only involved employees
+          attributes: ['id', 'advancedAmount'],
+          transaction
+        }),
+        EmployeeAttendance.findAll({
+          where: {
+            employeeId: employeeIds,
+            date: date
+          },
+          transaction
+        })
+      ]);
+
+      // Create lookup maps for O(1) access
+      const employeeMap = new Map(employees.map(e => [e.id, e]));
+      const attendanceMap = new Map(existingAttendances.map(a => [a.employeeId, a]));
+
+      const attendanceUpserts = [];
+      const employeeUpdates = [];
+
+      // 2. Process records in memory
       for (const record of records) {
-        try {
-          const { employeeId, date, presence, workStatus, salary, siteId, machineId } = record;
+        const { employeeId, presence, workStatus, salary, siteId, machineId } = record;
+        const employee = employeeMap.get(employeeId);
+        const existingAttendance = attendanceMap.get(employeeId);
 
-          if (!employeeId || !date) {
-            errors.push({ employeeId, error: "employeeId and date are required" });
-            continue;
-          }
+        // Calculate Salary Difference for Advance Deduction
+        let salaryDiff = 0;
+        const newSalary = Number(salary) || 0;
 
-          // Check if attendance already exists for this employee on this date
-          const existingAttendance = await EmployeeAttendance.findOne({
-            where: { employeeId, date },
-            transaction
-          });
-
-          if (existingAttendance) {
-            // Update existing attendance - use provided values or defaults, fallback to existing
-            const updatePayload = {
-              presence: presence !== undefined ? presence : (existingAttendance.presence || 'present'),
-              workStatus: workStatus !== undefined ? workStatus : (existingAttendance.workStatus || 'working'),
-              salary: salary !== undefined ? salary : (existingAttendance.salary || 0),
-              siteId: siteId !== undefined ? siteId : existingAttendance.siteId,
-              machineId: machineId !== undefined ? machineId : existingAttendance.machineId,
-              updatedBy: username,
-            };
-
-            // Handle salary deduction if salary changed
-            const salaryDiff = Number(updatePayload.salary || 0) - Number(existingAttendance.salary || 0);
-            if (salaryDiff > 0) {
-              const employee = await EmployeeList.findByPk(employeeId, { transaction });
-              if (employee) {
-                const currentAdvance = Number(employee.advancedAmount) || 0;
-                const newAdvanceAmount = Math.max(0, currentAdvance - salaryDiff);
-                if (currentAdvance > 0) {
-                  await employee.update({
-                    advancedAmount: newAdvanceAmount,
-                    updatedBy: username
-                  }, { transaction });
-                }
-              }
-            }
-
-            await existingAttendance.update(updatePayload, { transaction });
-            results.push({ employeeId, action: 'updated', data: existingAttendance });
-            updatedCount++;
-          } else {
-            // Create new attendance - use provided values or defaults
-            const createPayload = {
-              employeeId,
-              date,
-              presence: presence !== undefined ? presence : 'present',
-              workStatus: workStatus !== undefined ? workStatus : 'working',
-              salary: salary !== undefined ? salary : 0,
-              siteId: siteId || null,
-              machineId: machineId || null,
-              createdBy: username,
-            };
-
-            const attendance = await EmployeeAttendance.create(createPayload, { transaction });
-
-            // Deduct salary from advance for new records
-            if (createPayload.salary > 0) {
-              const employee = await EmployeeList.findByPk(employeeId, { transaction });
-              if (employee) {
-                const currentAdvance = Number(employee.advancedAmount) || 0;
-                const newAdvanceAmount = Math.max(0, currentAdvance - createPayload.salary);
-                if (currentAdvance > 0) {
-                  await employee.update({
-                    advancedAmount: newAdvanceAmount,
-                    updatedBy: username
-                  }, { transaction });
-                }
-              }
-            }
-
-            results.push({ employeeId, action: 'created', data: attendance });
-            createdCount++;
-          }
-        } catch (recordError) {
-          errors.push({
-            employeeId: record.employeeId || 'unknown',
-            error: recordError.message
-          });
+        if (existingAttendance) {
+          salaryDiff = newSalary - (Number(existingAttendance.salary) || 0);
+        } else {
+          salaryDiff = newSalary;
         }
+
+        // Logic: specific business rule for advance deduction
+        // If salary increases (or is new), we MIGHT deduct from advance
+        if (employee && salaryDiff > 0) {
+          const currentAdvance = Number(employee.advancedAmount) || 0;
+          if (currentAdvance > 0) {
+            const newAdvanceAmount = Math.max(0, currentAdvance - salaryDiff);
+            if (newAdvanceAmount !== currentAdvance) {
+              employee.advancedAmount = newAdvanceAmount; // Update in memory object for consistency if duplicates in batch (unlikely but safe)
+              employeeUpdates.push({
+                id: employee.id,
+                advancedAmount: newAdvanceAmount,
+                updatedBy: username
+              });
+            }
+          }
+        }
+
+        // Prepare Attendance Upsert Data
+        attendanceUpserts.push({
+          id: existingAttendance ? existingAttendance.id : undefined, // Include ID if updating
+          employeeId,
+          date,
+          presence: presence || 'present',
+          workStatus: workStatus || 'working',
+          salary: newSalary,
+          siteId: siteId || null,
+          machineId: machineId || null,
+          createdBy: existingAttendance ? undefined : username,
+          updatedBy: username
+        });
+      }
+
+      // 3. Perform Bulk Operations
+      // A. Bulk Create/Update Attendance using bulkCreate with updateOnDuplicate
+      await EmployeeAttendance.bulkCreate(attendanceUpserts, {
+        updateOnDuplicate: ['presence', 'workStatus', 'salary', 'siteId', 'machineId', 'updatedBy'],
+        transaction
+      });
+
+      // B. Update Employees (Advance Amount)
+      // Since Sequelize doesn't have a simple bulkUpdate with different values, we use Promise.all with individual updates
+      // This is still faster than finding them again. We already have the IDs.
+      // Optimization: Only update if there are changes.
+      if (employeeUpdates.length > 0) {
+        await Promise.all(employeeUpdates.map(updateData =>
+          EmployeeList.update(
+            { advancedAmount: updateData.advancedAmount, updatedBy: updateData.updatedBy },
+            { where: { id: updateData.id }, transaction }
+          )
+        ));
       }
 
       await transaction.commit();
 
       return res.status(200).json({
         success: true,
-        message: `Batch attendance processed: ${createdCount} created, ${updatedCount} updated`,
+        message: `Processed ${records.length} records successfully`,
         data: {
-          created: createdCount,
-          updated: updatedCount,
           total: records.length,
-          errors: errors.length > 0 ? errors : undefined,
-          results
+          updatedEmployees: employeeUpdates.length
         }
       });
+
     } catch (error) {
-      await transaction.rollback();
+      if (transaction) await transaction.rollback();
       next(error);
     }
   };

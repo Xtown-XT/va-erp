@@ -72,7 +72,6 @@ const SparesReport = () => {
             "Machine/Compressor": item.machineNumber || item.compressorName || "-",
             "Spare Name": item.spareName,
             "Part Number": item.partNumber,
-            Category: item.category,
             "Quantity Used": item.quantity,
         }));
 
@@ -97,7 +96,7 @@ const SparesReport = () => {
         doc.text(`From: ${dateRange[0].format("DD/MM/YYYY")} To: ${dateRange[1].format("DD/MM/YYYY")}`, 14, 28);
 
         // Table
-        const tableColumn = ["Date", "Site", "Machine/Compressor", "Spare Name", "Part No", "Category", "Qty"];
+        const tableColumn = ["Date", "Site", "Machine/Compressor", "Spare Name", "Part No", "Qty"];
         const tableRows = [];
 
         reportData.forEach(item => {
@@ -107,7 +106,6 @@ const SparesReport = () => {
                 item.machineNumber || item.compressorName || "-",
                 item.spareName,
                 item.partNumber,
-                item.category,
                 item.quantity
             ];
             tableRows.push(rowData);
@@ -159,7 +157,6 @@ const SparesReport = () => {
             render: (text, record) => (
                 <div>
                     <div className="font-medium">{text}</div>
-                    <div className="text-xs text-gray-500">{record.category}</div>
                 </div>
             ),
         },
@@ -227,15 +224,15 @@ const SparesReport = () => {
                             ))}
                         </Select>
                     </Col>
-                    <Col xs={24} sm={4} className="flex items-end">
+                    <Col xs={24} sm={4} className="flex items-end pb-1">
                         <Button
                             type="primary"
                             icon={<SearchOutlined />}
                             onClick={fetchReport}
                             loading={loading}
-                            className="w-full"
+                            className="w-full h-[40px] flex items-center justify-center font-medium shadow-md"
                         >
-                            Generate
+                            Generate Report
                         </Button>
                     </Col>
                 </Row>

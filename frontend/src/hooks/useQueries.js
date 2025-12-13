@@ -164,7 +164,7 @@ export const useFittedDrillingTools = (compressorId) => {
   return useQuery({
     queryKey: ["fittedDrillingTools", compressorId],
     queryFn: async () => {
-      const res = await api.get(`/api/dailyEntries/fitted-drilling-tools/${compressorId}`);
+      const res = await api.get(`/api/dailyEntries/fitted-drilling-tools?compressorId=${compressorId}`);
       return res.data.data || [];
     },
     enabled: !!compressorId,

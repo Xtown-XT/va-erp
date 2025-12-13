@@ -129,6 +129,11 @@ const navArray = [
         label: "Daily Report",
         path: "/reports/daily",
         icon: <TbReport />
+      },
+      {
+        label: "Attendance Report",
+        path: "/reports/attendance",
+        icon: <TbReport />
       }
     ]
   },

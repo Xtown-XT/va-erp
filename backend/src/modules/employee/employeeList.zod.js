@@ -17,6 +17,8 @@ export const createEmployeeSchema = z.object({
     z.number().nonnegative(),
     z.null()
   ]).optional(),
+  siteId: z.string().uuid().nullable().optional(),
+  dailySalary: z.number().nonnegative().optional(),
 });
 
 export const updateEmployeeSchema = createEmployeeSchema.partial();

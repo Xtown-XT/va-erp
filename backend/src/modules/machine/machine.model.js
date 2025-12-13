@@ -39,14 +39,27 @@ const Machine = sequelize.define(
                 key: "id",
             },
         },
-        nextServiceRPM: {
+        lastServiceRPM: {
             type: DataTypes.DOUBLE,
             allowNull: true,
+            defaultValue: 0,
+            comment: "Last RPM when General/Hydraulic service was done",
+        },
+        lastEngineServiceRPM: {
+            type: DataTypes.DOUBLE,
+            allowNull: true,
+            defaultValue: 0,
+            comment: "Last RPM when Engine service was done",
         },
         serviceCycleRpm: {
             type: DataTypes.INTEGER,
             defaultValue: 250,
-            comment: "RPM interval for service notification",
+            comment: "Cycle for General/Hydraulic service",
+        },
+        engineServiceCycleRpm: {
+            type: DataTypes.INTEGER,
+            defaultValue: 250,
+            comment: "Cycle for Engine service",
         },
 
         compressorId: {
@@ -71,24 +84,6 @@ const Machine = sequelize.define(
         tableName: "machine",
         timestamps: true,
         paranoid: true,
-        hooks: {
-            beforeCreate: (machine) => {
-                if (machine.machineRPM !== undefined && machine.serviceCycleRpm && !machine.nextServiceRPM) {
-                    // Set initial nextServiceRPM to next multiple of cycle
-                    const current = Number(machine.machineRPM) || 0;
-                    const cycle = Number(machine.serviceCycleRpm);
-                    machine.nextServiceRPM = Math.ceil((current + 1) / cycle) * cycle;
-                }
-            },
-            beforeUpdate: (machine) => {
-                // If service cycle changes, realign nextServiceRPM
-                if (machine.changed('serviceCycleRpm')) {
-                    const current = Number(machine.machineRPM) || 0;
-                    const cycle = Number(machine.serviceCycleRpm);
-                    machine.nextServiceRPM = Math.ceil((current + 1) / cycle) * cycle;
-                }
-            }
-        }
     }
 );
 

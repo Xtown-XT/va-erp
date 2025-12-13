@@ -35,6 +35,7 @@ import EmployeeDetails from "./components/EmployeeDetails";
 import ServiceUsageReport from "./components/ServiceUsageReport";
 import SparesReport from "./components/SparesReport";
 import DailyEntryReport from "./components/DailyEntryReport";
+import AttendanceReport from "./components/AttendanceReport";
 
 import NotFound from "./components/NotFound";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -85,6 +86,7 @@ function App() {
               <Route path="reports/spares-summary" element={<SparesReport />} />
               <Route path="reports/production" element={<SiteProductionReport />} />
               <Route path="reports/daily" element={<DailyEntryReport />} />
+              <Route path="reports/attendance" element={<AttendanceReport />} />
 
               <Route path="reports/machine-service/:machineId" element={<MachineServiceHistory />} />
               <Route path="reports/compressor-service/:compressorId" element={<CompressorServiceHistory />} />

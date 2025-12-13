@@ -66,6 +66,32 @@ class EmployeeListCustomController extends BaseController {
     }
   };
 
+  // Override getAll to support search and filters
+  getAll = async (req, res, next) => {
+    try {
+      const { page = 1, limit = 10, search, status } = req.query;
+      const where = {};
+
+      if (status) {
+        where.status = status;
+      }
+
+      if (search) {
+        where[Op.or] = [
+          { name: { [Op.like]: `%${search}%` } },
+          { empId: { [Op.like]: `%${search}%` } },
+          { phone: { [Op.like]: `%${search}%` } }
+        ];
+      }
+
+      // Pass options to BaseCrud.getAll
+      const items = await this.service.getAll(page, limit, { where });
+      return res.json({ success: true, ...items });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   // Get employee work history and statistics
   getEmployeeHistory = async (req, res, next) => {
     try {

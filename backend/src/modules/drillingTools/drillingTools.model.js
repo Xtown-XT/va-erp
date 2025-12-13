@@ -18,18 +18,8 @@ const DrillingTools = sequelize.define(
             type: DataTypes.STRING,
             allowNull: true,
         },
-        category: {
-            type: DataTypes.STRING,
-            allowNull: true,
-        },
-        totalRPM: {
-            type: DataTypes.INTEGER,
-            allowNull: true,
-        },
-        totalMeter: {
-            type: DataTypes.INTEGER,
-            allowNull: true,
-        },
+
+
         price: {
             type: DataTypes.DECIMAL(10, 2),
             defaultValue: 0,

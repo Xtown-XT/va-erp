@@ -107,8 +107,7 @@ export const InventoryController = {
                     spareId: s.spareId,
                     name: s.spare?.name,
                     quantity: s.quantity,
-                    partNumber: s.spare?.partNumber,
-                    category: s.spare?.category
+                    partNumber: s.spare?.partNumber
                 }));
 
                 const tools = stocks.filter(s => s.drillingToolId).map(s => ({
@@ -148,34 +147,9 @@ export const InventoryController = {
         try {
             const { siteId, spareId, drillingToolId, quantity, mode = 'add', serialNumber, initialRPM, initialMeter } = req.body;
 
-            // Handle Drilling Tool Instance Creation
-            if (drillingToolId && (mode === 'add' || quantity > 0)) {
-                // For tools, we expect adding 1 at a time (quantity is ignored or assumed 1)
-                // If adding stock, require serialNumber
-                if (serialNumber) {
-                    // Check existing SN
-                    const existingInstance = await DrillingToolItems.findOne({ where: { serialNumber } });
-                    if (existingInstance) {
-                        await t.rollback();
-                        return res.status(400).json({ success: false, message: `Serial Number '${serialNumber}' already exists` });
-                    }
+            // Handle drilling tool stock update (Just quantity, logic merged below)
+            // Legacy serial number logic removed
 
-                    await DrillingToolItems.create({
-                        drillingToolId,
-                        siteId,
-                        serialNumber,
-                        currentRpm: initialRPM || 0,
-                        currentMeter: initialMeter || 0,
-                        status: 'In Stock'
-                    }, { transaction: t });
-                } else if (!serialNumber && drillingToolId) {
-                    // If no serial number but drillingToolId is there, maybe it's just a count update? 
-                    // User rule: "drilling tool is always count 1 not bulk".
-                    // We should enforce SN.
-                    await t.rollback();
-                    return res.status(400).json({ success: false, message: "Serial Number is required for Drilling Tools" });
-                }
-            }
 
             // Update Aggregate SiteStock (common for both Spares and Tools for summary)
             let stock = await SiteStock.findOne({
@@ -187,7 +161,7 @@ export const InventoryController = {
                 transaction: t
             });
 
-            const qtyChange = drillingToolId ? 1 : quantity; // Force 1 for tool additions
+            const qtyChange = quantity;
 
             if (!stock) {
                 if (mode === 'add' && qtyChange < 0) {
@@ -231,7 +205,7 @@ export const InventoryController = {
             let items = [];
             if (!itemType || itemType === 'spares' || itemType === 'all') {
                 const spares = await Spares.findAll({ lean: true });
-                items = [...items, ...spares.map(s => ({ ...s.dataValues, itemType: 'Spare', groupName: s.category }))];
+                items = [...items, ...spares.map(s => ({ ...s.dataValues, itemType: 'Spare' }))];
             }
             if (!itemType || itemType === 'Drilling Tools' || itemType === 'all') {
                 const tools = await DrillingTools.findAll({ lean: true });

@@ -33,13 +33,17 @@ const Compressor = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
-    nextServiceRPM: {
+    lastServiceRPM: {
       type: DataTypes.DOUBLE,
       allowNull: true,
+      defaultValue: 0,
+      comment: "Last RPM when generic service was done",
     },
-    nextEngineServiceRPM: {
+    lastEngineServiceRPM: {
       type: DataTypes.DOUBLE,
       allowNull: true,
+      defaultValue: 0,
+      comment: "Last RPM when Engine service was done",
     },
     serviceCycleRpm: {
       type: DataTypes.INTEGER,
@@ -57,36 +61,6 @@ const Compressor = sequelize.define(
     tableName: "compressor",
     timestamps: true,
     paranoid: true,
-    hooks: {
-      beforeCreate: (compressor) => {
-        // Init nextServiceRPM
-        if (compressor.compressorRPM !== undefined && compressor.serviceCycleRpm && !compressor.nextServiceRPM) {
-          const current = Number(compressor.compressorRPM) || 0;
-          const cycle = Number(compressor.serviceCycleRpm);
-          compressor.nextServiceRPM = Math.ceil((current + 1) / cycle) * cycle;
-        }
-        // Init nextEngineServiceRPM
-        if (compressor.compressorRPM !== undefined && compressor.engineServiceCycleRpm && !compressor.nextEngineServiceRPM) {
-          const current = Number(compressor.compressorRPM) || 0;
-          const cycle = Number(compressor.engineServiceCycleRpm);
-          compressor.nextEngineServiceRPM = Math.ceil((current + 1) / cycle) * cycle;
-        }
-      },
-      beforeUpdate: (compressor) => {
-        // Re-calc if Service Cycle changes
-        if (compressor.changed('serviceCycleRpm')) {
-          const current = Number(compressor.compressorRPM) || 0;
-          const cycle = Number(compressor.serviceCycleRpm);
-          compressor.nextServiceRPM = Math.ceil((current + 1) / cycle) * cycle;
-        }
-        // Re-calc if Engine Cycle changes
-        if (compressor.changed('engineServiceCycleRpm')) {
-          const current = Number(compressor.compressorRPM) || 0;
-          const cycle = Number(compressor.engineServiceCycleRpm);
-          compressor.nextEngineServiceRPM = Math.ceil((current + 1) / cycle) * cycle;
-        }
-      }
-    }
   }
 );
 

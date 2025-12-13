@@ -237,9 +237,14 @@ class PurchaseOrderController extends BaseController {
 
                     for (const dist of itemDist) {
                         const qty = Number(dist.quantity);
-                        if (item.itemType === 'spare' || item.spareId) { // Check both
+                        if (item.itemType === 'spare' || item.spareId || item.itemType === 'drillingTool' || item.drillingToolId) {
+                            // Unified stock update for Spares and Drilling Tools
+                            const whereClause = { siteId: dist.siteId };
+                            if (item.itemType === 'spare' || item.spareId) whereClause.spareId = item.spareId;
+                            if (item.itemType === 'drillingTool' || item.drillingToolId) whereClause.drillingToolId = item.drillingToolId;
+
                             const existingStock = await SiteStock.findOne({
-                                where: { siteId: dist.siteId, spareId: item.spareId },
+                                where: whereClause,
                                 transaction: t
                             });
 
@@ -248,26 +253,13 @@ class PurchaseOrderController extends BaseController {
                             } else {
                                 await SiteStock.create({
                                     siteId: dist.siteId,
-                                    spareId: item.spareId,
+                                    spareId: item.spareId || null,
+                                    drillingToolId: item.drillingToolId || null,
                                     quantity: qty,
                                     createdBy: req.user.username,
                                     updatedBy: req.user.username
                                 }, { transaction: t });
                             }
-                        } else if (item.itemType === 'drillingTool' || item.drillingToolId) {
-                            const instances = [];
-                            for (let i = 0; i < qty; i++) {
-                                instances.push({
-                                    drillingToolId: item.drillingToolId,
-                                    siteId: dist.siteId,
-                                    status: 'In Stock',
-                                    currentRpm: 0,
-                                    currentMeter: 0,
-                                    createdBy: req.user.username,
-                                    updatedBy: req.user.username
-                                });
-                            }
-                            await DrillingToolItems.bulkCreate(instances, { transaction: t });
                         }
                     }
                 }

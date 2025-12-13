@@ -4,6 +4,9 @@ import PurchaseOrderItem from "./models/purchaseOrderItem.model.js";
 import SiteStock from "./models/siteStock.model.js";
 import Site from "../site/site.model.js";
 import Spares from "../spares/spares.model.js";
+import ServiceHistory from "../service/models/serviceHistory.model.js";
+import Machine from "../machine/machine.model.js";
+import Compressor from "../compressor/compressor.model.js";
 import { Op } from "sequelize";
 import sequelize from "../../config/db.js";
 
@@ -148,15 +151,6 @@ class ReportsController {
                 });
             }
 
-            const { Op } = await import("sequelize");
-            const sequelize = (await import("../../config/db.js")).default;
-            const ServiceItem = (await import("../service/models/serviceItem.model.js")).default;
-            const ServiceHistory = (await import("../service/models/serviceHistory.model.js")).default;
-            const Site = (await import("../site/site.model.js")).default;
-            const Spares = (await import("../spares/spares.model.js")).default;
-            const Machine = (await import("../machine/machine.model.js")).default;
-            const Compressor = (await import("../compressor/compressor.model.js")).default;
-
             const whereClause = {
                 serviceDate: {
                     [Op.between]: [startDate, endDate],
@@ -185,7 +179,7 @@ class ReportsController {
                     {
                         model: Spares,
                         as: "spare",
-                        attributes: ["name", "partNumber", "category"]
+                        attributes: ["name", "partNumber"]
                     }
                 ],
                 where: {
@@ -201,7 +195,6 @@ class ReportsController {
                 siteName: u.serviceHistory?.site?.siteName,
                 spareName: u.spare?.name,
                 partNumber: u.spare?.partNumber,
-                category: u.spare?.category,
                 quantity: u.quantity,
                 serviceType: u.serviceHistory?.serviceType,
                 machineNumber: u.serviceHistory?.machine?.machineNumber,
@@ -233,10 +226,6 @@ class ReportsController {
                     message: "startDate and endDate are required",
                 });
             }
-
-            const { Op } = await import("sequelize");
-            const sequelize = (await import("../../config/db.js")).default;
-            const Site = (await import("../site/site.model.js")).default;
 
             // Query to aggregate by site
             const results = await sequelize.query(`
@@ -327,9 +316,6 @@ class ReportsController {
                     message: "startDate and endDate are required",
                 });
             }
-
-            const { Op } = await import("sequelize");
-            const sequelize = (await import("../../config/db.js")).default;
 
             // Query to aggregate by machine
             const results = await sequelize.query(`

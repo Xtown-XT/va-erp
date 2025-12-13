@@ -7,6 +7,27 @@ const DrillingToolsCrud = new BaseCrud(DrillingTools);
 
 const controller = new BaseController(DrillingToolsCrud, "DrillingTools");
 
+const { Op } = await import("sequelize");
+
+controller.getAll = async (req, res, next) => {
+    try {
+        const { page = 1, limit = 10, search } = req.query;
+        const where = {};
+
+        if (search) {
+            where[Op.or] = [
+                { name: { [Op.like]: `%${search}%` } },
+                { partNumber: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        const items = await DrillingToolsCrud.getAll(page, limit, { where });
+        return res.json({ success: true, ...items });
+    } catch (error) {
+        next(error);
+    }
+};
+
 controller.getInstances = async (req, res, next) => {
     try {
         const { status, siteId } = req.query;

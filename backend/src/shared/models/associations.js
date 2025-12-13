@@ -56,6 +56,9 @@ export const defineAssociations = () => {
   EmployeeList.hasMany(DailyEntry, { foreignKey: "employeeId", as: "dailyEntriesAsPrimary" });
   DailyEntry.belongsTo(EmployeeList, { foreignKey: "employeeId", as: "primaryEmployee" });
 
+  Compressor.hasMany(DailyEntry, { foreignKey: "compressorId", as: "dailyEntries" });
+  DailyEntry.belongsTo(Compressor, { foreignKey: "compressorId", as: "compressor" });
+
   // Many-to-many employee relationships (additional employees)
   EmployeeList.belongsToMany(DailyEntry, {
     through: DailyEntryEmployee,
