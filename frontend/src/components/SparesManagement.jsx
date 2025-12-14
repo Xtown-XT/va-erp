@@ -107,11 +107,7 @@ const SparesManagement = () => {
             dataIndex: "partNumber",
             key: "partNumber",
         },
-        {
-            title: "Category",
-            dataIndex: "category",
-            key: "category",
-        },
+
         {
             title: "Type",
             dataIndex: "spareType",
@@ -196,9 +192,7 @@ const SparesManagement = () => {
                         <Input />
                     </Form.Item>
 
-                    <Form.Item name="category" label="Category">
-                        <Input />
-                    </Form.Item>
+
 
                     <div className="flex gap-4">
                         <Form.Item name="spareType" label="Type" className="flex-1">

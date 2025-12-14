@@ -72,76 +72,37 @@ const MaintenanceModal = ({ visible, onClose, asset, assetType, onSuccess, sites
 
     const handleSaveConfig = async (values) => {
         try {
-            // We need to update the asset's maintenanceConfig directly
-            // Backend endpoint specifically for config update might be better, but we can use PUT asset
-
-            // Get current FULL config from asset (or the state we just fetched if we trust it's in sync, 
-            // but fetching fresh asset is better. Ideally backend has a dedicated endpoint or we use put asset)
-            // Let's assume we update the whole asset. 
-            // BUT wait, we need the raw config array, the status endpoint returns computed status.
-            // We usually need to fetch the ASSET again to get the raw JSON.
-            // Simplified: The status object contains name/cycle/lastServiceRPM/alertThreshold which is enough to reconstruct.
+            const endpoint = assetType === 'machine' ? `/api/machines/${asset.id}` : `/api/compressors/${asset.id}`;
+            const { data } = await api.get(endpoint);
+            const currentAsset = data.data;
+            let rawConfig = currentAsset.maintenanceConfig || [];
+            if (!Array.isArray(rawConfig)) rawConfig = [];
 
             const newConfigItem = {
-                id: editingConfig ? editingConfig.id : Date.now(), // Generate crude ID if new
+                id: editingConfig ? editingConfig.id : Date.now(),
                 name: values.name,
                 cycle: parseInt(values.cycle),
                 lastServiceRPM: editingConfig ? editingConfig.lastServiceRPM : (values.lastServiceRPM || 0),
-                alertThreshold: 50 // Fixed per requirement
+                alertThreshold: 50
             };
-
-            let updatedConfigRaw = [...config];
-            // Wait, 'config' state here is the computed status view. It has 'name', 'cycle', etc.
-            // We need to map it back to just the stored fields.
-
-            // Logic: 
-            // 1. Get existing raw config from asset details (passed in props? likely stale).
-            // 2. Or just map the 'config' state back to raw objects.
-
-            const rawConfig = config.map(c => ({
-                name: c.name,
-                cycle: c.cycle,
-                lastServiceRPM: c.lastServiceRPM
-            }));
 
             if (editingConfig) {
                 const index = rawConfig.findIndex(c => c.name === editingConfig.name);
                 if (index >= 0) {
-                    rawConfig[index] = { ...rawConfig[index], ...newConfigItem }; // Update name/cycle
+                    rawConfig[index] = { ...rawConfig[index], ...newConfigItem };
                 }
             } else {
-                // Check duplicate name
                 if (rawConfig.find(c => c.name === values.name)) {
                     message.error("Service name already exists");
                     return;
                 }
-                // New
-                rawConfig.push({
-                    name: values.name,
-                    cycle: values.cycle,
-                    lastServiceRPM: values.lastServiceRPM || 0
-                });
+                rawConfig.push(newConfigItem);
             }
 
-            // Save to Asset
-            const endpoint = assetType === 'machine' ? `/api/machines/${asset.id}` : `/api/compressors/${asset.id}`;
-            await api.put(endpoint, {
-                // We only want to update detailed config
-                maintenanceConfig: rawConfig,
-                // Send required fields if needed? Usually PUT handles partial updates.
-                // Assuming backend handles partial updates (it usually does in our patterns)
-                // BUT wait, Machine update usually requires brandId/machineType etc if strict validation.
-                // Let's hope validation allows partials or we need to send everything.
-                // Re-reading machine.js handleSubmit... it builds payload carefully.
-                // We might need a specific 'maintenance-config' endpoint or send minimal needed.
-                // Safest: Send everything OR created a specific endpoint. 
-                // Given constraints, I'll try sending just maintenanceConfig. If it fails, I'll fetch full asset first.
-                maintenanceConfig: rawConfig
-            });
-
+            await api.put(endpoint, { maintenanceConfig: rawConfig });
             message.success("Configuration saved");
             setIsConfigModalVisible(false);
-            fetchMaintenanceStatus(); // Refresh
+            fetchMaintenanceStatus();
 
         } catch (err) {
             console.error(err);
@@ -151,17 +112,19 @@ const MaintenanceModal = ({ visible, onClose, asset, assetType, onSuccess, sites
 
     const handleDeleteConfig = async (serviceName) => {
         try {
-            const rawConfig = config.filter(c => c.name !== serviceName).map(c => ({
-                name: c.name,
-                cycle: c.cycle,
-                lastServiceRPM: c.lastServiceRPM
-            }));
-
             const endpoint = assetType === 'machine' ? `/api/machines/${asset.id}` : `/api/compressors/${asset.id}`;
-            await api.put(endpoint, { maintenanceConfig: rawConfig });
+            const { data } = await api.get(endpoint);
+            const currentAsset = data.data;
+            let rawConfig = currentAsset.maintenanceConfig || [];
+            if (!Array.isArray(rawConfig)) rawConfig = [];
+
+            const updatedConfig = rawConfig.filter(c => c.name !== serviceName);
+
+            await api.put(endpoint, { maintenanceConfig: updatedConfig });
             message.success("Service type removed");
             fetchMaintenanceStatus();
         } catch (err) {
+            console.error(err);
             message.error("Failed to delete");
         }
     }

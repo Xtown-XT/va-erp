@@ -48,7 +48,9 @@ const DailyEntry = () => {
     compressorServiceItems: [],
     drillingTools: [],
     vehicleServiceDone: false,
+    vehicleServiceName: null,
     compressorServiceDone: false,
+    compressorServiceName: null,
   });
 
   const [loading, setLoading] = useState(false);
@@ -566,8 +568,15 @@ const DailyEntry = () => {
         employees: shift1Data.employees
           .filter(e => e.employeeId)
           .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 1 })),
+        // Fix: Send correct keys for service status
         vehicleServiceDone: Boolean(shift1Data.vehicleServiceDone),
+        machineServiceDone: Boolean(shift1Data.vehicleServiceDone), // Map to backend expectation
+        vehicleServiceName: shift1Data.vehicleServiceName,
+        machineServiceName: shift1Data.vehicleServiceName, // Map to backend expectation
+
         compressorServiceDone: Boolean(shift1Data.compressorServiceDone),
+        compressorServiceName: shift1Data.compressorServiceName,
+
         machineServiceItems: shift1Data.machineServiceItems.map(item => ({
           itemId: item.itemId,
           action: item.action || 'fit',
@@ -611,8 +620,16 @@ const DailyEntry = () => {
         employees: shift2Data.employees
           .filter(e => e.employeeId)
           .map(e => ({ employeeId: e.employeeId, role: e.role, shift: 2 })),
+
+        // Fix: Send correct keys for service status
         vehicleServiceDone: Boolean(shift2Data.vehicleServiceDone),
+        machineServiceDone: Boolean(shift2Data.vehicleServiceDone),
+        vehicleServiceName: shift2Data.vehicleServiceName,
+        machineServiceName: shift2Data.vehicleServiceName,
+
         compressorServiceDone: Boolean(shift2Data.compressorServiceDone),
+        compressorServiceName: shift2Data.compressorServiceName,
+
         machineServiceItems: shift2Data.machineServiceItems.map(item => ({
           itemId: item.itemId,
           action: item.action || 'fit',
@@ -650,7 +667,6 @@ const DailyEntry = () => {
   // Handle cancel
   const handleCancel = () => {
     setShowForm(false);
-    setEditingId(null);
     setShift1Data({
       siteId: null,
       vehicleId: null,
@@ -669,7 +685,9 @@ const DailyEntry = () => {
       compressorServiceItems: [],
       drillingTools: [],
       vehicleServiceDone: false,
+      vehicleServiceName: null,
       compressorServiceDone: false,
+      compressorServiceName: null,
     });
     setShift2Data(getInitialShiftData());
     setSelectedShift1Machine(null);
@@ -1130,31 +1148,65 @@ const DailyEntry = () => {
           {/* Service Status */}
           <div className="mb-4">
             <Title level={5}>Service Status</Title>
-            <Row gutter={16}>
-              <Col xs={24} sm={12}>
-                <Text strong>Vehicle Service Done</Text>
-                <div className="mt-1">
-                  <Switch
-                    checked={shiftData.vehicleServiceDone}
-                    onChange={(checked) => updateShiftData('vehicleServiceDone', checked)}
-                    checkedChildren="Done"
-                    unCheckedChildren="Pending"
-                  />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card size="small" title="Machine Service">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={shiftData.vehicleServiceDone}
+                      onChange={(checked) => updateShiftData('vehicleServiceDone', checked)}
+                    />
+                    <Text>Machine Service Done?</Text>
+                  </div>
+                  {shiftData.vehicleServiceDone && (
+                    <div className="mt-2">
+                      <Text className="mb-1 block">Select Service Type:</Text>
+                      <Select
+                        placeholder="Select Service (e.g. Hydraulic Oil)"
+                        className="w-full"
+                        value={shiftData.vehicleServiceName}
+                        onChange={(val) => updateShiftData('vehicleServiceName', val)}
+                      >
+                        <Select.Option value="General Service">General Service (Default)</Select.Option>
+                        {selectedMachine?.maintenanceConfig?.map((cfg, idx) => (
+                          <Select.Option key={idx} value={cfg.name}>{cfg.name}</Select.Option>
+                        ))}
+                      </Select>
+                    </div>
+                  )}
                 </div>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Text strong>Compressor Service Done</Text>
-                <div className="mt-1">
-                  <Switch
-                    checked={shiftData.compressorServiceDone}
-                    onChange={(checked) => updateShiftData('compressorServiceDone', checked)}
-                    checkedChildren="Done"
-                    unCheckedChildren="Pending"
-                    disabled={!shiftData.compressorId}
-                  />
+              </Card>
+
+              <Card size="small" title="Compressor Service">
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={shiftData.compressorServiceDone}
+                      onChange={(checked) => updateShiftData('compressorServiceDone', checked)}
+                      disabled={!shiftData.compressorId}
+                    />
+                    <Text>Compressor Service Done?</Text>
+                  </div>
+                  {shiftData.compressorServiceDone && (
+                    <div className="mt-2">
+                      <Text className="mb-1 block">Select Service Type:</Text>
+                      <Select
+                        placeholder="Select Service"
+                        className="w-full"
+                        value={shiftData.compressorServiceName}
+                        onChange={(val) => updateShiftData('compressorServiceName', val)}
+                        disabled={!shiftData.compressorId}
+                      >
+                        <Select.Option value="General Service">General Service (Default)</Select.Option>
+                        {selectedCompressor?.maintenanceConfig?.map((cfg, idx) => (
+                          <Select.Option key={idx} value={cfg.name}>{cfg.name}</Select.Option>
+                        ))}
+                      </Select>
+                    </div>
+                  )}
                 </div>
-              </Col>
-            </Row>
+              </Card>
+            </div>
           </div>
         </>
       </Card>

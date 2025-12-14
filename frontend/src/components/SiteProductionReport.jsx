@@ -8,30 +8,40 @@ import {
   Typography,
   message,
   Segmented,
+  Select,
 } from "antd";
 import { FileExcelOutlined } from "@ant-design/icons";
 import * as XLSX from "xlsx";
 import api from "../service/api";
 import dayjs from "dayjs";
-
-const { Title } = Typography;
-const { RangePicker } = DatePicker;
-
+import { useSites } from "../hooks/useQueries";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const { Title, Text } = Typography;
+const { RangePicker } = DatePicker;
+const { Option } = Select;
+
 const SiteProductionReport = () => {
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState("sitewise"); // 'sitewise' or 'machinewise'
+  const [viewMode, setViewMode] = useState("sitewise"); // 'sitewise', 'machinewise', 'daywise'
+  const [selectedSite, setSelectedSite] = useState(null);
   const [dateRange, setDateRange] = useState([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
   ]);
   const [reportData, setReportData] = useState([]);
 
+  // Fetch sites for the day-wise filter
+  const { data: sites = [] } = useSites();
+
   const fetchReport = async () => {
     if (!dateRange || dateRange.length !== 2) {
       return message.error("Please select a date range");
+    }
+
+    if (viewMode === "daywise" && !selectedSite) {
+      return message.error("Please select a site for Day-wise report");
     }
 
     setLoading(true);
@@ -39,14 +49,19 @@ const SiteProductionReport = () => {
       const startDate = dateRange[0].format("YYYY-MM-DD");
       const endDate = dateRange[1].format("YYYY-MM-DD");
 
-      const endpoint =
-        viewMode === "sitewise"
-          ? `/api/reports/production-sitewise`
-          : `/api/reports/production-machinewise`;
+      let endpoint = "";
+      let params = `startDate=${startDate}&endDate=${endDate}`;
 
-      const res = await api.get(
-        `${endpoint}?startDate=${startDate}&endDate=${endDate}`
-      );
+      if (viewMode === "sitewise") {
+        endpoint = "/api/reports/production-sitewise";
+      } else if (viewMode === "machinewise") {
+        endpoint = "/api/reports/production-machinewise";
+      } else if (viewMode === "daywise") {
+        endpoint = "/api/reports/production-daywise";
+        params += `&siteId=${selectedSite}`;
+      }
+
+      const res = await api.get(`${endpoint}?${params}`);
 
       if (res.data.success) {
         setReportData(res.data.data);
@@ -61,9 +76,22 @@ const SiteProductionReport = () => {
 
   const exportToExcel = () => {
     const sheetData = reportData.map((row) => {
+      let firstColKey = "Name";
+      let firstColVal = "";
+
+      if (viewMode === "sitewise") {
+        firstColKey = "Site Name";
+        firstColVal = row.siteName;
+      } else if (viewMode === "machinewise") {
+        firstColKey = "Machine Number";
+        firstColVal = row.machineNumber;
+      } else {
+        firstColKey = "Date";
+        firstColVal = row.date; // or format it
+      }
+
       const baseData = {
-        [viewMode === "sitewise" ? "Site Name" : "Machine Number"]:
-          viewMode === "sitewise" ? row.siteName : row.machineNumber,
+        [firstColKey]: firstColVal,
       };
 
       if (viewMode === "machinewise") {
@@ -104,8 +132,13 @@ const SiteProductionReport = () => {
       "DD/MM/YYYY"
     )} to ${dateRange[1].format("DD/MM/YYYY")}`;
 
+    let firstColHeader = "Name";
+    if (viewMode === "sitewise") firstColHeader = "Site Name";
+    else if (viewMode === "machinewise") firstColHeader = "Machine";
+    else firstColHeader = "Date";
+
     const tableColumn = [
-      viewMode === "sitewise" ? "Site Name" : "Machine",
+      firstColHeader,
       ...(viewMode === "machinewise" ? ["Type"] : []),
       "Meter",
       "Crwl HSD",
@@ -123,8 +156,13 @@ const SiteProductionReport = () => {
     ];
 
     const tableRows = reportData.map((row) => {
+      let firstColVal = "";
+      if (viewMode === "sitewise") firstColVal = row.siteName;
+      else if (viewMode === "machinewise") firstColVal = row.machineNumber;
+      else firstColVal = dayjs(row.date).format("DD/MM/YYYY");
+
       const rowData = [
-        viewMode === "sitewise" ? row.siteName : row.machineNumber,
+        firstColVal,
         ...(viewMode === "machinewise" ? [row.machineType || "-"] : []),
         row.totalMeter?.toFixed(2) || "0",
         row.totalCrawlerHSD?.toFixed(2) || "0",
@@ -180,9 +218,21 @@ const SiteProductionReport = () => {
 
   const columns = [
     {
-      title: viewMode === "sitewise" ? "Site Name" : "Machine Number",
-      dataIndex: viewMode === "sitewise" ? "siteName" : "machineNumber",
+      title:
+        viewMode === "sitewise"
+          ? "Site Name"
+          : viewMode === "machinewise"
+            ? "Machine Number"
+            : "Date",
+      dataIndex:
+        viewMode === "sitewise"
+          ? "siteName"
+          : viewMode === "machinewise"
+            ? "machineNumber"
+            : "date",
       key: "name",
+      render: (val) =>
+        viewMode === "daywise" ? dayjs(val).format("DD/MM/YYYY") : val,
     },
     ...(viewMode === "machinewise"
       ? [
@@ -252,7 +302,6 @@ const SiteProductionReport = () => {
       dataIndex: "crawlerHSDPerRPM",
       key: "crawlerHSDPerRPM",
       render: (val) => val?.toFixed(2) || 0,
-      title: "Crwl HSD/RPM", // Keeping slightly longer title in UI if space allows, or shortening
     },
     {
       title: "Comp HSD/RPM",
@@ -303,9 +352,7 @@ const SiteProductionReport = () => {
     return {
       ...totals,
       hsdPerMeter:
-        totals.totalMeter > 0
-          ? totals.totalTotalHSD / totals.totalMeter
-          : 0,
+        totals.totalMeter > 0 ? totals.totalTotalHSD / totals.totalMeter : 0,
       meterPerRPM:
         totals.totalCompRPM > 0 ? totals.totalMeter / totals.totalCompRPM : 0,
       crawlerHSDPerRPM:
@@ -316,7 +363,8 @@ const SiteProductionReport = () => {
         totals.totalCompRPM > 0
           ? totals.totalCompHSD / totals.totalCompRPM
           : 0,
-      avgDepth: totals.totalHoles > 0 ? totals.totalMeter / totals.totalHoles : 0,
+      avgDepth:
+        totals.totalHoles > 0 ? totals.totalMeter / totals.totalHoles : 0,
     };
   };
 
@@ -326,21 +374,55 @@ const SiteProductionReport = () => {
         <Title level={3}>Production Report</Title>
 
         <Space direction="vertical" size="large" className="w-full">
-          <Space size="large" wrap>
-            <Segmented
-              options={[
-                { label: "Site-wise", value: "sitewise" },
-                { label: "Machine-wise", value: "machinewise" },
-              ]}
-              value={viewMode}
-              onChange={setViewMode}
-            />
+          <Space size="large" wrap align="end">
+            <div>
+              <Text strong className="block mb-1">
+                Report Type
+              </Text>
+              <Segmented
+                options={[
+                  { label: "Site-wise", value: "sitewise" },
+                  { label: "Machine-wise", value: "machinewise" },
+                  { label: "Day-wise Breakdown", value: "daywise" },
+                ]}
+                value={viewMode}
+                onChange={(val) => {
+                  setViewMode(val);
+                  setReportData([]); // Clear old data on switch
+                }}
+              />
+            </div>
 
-            <RangePicker
-              value={dateRange}
-              onChange={setDateRange}
-              format="DD/MM/YYYY"
-            />
+            {viewMode === "daywise" && (
+              <div style={{ minWidth: 200 }}>
+                <Text strong className="block mb-1">
+                  Select Site
+                </Text>
+                <Select
+                  placeholder="Select Site"
+                  value={selectedSite}
+                  onChange={setSelectedSite}
+                  options={sites.map((s) => ({
+                    label: s.siteName,
+                    value: s.id,
+                  }))}
+                  style={{ width: "100%" }}
+                  showSearch
+                  optionFilterProp="label"
+                />
+              </div>
+            )}
+
+            <div>
+              <Text strong className="block mb-1">
+                Date Range
+              </Text>
+              <RangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                format="DD/MM/YYYY"
+              />
+            </div>
 
             <Button type="primary" onClick={fetchReport} loading={loading}>
               Generate Report
@@ -353,14 +435,10 @@ const SiteProductionReport = () => {
                   onClick={exportToExcel}
                   type="default"
                 >
-                  Export to Excel
+                  Excel
                 </Button>
-                <Button
-                  onClick={exportToPDF}
-                  type="default"
-                  danger
-                >
-                  Export PDF
+                <Button onClick={exportToPDF} type="default" danger>
+                  PDF
                 </Button>
               </>
             )}
@@ -370,23 +448,26 @@ const SiteProductionReport = () => {
             <Table
               columns={columns}
               dataSource={reportData}
-              rowKey={viewMode === "sitewise" ? "siteId" : "machineId"}
+              rowKey={
+                viewMode === "sitewise"
+                  ? "siteId"
+                  : viewMode === "machinewise"
+                    ? "machineId"
+                    : "date"
+              }
               loading={loading}
               pagination={{
                 pageSize: 50,
                 showSizeChanger: true,
                 showTotal: (total) => `Total ${total} items`,
               }}
-              size="small" // Compact layout
-              // scroll={{ x: 1800 }} // Removed to fit in one page
+              size="small"
               summary={() => {
                 const totals = calculateTotals();
                 return (
                   <Table.Summary fixed>
-                    <Table.Summary.Row style={{ fontWeight: "bold" }}>
-                      <Table.Summary.Cell index={0}>
-                        TOTAL
-                      </Table.Summary.Cell>
+                    <Table.Summary.Row style={{ fontWeight: "bold", background: "#fafafa" }}>
+                      <Table.Summary.Cell index={0}>TOTAL</Table.Summary.Cell>
                       {viewMode === "machinewise" && (
                         <Table.Summary.Cell index={1}>-</Table.Summary.Cell>
                       )}
@@ -423,9 +504,7 @@ const SiteProductionReport = () => {
                       <Table.Summary.Cell>
                         {totals.compHSDPerRPM?.toFixed(2)}
                       </Table.Summary.Cell>
-                      <Table.Summary.Cell>
-                        {totals.totalHoles}
-                      </Table.Summary.Cell>
+                      <Table.Summary.Cell>{totals.totalHoles}</Table.Summary.Cell>
                       <Table.Summary.Cell>
                         {totals.avgDepth?.toFixed(2)}
                       </Table.Summary.Cell>
@@ -438,7 +517,7 @@ const SiteProductionReport = () => {
 
           {reportData.length === 0 && !loading && (
             <div className="text-center mt-8 text-gray-400">
-              <p>Select a date range and click "Generate Report" to view data</p>
+              <p>Select filter options and click "Generate Report"</p>
             </div>
           )}
         </Space>

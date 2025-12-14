@@ -12,12 +12,15 @@ import {
     Modal,
     Statistic,
     Row,
-    Col
+    Col,
+    Space
 } from "antd";
 import {
     FilePdfOutlined,
     FileExcelOutlined,
-    SearchOutlined
+    SearchOutlined,
+    CheckCircleOutlined,
+    CloseCircleOutlined
 } from "@ant-design/icons";
 import api from "../service/api";
 import dayjs from "dayjs";

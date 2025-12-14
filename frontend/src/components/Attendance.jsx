@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Button,
   Input,
@@ -32,6 +33,7 @@ import dayjs from "dayjs";
 const { Title, Text } = Typography;
 
 const Attendance = () => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [sites, setSites] = useState([]);
   const [selectedSite, setSelectedSite] = useState(null);
@@ -337,15 +339,23 @@ const Attendance = () => {
               </div>
             }
             extra={
-              <Button
-                type="primary"
-                icon={<SaveOutlined />}
-                onClick={handleSave}
-                loading={saving}
-                disabled={employees.length === 0}
-              >
-                Save All Changes
-              </Button>
+              <Space>
+                <Button
+                  onClick={() => navigate('/reports/attendance')}
+                  icon={<SearchOutlined />}
+                >
+                  View Report
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  onClick={handleSave}
+                  loading={saving}
+                  disabled={employees.length === 0}
+                >
+                  Save All Changes
+                </Button>
+              </Space>
             }
             bodyStyle={{ padding: 0 }}
           >

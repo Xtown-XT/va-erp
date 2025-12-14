@@ -58,7 +58,6 @@ const InventoryManagement = () => {
       };
 
       await api.post('/api/inventory/stock/update', payload);
-      await api.post('/api/inventory/stock/update', payload);
       message.success("Stock Updated Successfully");
 
       form.resetFields();
