@@ -10,13 +10,21 @@ const ServiceHistory = sequelize.define(
             defaultValue: DataTypes.UUIDV4,
             primaryKey: true,
         },
-        entityType: {
-            type: DataTypes.ENUM('MACHINE', 'COMPRESSOR'),
-            allowNull: false,
+        machineId: {
+            type: DataTypes.UUID,
+            allowNull: true,
+            references: {
+                model: "machine",
+                key: "id",
+            },
         },
-        entityId: {
-            type: DataTypes.UUID, // Can reference Machine or Compressor
-            allowNull: false,
+        compressorId: {
+            type: DataTypes.UUID,
+            allowNull: true,
+            references: {
+                model: "compressor",
+                key: "id",
+            },
         },
         serviceType: {
             type: DataTypes.STRING,

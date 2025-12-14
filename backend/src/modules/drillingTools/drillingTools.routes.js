@@ -17,6 +17,8 @@ router.post(
     DrillingToolsController.create
 );
 router.post("/instances", authorize("create"), DrillingToolsController.createInstance);
+router.post("/install", authorize("create"), DrillingToolsController.installTool);
+router.post("/remove", authorize("create"), DrillingToolsController.removeTool);
 router.get("/instances", authorize("read"), DrillingToolsController.getInstances);
 router.get("/", authorize("read"), DrillingToolsController.getAll);
 router.get("/:id", authorize("read"), DrillingToolsController.getById);

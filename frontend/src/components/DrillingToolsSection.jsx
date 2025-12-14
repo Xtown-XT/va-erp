@@ -8,9 +8,10 @@ const DrillingToolsSection = ({
     onAddTool,
     onRemoveTool,
     onUpdateTool,
-    compressorName
+    compressorName,
+    siteId
 }) => {
-    const { data: availableHammerBits = [] } = useItemsByType('hammer_bit'); // Fetch tools (bits/hammers)
+    const { data: availableHammerBits = [] } = useItemsByType('hammer_bit', siteId); // Fetch tools with stock
     const [selectedItem, setSelectedItem] = useState(null);
     const [quantity, setQuantity] = useState(1);
 

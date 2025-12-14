@@ -182,43 +182,18 @@ const ShiftForm = ({
                 </Col>
             </Row>
 
-            <Divider orientation="left">Services</Divider>
-            <Row gutter={16}>
-                <Col xs={24} md={12}>
-                    <ServiceEntryForm
-                        label="Machine Service"
-                        assetType="MACHINE"
-                        serviceDoneField={p("machineServiceDone")}
-                        serviceNameField={p("machineServiceName")}
-                        sparesField={p("machineGeneralSpares")}
-                        maintenanceConfig={machineMaintenanceConfig}
-                        form={form}
-                    />
-                </Col>
-                <Col xs={24} md={12}>
-                    <ServiceEntryForm
-                        label="Compressor Service"
-                        assetType="COMPRESSOR"
-                        serviceDoneField={p("compressorServiceDone")}
-                        serviceNameField={p("compressorServiceName")}
-                        sparesField={p("compressorGeneralSpares")}
-                        maintenanceConfig={compressorMaintenanceConfig}
-                        form={form}
-                    />
-                </Col>
-            </Row>
-
-            <Divider orientation="left">Crew</Divider>
+            <Divider orientation="left">Crew Change (Add Employees)</Divider>
             <Form.List name={p("employees")}>
                 {(fields, { add, remove }) => (
                     <>
+                        {/* Always show at least 2 rows if empty? Or managed by parent initialValues */}
                         {fields.map(({ key, name, ...restField }) => (
                             <Row key={key} gutter={8} align="middle" className="mb-2">
                                 <Col span={10}>
                                     <Form.Item
                                         {...restField}
                                         name={[name, 'employeeId']}
-                                        rules={[{ required: true, message: 'Missing emp' }]}
+                                        // rules={[{ required: true, message: 'Missing emp' }]} // Optional for helper?
                                         noStyle
                                     >
                                         <Select placeholder="Select Employee" showSearch optionFilterProp="children">
@@ -242,15 +217,10 @@ const ShiftForm = ({
                                     </Form.Item>
                                 </Col>
                                 <Col span={4}>
-                                    <Button icon={<DeleteOutlined />} onClick={() => remove(name)} danger size="small" />
+                                    {/* <Button icon={<DeleteOutlined />} onClick={() => remove(name)} danger size="small" /> */}
                                 </Col>
                             </Row>
                         ))}
-                        <Form.Item>
-                            <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                                Add Crew Member
-                            </Button>
-                        </Form.Item>
                     </>
                 )}
             </Form.List>

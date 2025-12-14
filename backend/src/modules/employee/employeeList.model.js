@@ -13,7 +13,8 @@ const EmployeeList = sequelize.define(
     empId: {
       type: DataTypes.STRING(20),
       allowNull: false,
-      unique: true,
+      allowNull: false,
+      // unique: true, // Commented out to fix ER_TOO_MANY_KEYS error during sync
     },
     name: {
       type: DataTypes.STRING(100),

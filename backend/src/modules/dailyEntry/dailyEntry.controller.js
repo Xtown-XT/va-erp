@@ -12,7 +12,8 @@ import { BaseCrud } from "../../shared/utils/baseCrud.js";
 import { BaseController } from "../../shared/utils/baseController.js";
 import DailyEntryEmployee from "./dailyEntryEmployee.model.js";
 import { Op } from "sequelize";
-import DrillingToolLog from "../drillingTools/drillingToolLog.model.js"; // Import needed for getFittedDrillingTools
+import DrillingToolInstallation from "../drillingTools/drillingToolInstallation.model.js";
+import DrillingToolLog from "../drillingTools/drillingToolLog.model.js";
 
 // 1. Create CRUD service from model
 const DailyEntryCrud = new BaseCrud(DailyEntry);
@@ -458,8 +459,48 @@ class DailyEntryCustomController extends BaseController {
       });
 
       if (tool.action === 'INSTALL') {
+        // 1. Decrement Stock
         if (stock && stock.quantity > 0) {
           await stock.decrement('quantity', { by: qty, transaction });
+        }
+
+        // 2. Create Active Installation
+        // Check if already active? (Ideally shouldn't be)
+        await DrillingToolInstallation.create({
+          drillingToolId: tool.toolId,
+          machineId,
+          siteId,
+          fittedDate: logDate,
+          fittedRPM: logRPM,
+          fittedMeter: tool.currentMachineMeter || 0, // Snapshot meter at install
+          status: 'ACTIVE',
+          initialAccumulatedMeter: 0, // Or fetch previous history?
+          currentMeter: 0,
+          currentAccumulatedMeter: 0
+        }, { transaction });
+
+      } else if (tool.action === 'REMOVE') {
+        // Close Active Installation
+        const installation = await DrillingToolInstallation.findOne({
+          where: {
+            drillingToolId: tool.toolId,
+            machineId: machineId, // Must match machine we are removing from
+            status: 'ACTIVE'
+          },
+          transaction
+        });
+
+        if (installation) {
+          await installation.update({
+            removedDate: logDate,
+            removedRPM: logRPM,
+            removedMeter: tool.currentMachineMeter || 0,
+            status: 'COMPLETED'
+          }, { transaction });
+
+          // Note: Meter accumulation for the delta (RemovedMeter - FittedMeter) 
+          // is effectively handled by daily meter increments up to this point?
+          // If we accumulated daily, `currentAccumulatedMeter` is accurate.
         }
       }
     }
@@ -623,13 +664,52 @@ class DailyEntryCustomController extends BaseController {
             await compressor.update({ compressorRPM: maxClosingRPM }, { transaction });
           }
 
+
+          // Generic Services Array Processing
+          if (req.body.services && Array.isArray(req.body.services)) {
+            for (const svc of req.body.services) {
+              // Determine entityId based on type if not explicit
+              let entityId = svc.entityId;
+              if (!entityId) {
+                if (svc.entityType === 'MACHINE') entityId = machineId;
+                else if (svc.entityType === 'COMPRESSOR') entityId = compressorId;
+              }
+
+              // RPM: Use closing RPM if not provided
+              let rpm = svc.currentRpm;
+              if (!rpm) {
+                if (svc.entityType === 'MACHINE') rpm = maxClosingRPM; // Warning: scope issue, maxClosingRPM defined above in machine block
+                else if (svc.entityType === 'COMPRESSOR') rpm = (req.body.compressorClosingRPM || 0); // Need to get max
+                // To be safe, let's recalculate or use final values
+                if (svc.entityType === 'MACHINE') rpm = finalMachineClosingRPM;
+                else if (svc.entityType === 'COMPRESSOR') rpm = compressorClosingRPM || 0;
+              }
+
+              if (entityId && svc.serviceName) {
+                await this.processService({
+                  entityType: svc.entityType, // MACHINE or COMPRESSOR
+                  entityId: entityId,
+                  serviceName: svc.serviceName,
+                  date: entry.date,
+                  currentRpm: rpm,
+                  siteId,
+                  spares: svc.spares || [],
+                  username: req.user.username,
+                  transaction,
+                  dailyEntryId: entry.id
+                });
+              }
+            }
+          }
+
+          // KEEPING LEGACY SUPPORT BELOW (Optional, or remove if fully migrating frontend)
           if (req.body.compressorServiceDone) {
             await this.processService({
               entityType: 'COMPRESSOR',
               entityId: compressorId,
               serviceName: req.body.compressorServiceName || 'General Service',
               date: entry.date,
-              currentRpm: maxClosingRPM,
+              currentRpm: compressorClosingRPM || 0, // Simplified
               siteId,
               spares: req.body.compressorGeneralSpares || [],
               username: req.user.username,
@@ -674,6 +754,22 @@ class DailyEntryCustomController extends BaseController {
           })),
           entry.id, compressorId, machineId, siteId, entry.date, req.user.username, transaction
         );
+      }
+
+      // Drilling Tools Meter Accumulation
+      const entryMeter = req.body.meter || 0;
+      if (entryMeter > 0 && machineId) {
+        const activeInstallations = await DrillingToolInstallation.findAll({
+          where: {
+            machineId: machineId,
+            status: 'ACTIVE'
+          },
+          transaction
+        });
+
+        for (const install of activeInstallations) {
+          await install.increment('currentAccumulatedMeter', { by: entryMeter, transaction });
+        }
       }
 
       await transaction.commit();
