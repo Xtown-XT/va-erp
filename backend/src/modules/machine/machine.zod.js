@@ -10,6 +10,7 @@ export const createMachineSchema = z.object({
     engineServiceCycleRpm: z.number().int().min(1, "Engine service cycle must be at least 1").optional(),
     lastServiceRPM: z.number().int().min(0).optional(),
     lastEngineServiceRPM: z.number().int().min(0).optional(),
+    maintenanceConfig: z.array(z.any()).optional(),
     compressorId: z.union([
         z.string().uuid("Invalid compressor ID format"),
         z.null()

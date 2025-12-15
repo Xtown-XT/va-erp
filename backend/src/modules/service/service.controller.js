@@ -95,6 +95,9 @@ class ServiceController extends BaseController {
                 const machine = await Machine.findByPk(machineId, { transaction: t });
                 if (machine) {
                     let config = machine.maintenanceConfig || [];
+                    if (typeof config === 'string') {
+                        try { config = JSON.parse(config); } catch (e) { config = []; }
+                    }
                     // Ensure config is an array (handle legacy null/undefined)
                     if (!Array.isArray(config)) config = [];
 
@@ -123,7 +126,11 @@ class ServiceController extends BaseController {
             if (compressorId && currentRpm && serviceName) {
                 const compressor = await Compressor.findByPk(compressorId, { transaction: t });
                 if (compressor) {
+                    const currentRPM = compressor.compressorRPM || 0;
                     let config = compressor.maintenanceConfig || [];
+                    if (typeof config === 'string') {
+                        try { config = JSON.parse(config); } catch (e) { config = []; }
+                    }
                     if (!Array.isArray(config)) config = [];
 
                     const configIndex = config.findIndex(c => c.name === serviceName);
@@ -181,7 +188,10 @@ class ServiceController extends BaseController {
 
             for (const machine of machines) {
                 const currentRPM = machine.machineRPM || 0;
-                const config = machine.maintenanceConfig || [];
+                let config = machine.maintenanceConfig || [];
+                if (typeof config === 'string') {
+                    try { config = JSON.parse(config); } catch (e) { config = []; }
+                }
 
                 if (Array.isArray(config)) {
                     for (const item of config) {
@@ -268,7 +278,13 @@ class ServiceController extends BaseController {
             if (!asset) return res.status(404).json({ success: false, message: "Asset not found" });
 
             const currentRPM = (type === 'machine' ? asset.machineRPM : asset.compressorRPM) || 0;
-            const config = asset.maintenanceConfig || [];
+            let config = asset.maintenanceConfig || [];
+            if (typeof config === 'string') {
+                try { config = JSON.parse(config); } catch (e) { config = []; }
+            }
+            // Ensure array
+            if (!Array.isArray(config)) config = [];
+
             const statuses = [];
 
             if (Array.isArray(config)) {

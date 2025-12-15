@@ -12,46 +12,37 @@ class AlertsController {
             // 1. Machine Alerts
             const machines = await Machine.findAll({
                 where: { status: 'active' },
-                attributes: ['id', 'machineNumber', 'machineType', 'machineRPM', 'lastServiceRPM', 'serviceCycleRpm', 'lastEngineServiceRPM', 'engineServiceCycleRpm']
+                attributes: ['id', 'machineNumber', 'machineType', 'machineRPM', 'maintenanceConfig']
             });
 
             machines.forEach(m => {
-                const current = m.machineRPM || 0;
-
-                // General Service Alert
-                const lastGen = m.lastServiceRPM || 0;
-                const cycleGen = m.serviceCycleRpm || 250;
-                const nextGen = lastGen + cycleGen;
-
-                if (nextGen - current <= 20) {
-                    alerts.push({
-                        id: `M_GEN_${m.id}`,
-                        entity: 'Machine',
-                        name: m.machineNumber,
-                        type: 'General Service',
-                        currentRPM: current,
-                        dueAt: nextGen,
-                        remaining: nextGen - current,
-                        severity: nextGen - current <= 0 ? 'critical' : 'warning'
-                    });
+                const currentRPM = m.machineRPM || 0;
+                let config = m.maintenanceConfig || [];
+                if (typeof config === 'string') {
+                    try { config = JSON.parse(config); } catch (e) { config = []; }
                 }
 
-                // Engine Service Alert
-                const lastEng = m.lastEngineServiceRPM || 0;
-                // If engine cycle is distinct? Assuming yes.
-                const cycleEng = m.engineServiceCycleRpm || 250;
-                const nextEng = lastEng + cycleEng;
+                if (Array.isArray(config)) {
+                    config.forEach(service => {
+                        const cycle = Number(service.cycle);
+                        if (!cycle) return;
 
-                if (nextEng - current <= 20) {
-                    alerts.push({
-                        id: `M_ENG_${m.id}`,
-                        entity: 'Machine',
-                        name: m.machineNumber,
-                        type: 'Engine Service',
-                        currentRPM: current,
-                        dueAt: nextEng,
-                        remaining: nextEng - current,
-                        severity: nextEng - current <= 0 ? 'critical' : 'warning'
+                        const lastService = Number(service.lastServiceRPM) || 0;
+                        const nextDue = lastService + cycle;
+                        const remaining = nextDue - currentRPM;
+
+                        if (remaining <= 50) {
+                            alerts.push({
+                                id: `M_${m.id}_${service.name}`,
+                                entity: 'Machine',
+                                name: m.machineNumber,
+                                type: service.name,
+                                currentRPM: currentRPM,
+                                dueAt: nextDue,
+                                remaining: remaining,
+                                severity: remaining <= 0 ? 'critical' : 'warning'
+                            });
+                        }
                     });
                 }
             });
@@ -59,45 +50,37 @@ class AlertsController {
             // 2. Compressor Alerts
             const compressors = await Compressor.findAll({
                 where: { status: 'active' },
-                attributes: ['id', 'compressorName', 'compressorRPM', 'lastServiceRPM', 'serviceCycleRpm', 'lastEngineServiceRPM', 'engineServiceCycleRpm']
+                attributes: ['id', 'compressorName', 'compressorRPM', 'maintenanceConfig']
             });
 
             compressors.forEach(c => {
-                const current = c.compressorRPM || 0;
-
-                // General Service
-                const lastGen = c.lastServiceRPM || 0;
-                const cycleGen = c.serviceCycleRpm || 250;
-                const nextGen = lastGen + cycleGen;
-
-                if (nextGen - current <= 20) {
-                    alerts.push({
-                        id: `C_GEN_${c.id}`,
-                        entity: 'Compressor',
-                        name: c.compressorName,
-                        type: 'General Service',
-                        currentRPM: current,
-                        dueAt: nextGen,
-                        remaining: nextGen - current,
-                        severity: nextGen - current <= 0 ? 'critical' : 'warning'
-                    });
+                const currentRPM = c.compressorRPM || 0;
+                let config = c.maintenanceConfig || [];
+                if (typeof config === 'string') {
+                    try { config = JSON.parse(config); } catch (e) { config = []; }
                 }
 
-                // Engine Service
-                const lastEng = c.lastEngineServiceRPM || 0;
-                const cycleEng = c.engineServiceCycleRpm || 300;
-                const nextEng = lastEng + cycleEng;
+                if (Array.isArray(config)) {
+                    config.forEach(service => {
+                        const cycle = Number(service.cycle);
+                        if (!cycle) return;
 
-                if (nextEng - current <= 20) {
-                    alerts.push({
-                        id: `C_ENG_${c.id}`,
-                        entity: 'Compressor',
-                        name: c.compressorName,
-                        type: 'Engine Service',
-                        currentRPM: current,
-                        dueAt: nextEng,
-                        remaining: nextEng - current,
-                        severity: nextEng - current <= 0 ? 'critical' : 'warning'
+                        const lastService = Number(service.lastServiceRPM) || 0;
+                        const nextDue = lastService + cycle;
+                        const remaining = nextDue - currentRPM;
+
+                        if (remaining <= 50) {
+                            alerts.push({
+                                id: `C_${c.id}_${service.name}`,
+                                entity: 'Compressor',
+                                name: c.compressorName,
+                                type: service.name,
+                                currentRPM: currentRPM,
+                                dueAt: nextDue,
+                                remaining: remaining,
+                                severity: remaining <= 0 ? 'critical' : 'warning'
+                            });
+                        }
                     });
                 }
             });
