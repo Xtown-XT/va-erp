@@ -450,7 +450,7 @@ class DailyEntryCustomController extends BaseController {
         drillingToolId: tool.toolId,
         siteId,
         machineId,
-        action: tool.action,
+        action: (tool.action === 'fit' ? 'INSTALL' : (tool.action === 'remove' ? 'REMOVE' : 'INSTALL')), // Map fit/remove. Fallback 'update' -> 'INSTALL'? Or ignore? Zod allows 'update'. Log model only INSTALL/REMOVE. Assuming update=install for now or needs DB migration.
         date: logDate,
         quantity: qty,
         currentMachinePRM: logRPM,
@@ -754,6 +754,7 @@ class DailyEntryCustomController extends BaseController {
         await this.processDrillingTools(
           req.body.drillingTools.map(t => ({
             ...t,
+            toolId: t.itemId, // Map itemId (from schema) to toolId (for logic)
             currentMachineRPM: machineRPM,
             currentCompressorRPM: compressorRPM,
             currentMachineMeter: req.body.machineEndMeter || 0

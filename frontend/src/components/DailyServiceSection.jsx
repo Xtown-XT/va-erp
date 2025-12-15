@@ -107,8 +107,9 @@ const DailyServiceSection = ({ machines, compressor, form, siteId }) => {
                                                 else if (assetKey?.startsWith('COMPRESSOR')) targetType = 'compressor';
 
                                                 const filteredSpares = spares.filter(s => {
-                                                    if (!s.type) return true; // Show general spares
-                                                    return s.type === targetType;
+                                                    const sType = s.type ? s.type.toLowerCase() : null;
+                                                    if (!sType) return true; // Show general spares
+                                                    return sType === targetType;
                                                 });
 
                                                 return (
