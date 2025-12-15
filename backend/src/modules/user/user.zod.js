@@ -12,4 +12,4 @@ export const updateUserSchema = z.object({
   role: z.enum(["admin", "editor", "viewer"]).optional(),
 });
 
-export const deleteUserSchema = z.object({});
+export const deleteUserSchema = z.any();

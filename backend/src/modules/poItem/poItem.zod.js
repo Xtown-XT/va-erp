@@ -10,4 +10,4 @@ export const createPoItemSchema = z.object({
 
 export const updatePoItemSchema = createPoItemSchema.partial();
 
-export const deletePoItemSchema = z.object({});
+export const deletePoItemSchema = z.any();

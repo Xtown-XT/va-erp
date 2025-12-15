@@ -15,4 +15,4 @@ export const createCompressorSchema = z.object({
 
 export const updateCompressorSchema = createCompressorSchema.partial();
 
-export const deleteCompressorSchema = z.object({});
+export const deleteCompressorSchema = z.any();

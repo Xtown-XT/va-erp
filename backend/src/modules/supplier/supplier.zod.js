@@ -21,4 +21,4 @@ export const createSupplierSchema = z.object({
 
 export const updateSupplierSchema = createSupplierSchema.partial();
 
-export const deleteSupplierSchema = z.object({});
+export const deleteSupplierSchema = z.any();

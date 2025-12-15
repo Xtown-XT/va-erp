@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createPoSchema = z.object({
   orderNumber: z.string().min(1, "Order number is required"),
   orderDate: z.string().refine(val => !isNaN(Date.parse(val)), {
-  message: "Invalid date format",
+    message: "Invalid date format",
   }),
 
   gstInclude: z.boolean(),
@@ -54,4 +54,4 @@ export const updatePoSchema = z.object({
 });
 
 
-export const deletePoSchema = z.object({});
+export const deletePoSchema = z.any();

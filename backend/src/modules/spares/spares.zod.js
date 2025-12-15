@@ -16,4 +16,4 @@ export const updateSparesSchema = z.object({
     price: z.number().optional().nullable(),
 });
 
-export const deleteSparesSchema = z.object({});
+export const deleteSparesSchema = z.any();

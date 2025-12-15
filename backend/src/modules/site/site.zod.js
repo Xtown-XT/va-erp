@@ -7,4 +7,4 @@ export const createSiteSchema = z.object({
 
 export const updateSiteSchema = createSiteSchema.partial();
 
-export const deleteSiteSchema = z.object({});
+export const deleteSiteSchema = z.any();

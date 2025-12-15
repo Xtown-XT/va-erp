@@ -14,4 +14,4 @@ export const updateDrillingToolsSchema = z.object({
     price: z.number().optional().nullable(),
 });
 
-export const deleteDrillingToolsSchema = z.object({});
+export const deleteDrillingToolsSchema = z.any();

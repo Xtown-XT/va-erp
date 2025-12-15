@@ -75,4 +75,4 @@ export const createDailyEntrySchema = z.object({
 
 export const updateDailyEntrySchema = createDailyEntrySchema.partial();
 
-export const deleteDailyEntrySchema = z.object({});
+export const deleteDailyEntrySchema = z.any();

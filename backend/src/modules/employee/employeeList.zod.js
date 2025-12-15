@@ -23,4 +23,4 @@ export const createEmployeeSchema = z.object({
 
 export const updateEmployeeSchema = createEmployeeSchema.partial();
 
-export const deleteEmployeeSchema = z.object({});
+export const deleteEmployeeSchema = z.any();

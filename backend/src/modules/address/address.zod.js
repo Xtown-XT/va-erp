@@ -17,4 +17,4 @@ export const createAddressSchema = z.object({
 
 export const updateAddressSchema = createAddressSchema.partial();
 
-export const deleteAddressSchema = z.object({});
+export const deleteAddressSchema = z.any();

@@ -7,4 +7,4 @@ export const createBrandSchema = z.object({
 
 export const updateBrandSchema = createBrandSchema.partial();
 
-export const deleteBrandSchema = z.object({});
+export const deleteBrandSchema = z.any();

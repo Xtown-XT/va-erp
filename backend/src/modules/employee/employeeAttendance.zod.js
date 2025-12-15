@@ -25,7 +25,7 @@ export const createEmployeeAttendanceSchema = z.object({
 
 export const updateEmployeeAttendanceSchema = createEmployeeAttendanceSchema.partial();
 
-export const deleteEmployeeAttendanceSchema = z.object({});
+export const deleteEmployeeAttendanceSchema = z.any();
 
 // Batch upsert schema - accepts array of attendance records
 export const batchUpsertEmployeeAttendanceSchema = z.object({

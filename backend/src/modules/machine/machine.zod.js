@@ -23,4 +23,4 @@ export const createMachineSchema = z.object({
 
 export const updateMachineSchema = createMachineSchema.partial();
 
-export const deleteMachineSchema = z.object({});
+export const deleteMachineSchema = z.any();

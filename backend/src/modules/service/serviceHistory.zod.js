@@ -15,4 +15,4 @@ export const createServiceHistorySchema = z.object({
 
 export const updateServiceHistorySchema = createServiceHistorySchema.partial();
 
-export const deleteServiceHistorySchema = z.object({});
+export const deleteServiceHistorySchema = z.any();
