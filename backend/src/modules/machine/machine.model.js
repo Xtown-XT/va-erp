@@ -11,7 +11,7 @@ const Machine = sequelize.define(
             primaryKey: true,
         },
         machineType: {
-            type: DataTypes.STRING, // crawler, camper, truck, etc.
+            type: DataTypes.STRING, 
             allowNull: false,
             field: "machineType",
         },
@@ -39,28 +39,7 @@ const Machine = sequelize.define(
                 key: "id",
             },
         },
-        lastServiceRPM: {
-            type: DataTypes.DOUBLE,
-            allowNull: true,
-            defaultValue: 0,
-            comment: "@deprecated Use maintenanceConfig instead",
-        },
-        lastEngineServiceRPM: {
-            type: DataTypes.DOUBLE,
-            allowNull: true,
-            defaultValue: 0,
-            comment: "@deprecated Use maintenanceConfig instead",
-        },
-        serviceCycleRpm: {
-            type: DataTypes.INTEGER,
-            defaultValue: 250,
-            comment: "@deprecated Use maintenanceConfig instead",
-        },
-        engineServiceCycleRpm: {
-            type: DataTypes.INTEGER,
-            defaultValue: 250,
-            comment: "@deprecated Use maintenanceConfig instead",
-        },
+
         /**
          * maintenanceConfig: [
          *   {

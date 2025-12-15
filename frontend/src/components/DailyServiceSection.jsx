@@ -44,7 +44,24 @@ const DailyServiceSection = ({ machines, compressor, form, siteId }) => {
                                             label="Service Name"
                                             rules={[{ required: true }]}
                                         >
-                                            <Select mode="tags" placeholder="Service Name" />
+                                            <Select
+                                                mode="tags"
+                                                placeholder="Service Name"
+                                                onDropdownVisibleChange={(open) => {
+                                                    // Optional: Fetch latest config if needed, but prop update should suffice
+                                                }}
+                                            >
+                                                {/* Dynamic Options based on selected asset in this row */}
+                                                <Select.Option value="Breakdown">Breakdown</Select.Option>
+                                                <Select.Option value="General Service">General Service</Select.Option>
+                                                {/* Logic to inject machine/compressor config options */}
+                                                {(fields.map(f => form.getFieldValue(['services', f.name, 'assetKey'])).find((val, idx) => idx === fields.findIndex(x => x.key === key))?.startsWith('MACHINE') && machine?.maintenanceConfig || []).map(c => (
+                                                    <Select.Option key={c.name} value={c.name}>{c.name}</Select.Option>
+                                                ))}
+                                                {(fields.map(f => form.getFieldValue(['services', f.name, 'assetKey'])).find((val, idx) => idx === fields.findIndex(x => x.key === key))?.startsWith('COMPRESSOR') && compressor?.maintenanceConfig || []).map(c => (
+                                                    <Select.Option key={c.name} value={c.name}>{c.name}</Select.Option>
+                                                ))}
+                                            </Select>
                                         </Form.Item>
                                     </Col>
                                     <Col span={4}>

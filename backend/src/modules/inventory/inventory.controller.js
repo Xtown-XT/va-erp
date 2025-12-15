@@ -147,8 +147,7 @@ export const InventoryController = {
         try {
             const { siteId, spareId, drillingToolId, quantity, mode = 'add', serialNumber, initialRPM, initialMeter } = req.body;
 
-            // Handle drilling tool stock update (Just quantity, logic merged below)
-            // Legacy serial number logic removed
+
 
 
             // Update Aggregate SiteStock (common for both Spares and Tools for summary)

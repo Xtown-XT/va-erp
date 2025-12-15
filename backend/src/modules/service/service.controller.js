@@ -273,14 +273,16 @@ class ServiceController extends BaseController {
 
             if (Array.isArray(config)) {
                 for (const item of config) {
-                    if (!item.cycle) continue;
-                    const lastService = item.lastServiceRPM || 0;
-                    const nextService = lastService + Number(item.cycle);
+                    const cycle = Number(item.cycle);
+                    if (!cycle || isNaN(cycle)) continue;
+
+                    const lastService = Number(item.lastServiceRPM) || 0;
+                    const nextService = lastService + cycle;
                     const remaining = nextService - currentRPM;
 
                     statuses.push({
                         name: item.name,
-                        cycle: item.cycle,
+                        cycle: cycle,
                         lastServiceRPM: lastService,
                         nextServiceRPM: nextService,
                         currentRPM: currentRPM,

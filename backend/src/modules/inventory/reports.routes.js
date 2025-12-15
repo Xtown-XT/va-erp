@@ -8,6 +8,7 @@ router.get("/spares-summary", authorize("read"), reportsController.sparesSummary
 router.get("/spares-usage-log", authorize("read"), reportsController.sparesUsageLog);
 router.get("/production-sitewise", authorize("read"), reportsController.productionSitewise);
 router.get("/production-machinewise", authorize("read"), reportsController.productionMachinewise);
+router.get("/production-daywise", authorize("read"), reportsController.productionDaywise);
 router.get("/service-summary-sitewise", authorize("read"), reportsController.serviceSummarySitewise);
 
 export default router;

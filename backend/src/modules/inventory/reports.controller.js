@@ -395,6 +395,95 @@ class ReportsController {
             });
         }
     };
+    // Production Report: Day-wise breakdown for a specific site
+    productionDaywise = async (req, res) => {
+        try {
+            const { startDate, endDate, siteId } = req.query;
+
+            if (!startDate || !endDate || !siteId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "startDate, endDate, and siteId are required",
+                });
+            }
+
+            const results = await sequelize.query(`
+                SELECT 
+                    de.date,
+                    SUM(de.meter) as totalMeter,
+                    SUM(CASE 
+                        WHEN LOWER(m.machineType) LIKE '%crawler%' THEN de.machineHSD 
+                        ELSE 0 
+                    END) as totalCrawlerHSD,
+                    SUM(de.compressorHSD) as totalCompHSD,
+                    SUM(CASE 
+                        WHEN LOWER(m.machineType) LIKE '%camper%' OR LOWER(m.machineType) LIKE '%truck%' THEN de.machineHSD 
+                        ELSE 0 
+                    END) as totalCamperHSD,
+                    SUM(de.machineHSD + COALESCE(de.compressorHSD, 0)) as totalTotalHSD,
+                    SUM(CASE 
+                        WHEN LOWER(m.machineType) LIKE '%crawler%' THEN (de.machineClosingRPM - de.machineOpeningRPM) 
+                        ELSE 0 
+                    END) as totalCrawlerRPM,
+                    SUM(de.compressorClosingRPM - de.compressorOpeningRPM) as totalCompRPM,
+                    SUM(de.noOfHoles) as totalHoles,
+                    COUNT(de.id) as entryCount
+                FROM dailyEntry de
+                JOIN machine m ON de.machineId = m.id
+                WHERE de.siteId = :siteId 
+                  AND de.date BETWEEN :startDate AND :endDate
+                GROUP BY de.date
+                ORDER BY de.date
+            `, {
+                replacements: { startDate, endDate, siteId },
+                type: sequelize.QueryTypes.SELECT,
+            });
+
+            // Calculate ratios
+            const processedResults = results.map(row => {
+                const totalMeter = parseFloat(row.totalMeter) || 0;
+                const totalHoles = parseInt(row.totalHoles) || 0;
+                const totalCrawlerHSD = parseFloat(row.totalCrawlerHSD) || 0;
+                const totalCompHSD = parseFloat(row.totalCompHSD) || 0;
+                // const totalCamperHSD = parseFloat(row.totalCamperHSD) || 0; 
+                const totalTotalHSD = parseFloat(row.totalTotalHSD) || 0;
+                const totalCrawlerRPM = parseFloat(row.totalCrawlerRPM) || 0;
+                const totalCompRPM = parseFloat(row.totalCompRPM) || 0;
+
+                return {
+                    date: row.date,
+                    totalMeter,
+                    totalCrawlerHSD,
+                    totalCompHSD,
+                    totalCamperHSD: parseFloat(row.totalCamperHSD) || 0,
+                    totalTotalHSD,
+                    totalCrawlerRPM,
+                    totalCompRPM,
+                    totalHoles,
+                    avgDepth: totalHoles > 0 ? (totalMeter / totalHoles) : 0,
+                    hsdPerMeter: totalMeter > 0 ? (totalTotalHSD / totalMeter) : 0,
+                    meterPerRPM: totalCompRPM > 0 ? (totalMeter / totalCompRPM) : 0,
+                    crawlerHSDPerRPM: totalCrawlerRPM > 0 ? (totalCrawlerHSD / totalCrawlerRPM) : 0,
+                    compHSDPerRPM: totalCompRPM > 0 ? (totalCompHSD / totalCompRPM) : 0,
+                };
+            });
+
+            return res.json({
+                success: true,
+                data: processedResults,
+                // Meta info for frontend title/headers
+                dateRange: { startDate, endDate },
+            });
+
+        } catch (error) {
+            console.error("Error generating daywise production report:", error);
+            return res.status(500).json({
+                success: false,
+                message: error.message || "Failed to generate report",
+            });
+        }
+    };
+
     // Service Summary Report: Sitewise aggregation of services
     serviceSummarySitewise = async (req, res) => {
         try {

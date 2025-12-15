@@ -33,28 +33,7 @@ const Compressor = sequelize.define(
       allowNull: true,
       defaultValue: null,
     },
-    lastServiceRPM: {
-      type: DataTypes.DOUBLE,
-      allowNull: true,
-      defaultValue: 0,
-      comment: "@deprecated Use maintenanceConfig instead",
-    },
-    lastEngineServiceRPM: {
-      type: DataTypes.DOUBLE,
-      allowNull: true,
-      defaultValue: 0,
-      comment: "@deprecated Use maintenanceConfig instead",
-    },
-    serviceCycleRpm: {
-      type: DataTypes.INTEGER,
-      defaultValue: 250,
-      comment: "@deprecated",
-    },
-    engineServiceCycleRpm: {
-      type: DataTypes.INTEGER,
-      defaultValue: 300,
-      comment: "@deprecated",
-    },
+
     maintenanceConfig: {
       type: DataTypes.JSON,
       allowNull: true,

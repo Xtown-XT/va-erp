@@ -101,8 +101,30 @@ const MaintenanceModal = ({ visible, onClose, asset, assetType, onSuccess, sites
 
             await api.put(endpoint, { maintenanceConfig: rawConfig });
             message.success("Configuration saved");
+
+            // Optimistic Update / Calculated Local State
+            const currentRPM = assetType === 'machine' ? (asset.machineRPM || 0) : (asset.compressorRPM || 0);
+            const calculatedItem = {
+                ...newConfigItem,
+                nextServiceRPM: (newConfigItem.lastServiceRPM || 0) + newConfigItem.cycle,
+                status: 'OK', // Default, will be refreshed
+                percentage: 0
+            };
+
+            // Re-calculate basic status for immediate display
+            const remaining = calculatedItem.nextServiceRPM - currentRPM;
+            calculatedItem.status = remaining <= 0 ? 'Overdue' : (remaining <= 50 ? 'Due Soon' : 'OK');
+            calculatedItem.percentage = Math.min(100, Math.max(0, (remaining / calculatedItem.cycle) * 100));
+
+            // Update local state
+            if (editingConfig) {
+                setConfig(prev => prev.map(c => c.name === editingConfig.name ? calculatedItem : c));
+            } else {
+                setConfig(prev => [...prev, calculatedItem]);
+            }
+
             setIsConfigModalVisible(false);
-            fetchMaintenanceStatus();
+            fetchMaintenanceStatus(); // Background refresh
 
         } catch (err) {
             console.error(err);
