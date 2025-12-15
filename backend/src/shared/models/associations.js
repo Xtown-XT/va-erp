@@ -15,6 +15,7 @@ import Address from "../../modules/address/address.model.js";
 
 // New Models
 import DrillingToolItems from "../../modules/drillingTools/drillingToolItems.model.js";
+import DrillingToolLog from "../../modules/drillingTools/drillingToolLog.model.js";
 import PurchaseOrder from "../../modules/inventory/models/purchaseOrder.model.js";
 import PurchaseOrderItem from "../../modules/inventory/models/purchaseOrderItem.model.js";
 import ServiceHistory from "../../modules/service/models/serviceHistory.model.js";
@@ -72,6 +73,12 @@ export const defineAssociations = () => {
     otherKey: "employeeId",
     as: "employees",
   });
+
+  DailyEntry.hasMany(ServiceHistory, { foreignKey: "dailyEntryId", as: "services" });
+  ServiceHistory.belongsTo(DailyEntry, { foreignKey: "dailyEntryId", as: "dailyEntry" });
+
+  DailyEntry.hasMany(DrillingToolLog, { foreignKey: "dailyEntryId", as: "drillingLogs" });
+  DrillingToolLog.belongsTo(DailyEntry, { foreignKey: "dailyEntryId", as: "dailyEntry" });
 
   // ========== EMPLOYEE ATTENDANCE RELATIONSHIPS ==========
   Site.hasMany(EmployeeAttendance, { foreignKey: "siteId", as: "attendances" });
@@ -151,6 +158,8 @@ export const defineAssociations = () => {
   PurchaseOrder.belongsTo(Address, { foreignKey: "addressId", as: "address" });
   PurchaseOrder.belongsTo(Address, { foreignKey: "shippingAddressId", as: "shippingAddress" });
 
-  // PurchaseOrder Address Associations
-
+  // ========== DRILLING TOOL LOGS RELATIONSHIPS ==========
+  // Missing association causing EagerLoadingError
+  DrillingToolLog.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
+  DrillingTools.hasMany(DrillingToolLog, { foreignKey: "drillingToolId", as: "logs" });
 };

@@ -93,11 +93,12 @@ const initializeDatabase = async () => {
 
     defineAssociations();
 
-    await sequelize.sync({ alter: true }); // Sync with schema alterations enabled
-    // await sequelize.sync(); // Disabled simple sync
+
+    await sequelize.sync({ alter: true }); 
+ 
     console.log("✅ Database synced");
 
-    // await seedAdminUser(); // Removed as per request (use seed_admin.md)
+
 
   } catch (error) {
     console.error("❌ Database initialization failed:", error.message);

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Card, Table, Button, Select, InputNumber, Row, Col, Space, Popconfirm, Tag, message } from "antd";
 import { PlusOutlined, DeleteOutlined, ToolOutlined } from "@ant-design/icons";
-import { useItemsByType } from "../hooks/useQueries"; // Assuming hook exists
+import { useSiteStock } from "../hooks/useQueries";
 
 const DrillingToolsSection = ({
     drillingTools, // Array of tools
@@ -11,7 +11,10 @@ const DrillingToolsSection = ({
     compressorName,
     siteId
 }) => {
-    const { data: availableHammerBits = [] } = useItemsByType('hammer_bit', siteId); // Fetch tools with stock
+    // Fetch Site Stock (contains { spares: [], tools: [] })
+    const { data: stockData } = useSiteStock(siteId);
+    const availableTools = stockData?.tools || [];
+
     const [selectedItem, setSelectedItem] = useState(null);
     const [quantity, setQuantity] = useState(1);
 
@@ -61,9 +64,9 @@ const DrillingToolsSection = ({
     ];
 
     // Filter out available tools
-    const toolOptions = availableHammerBits.map(t => ({
-        label: `${t.itemName} (${t.partNumber}) - Stock: ${t.balance}`,
-        value: t.id,
+    const toolOptions = availableTools.map(t => ({
+        label: `${t.name} (${t.partNumber}) - Stock: ${t.quantity}`,
+        value: t.toolId,
         item: t
     }));
 
@@ -79,7 +82,7 @@ const DrillingToolsSection = ({
                         placeholder="Select Drilling Tool to Fit"
                         showSearch
                         optionFilterProp="label"
-                        value={selectedItem ? selectedItem.id : null}
+                        value={selectedItem ? selectedItem.toolId : null}
                         onChange={(val, opt) => setSelectedItem(opt.item)}
                         options={toolOptions}
                     />

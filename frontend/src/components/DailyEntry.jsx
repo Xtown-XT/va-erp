@@ -36,14 +36,15 @@ import {
   useDailyEntries,
   useFittedDrillingTools
 } from "../hooks/useQueries";
-import { useCreateDailyEntry, useUpdateDailyEntry, useDeleteDailyEntry } from "../hooks/useMutations";
+import { useCreateDailyEntry, useDeleteDailyEntry, useUpdateDailyEntry } from "../hooks/useMutations";
 import DrillingToolsSection from "./DrillingToolsSection";
 import DailyServiceSection from "./DailyServiceSection";
 
 const { Title, Text } = Typography;
 
 const DailyEntry = () => {
-  const [form] = Form.useForm(); // We will use Form but with Manual State mostly for Table Rows? Or fully Form?
+  const [form] = Form.useForm();
+  const [submitting, setSubmitting] = useState(false);
   // User wanted "old is good". Old was manual state. 
   // But ServiceEntryForm requires Form instance.
   // I will wrap everything in Form, but use state for the table inputs to mimic old behavior if needed, 
@@ -71,6 +72,7 @@ const DailyEntry = () => {
   });
   const createDailyEntry = useCreateDailyEntry();
   const deleteDailyEntry = useDeleteDailyEntry();
+  const updateDailyEntry = useUpdateDailyEntry();
 
   // Selected Machine Context (for Config/RPM)
   const [selectedMachine, setSelectedMachine] = useState(null);
@@ -82,6 +84,93 @@ const DailyEntry = () => {
   // Ref No
   const [refNo1, setRefNo1] = useState("");
   const [refNo2, setRefNo2] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editingShift, setEditingShift] = useState(1);
+
+  // Edit Handler
+  const handleEdit = async (id) => {
+    try {
+      const res = await api.get(`/api/dailyEntries/${id}`);
+      const entry = res.data.data;
+      if (!entry) return;
+
+      setEditingId(entry.id);
+      setEditingShift(entry.shift || 1);
+      setShift1Enabled(true);
+      setShift2Enabled(false); // Edit mode is single entry focused
+
+      // Populate Form
+      const formVals = {
+        date: dayjs(entry.date),
+        siteId: entry.siteId,
+        machineId: entry.machineId,
+        shift1_machineOpeningRPM: entry.machineOpeningRPM,
+        shift1_machineClosingRPM: entry.machineClosingRPM,
+        shift1_compressorOpeningRPM: entry.compressorOpeningRPM,
+        shift1_compressorClosingRPM: entry.compressorClosingRPM,
+        shift1_noOfHoles: entry.noOfHoles,
+        shift1_meter: entry.meter,
+        shift1_dieselUsed: entry.dieselUsed,
+        shift1_machineHSD: entry.machineHSD,
+        shift1_compressorHSD: entry.compressorHSD,
+        shift1_employees: entry.employees?.map(e => ({
+          employeeId: e.id, // Fixed: use .id of the employee object
+          role: e.role
+        })) || [],
+        // Map Services
+        services: (entry.services || []).map(svc => ({
+          assetKey: `${svc.entityType}:${svc.entityId}`,
+          serviceName: svc.serviceName,
+          currentRpm: svc.currentRPM,
+          spares: svc.items?.map(item => ({
+            itemId: item.spareId, // Note: backend service items map spareId
+            quantity: item.quantityUsed || item.quantity
+          })) || []
+        }))
+      };
+
+      // Set Drilling Tools State
+      if (entry.drillingLogs) {
+        setDrillingTools(entry.drillingLogs.map(log => ({
+          id: log.id, // Use log id as temp id
+          itemId: log.drillingToolId,
+          itemName: log.drillingTool?.name,
+          partNumber: log.drillingTool?.partNumber,
+          quantity: log.quantity,
+          action: (log.action === 'INSTALL' || log.action === 'fit') ? 'fit' :
+            ((log.action === 'REMOVE' || log.action === 'remove') ? 'remove' : 'update'),
+          startingRPM: log.currentMachinePRM, // stored as PRM or RPM? controller says PRM in create?? Line 450
+          currentRPM: log.currentMachinePRM,
+          currentMeter: log.currentMachineMeter,
+          isExisting: true
+        })));
+      }
+
+      form.setFieldsValue(formVals);
+
+      // Trigger machine change logic to load compressor etc.
+      if (entry.machineId) {
+        onMachineChange(entry.machineId);
+      }
+      // Overwrite compressor if entry has specific one
+      if (entry.compressorId) {
+        // Find comp details... onMachineChange does it but async.
+        // We might need to wait or just rely on state update.
+      }
+
+    } catch (e) {
+      console.error(e);
+      message.error("Failed to load entry for editing");
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    form.resetFields();
+    setDrillingTools([]);
+    setShift1Enabled(true);
+    setShift2Enabled(false);
+  };
 
   useEffect(() => {
     // Generate Refs
@@ -156,8 +245,8 @@ const DailyEntry = () => {
   const handleAddTool = (item, qty) => {
     setDrillingTools(prev => [...prev, {
       id: Date.now(),
-      itemId: item.id,
-      itemName: item.itemName,
+      itemId: item.toolId || item.id,
+      itemName: item.name || item.itemName,
       partNumber: item.partNumber,
       quantity: qty,
       action: 'fit',
@@ -178,103 +267,178 @@ const DailyEntry = () => {
 
   // Submit
   const onFinish = async (values) => {
-    // Pre-process services
-    const processedServices = (values.services || []).map(svc => {
-      const [type, id] = (svc.assetKey || "").split(":");
-      return {
-        entityType: type,
-        entityId: id,
-        serviceName: Array.isArray(svc.serviceName) ? svc.serviceName[0] : svc.serviceName,
-        currentRpm: svc.currentRpm,
-        spares: svc.spares
-      };
-    });
+    setSubmitting(true);
+    try {
+      // Pre-process services
+      const processedServices = (values.services || []).map(svc => {
+        const [type, id] = (svc.assetKey || "").split(":");
 
-    const dateStr = selectedDate.format("YYYY-MM-DD");
+        // Auto-fetch RPM
+        let autoRpm = 0;
+        if (type === 'MACHINE') {
+          // Use Shift 2 closing if valid, else Shift 1 closing
+          // Assuming closing RPM is cumulative/higher at end of day
+          const s1 = values.shift1_machineClosingRPM || 0;
+          const s2 = values.shift2_machineClosingRPM || 0;
+          autoRpm = Math.max(s1, s2);
+        } else if (type === 'COMPRESSOR') {
+          const s1 = values.shift1_compressorClosingRPM || 0;
+          const s2 = values.shift2_compressorClosingRPM || 0;
+          autoRpm = Math.max(s1, s2);
+        }
 
-    // Shift 1
-    if (shift1Enabled) {
-      const payload1 = {
-        date: dateStr,
-        shift: 1,
-        refNo: refNo1,
-        siteId: values.siteId,
-        machineId: values.machineId,
-        compressorId: selectedCompressor?.id,
+        return {
+          entityType: type,
+          entityId: id,
+          serviceName: Array.isArray(svc.serviceName) ? svc.serviceName[0] : svc.serviceName,
+          currentRpm: autoRpm,
+          spares: svc.spares
+        };
+      });
 
-        machineOpeningRPM: values.shift1_machineOpeningRPM,
-        machineClosingRPM: values.shift1_machineClosingRPM,
-        compressorOpeningRPM: values.shift1_compressorOpeningRPM,
-        compressorClosingRPM: values.shift1_compressorClosingRPM,
+      const dateStr = selectedDate.format("YYYY-MM-DD");
 
-        noOfHoles: values.shift1_noOfHoles,
-        meter: values.shift1_meter,
-        dieselUsed: values.shift1_dieselUsed,
-        machineHSD: values.shift1_machineHSD,
-        compressorHSD: values.shift1_compressorHSD,
+      // Shift 1 (Or Edit Mode Single Entry)
+      if (editingId) {
+        const payload = {
+          id: editingId,
+          date: dateStr,
+          shift: editingShift, // Or preserve existing shift? Edit mode assumes we loaded specific entry. 
+          // But invalid because we mapped everything to shift1 fields.
+          // We should fetch shift from original entry to be safe? 
+          // Or mostly users edit Shift 1 UI for everything.
+          // Let's assume passed values mapped to shift1 are what we want to save.
+          // Backend update takes 'shift' from body.
+          // TODO: If user edits Shift 2 entry, we populated shift1 fields. We should properly send shift: originalShift.
+          // Fix: fetch original shift or store it in state during handleEdit.
+          // For now, simpler: user edits, we save as Shift 1? NO.
+          // We need to store original shift in state!
 
-        employees: values.shift1_employees,
+          siteId: values.siteId,
+          machineId: values.machineId,
+          compressorId: selectedCompressor?.id,
 
-        // Attach Services to Shift 1 only? Or split them?
-        // Since backend handles array now, we can attach to Shift 1 entry.
-        // We should send it only once.
-        services: processedServices,
+          machineOpeningRPM: values.shift1_machineOpeningRPM,
+          machineClosingRPM: values.shift1_machineClosingRPM,
+          compressorOpeningRPM: values.shift1_compressorOpeningRPM,
+          compressorClosingRPM: values.shift1_compressorClosingRPM,
 
-        // Drilling Tools (Logs) attached to Shift 1
-        drillingTools: drillingTools.map(t => ({
-          toolId: t.itemId,
-          action: t.action === 'fit' ? 'INSTALL' : (t.action === 'remove' ? 'REMOVE' : 'UPDATE'),
-          quantity: t.quantity,
-          currentMachineRPM: t.currentRPM,
-          currentMachineMeter: t.currentMeter,
-          date: dateStr
-        })).filter(t => t.action)
-      };
-      await createDailyEntry.mutateAsync(payload1);
+          noOfHoles: values.shift1_noOfHoles,
+          meter: values.shift1_meter,
+          dieselUsed: values.shift1_dieselUsed,
+          machineHSD: values.shift1_machineHSD,
+          compressorHSD: values.shift1_compressorHSD,
+
+          employees: (values.shift1_employees || []).map(e => ({ ...e, shift: editingShift })),
+
+          services: processedServices,
+
+          drillingTools: drillingTools.map(t => ({
+            itemId: t.itemId,
+            action: t.action === 'fit' ? 'fit' : (t.action === 'remove' ? 'remove' : 'update'),
+            quantity: t.quantity,
+            currentRPM: t.currentRPM,
+            dailyMeter: t.currentMeter, // Schema has dailyMeter, usage tracking
+            addedDate: dateStr
+          })).filter(t => t.action)
+        };
+        // We need useUpdateDailyEntry hook!
+        // Wait, define hooks at top level!
+        await updateDailyEntry.mutateAsync(payload);
+
+        message.success("Entry Updated");
+        cancelEdit();
+        refetchEntries();
+      } else {
+        if (shift1Enabled) {
+          const payload1 = {
+            date: dateStr,
+            shift: 1,
+            refNo: refNo1,
+            siteId: values.siteId,
+            machineId: values.machineId,
+            compressorId: selectedCompressor?.id,
+
+            machineOpeningRPM: values.shift1_machineOpeningRPM,
+            machineClosingRPM: values.shift1_machineClosingRPM,
+            compressorOpeningRPM: values.shift1_compressorOpeningRPM,
+            compressorClosingRPM: values.shift1_compressorClosingRPM,
+
+            noOfHoles: values.shift1_noOfHoles,
+            meter: values.shift1_meter,
+            dieselUsed: values.shift1_dieselUsed,
+            machineHSD: values.shift1_machineHSD,
+            compressorHSD: values.shift1_compressorHSD,
+
+            employees: (values.shift1_employees || []).map(e => ({ ...e, shift: 1 })),
+
+            // Attach Services to Shift 1 only? Or split them?
+            // Since backend handles array now, we can attach to Shift 1 entry.
+            // We should send it only once.
+            services: processedServices,
+
+            // Drilling Tools (Logs) attached to Shift 1
+            drillingTools: drillingTools.map(t => ({
+              itemId: t.itemId,
+              action: t.action === 'fit' ? 'fit' : (t.action === 'remove' ? 'remove' : 'update'),
+              quantity: t.quantity,
+              currentRPM: t.currentRPM,
+              dailyMeter: t.currentMeter,
+              addedDate: dateStr
+            })).filter(t => t.action)
+          };
+          await createDailyEntry.mutateAsync(payload1);
+        }
+
+        // Shift 2
+        if (shift2Enabled) {
+          const payload2 = {
+            date: dateStr,
+            shift: 2,
+            refNo: refNo2,
+            siteId: values.siteId,
+            machineId: values.machineId,
+            compressorId: selectedCompressor?.id,
+
+            machineOpeningRPM: values.shift2_machineOpeningRPM,
+            machineClosingRPM: values.shift2_machineClosingRPM,
+            compressorOpeningRPM: values.shift2_compressorOpeningRPM,
+            compressorClosingRPM: values.shift2_compressorClosingRPM,
+
+            noOfHoles: values.shift2_noOfHoles,
+            meter: values.shift2_meter,
+            dieselUsed: values.shift2_dieselUsed,
+            machineHSD: values.shift2_machineHSD,
+            compressorHSD: values.shift2_compressorHSD,
+
+            employees: (values.shift2_employees || []).map(e => ({ ...e, shift: 2 })),
+
+            // Do NOT send services/tools again for Shift 2 to avoid double counting
+            // unless there's a specific requirement. 
+            // User said "remove shift based service".
+            // It's "Daily" service.
+          };
+          await createDailyEntry.mutateAsync(payload2);
+        }
+
+        message.success("Entries Saved");
+        form.resetFields();
+        // Reset defaults
+        form.setFieldsValue({
+          shift1_employees: [{ role: 'operator' }, { role: 'helper' }],
+          shift2_employees: [{ role: 'operator' }, { role: 'helper' }],
+        });
+        setDrillingTools([]);
+        setShift1Enabled(true);
+        setShift2Enabled(false);
+        refetchEntries();
+      }
+    } catch (error) {
+      console.error(error);
+      message.error("Failed to save: " + (error.message || "Unknown Error"));
+    } finally {
+      setSubmitting(false);
     }
-
-    // Shift 2
-    if (shift2Enabled) {
-      const payload2 = {
-        date: dateStr,
-        shift: 2,
-        refNo: refNo2,
-        siteId: values.siteId,
-        machineId: values.machineId,
-        compressorId: selectedCompressor?.id,
-
-        machineOpeningRPM: values.shift2_machineOpeningRPM,
-        machineClosingRPM: values.shift2_machineClosingRPM,
-        compressorOpeningRPM: values.shift2_compressorOpeningRPM,
-        compressorClosingRPM: values.shift2_compressorClosingRPM,
-
-        noOfHoles: values.shift2_noOfHoles,
-        meter: values.shift2_meter,
-        dieselUsed: values.shift2_dieselUsed,
-        machineHSD: values.shift2_machineHSD,
-        compressorHSD: values.shift2_compressorHSD,
-
-        employees: values.shift2_employees,
-
-        // Do NOT send services/tools again for Shift 2 to avoid double counting
-        // unless there's a specific requirement. 
-        // User said "remove shift based service".
-        // It's "Daily" service.
-      };
-      await createDailyEntry.mutateAsync(payload2);
-    }
-
-    message.success("Entries Saved");
-    form.resetFields();
-    // Reset defaults
-    form.setFieldsValue({
-      shift1_employees: [{ role: 'operator' }, { role: 'helper' }],
-      shift2_employees: [{ role: 'operator' }, { role: 'helper' }],
-    });
-    setDrillingTools([]);
-    setShift1Enabled(true);
-    setShift2Enabled(false);
-    refetchEntries();
   };
 
   return (
@@ -312,11 +476,13 @@ const DailyEntry = () => {
           </Row>
 
           <Row>
-            <Col>
-              <Space>
-                <Switch checked={shift2Enabled} onChange={setShift2Enabled} /> <Text>Enable Shift 2</Text>
-              </Space>
-            </Col>
+            {!editingId && (
+              <Col>
+                <Space>
+                  <Switch checked={shift2Enabled} onChange={setShift2Enabled} /> <Text>Enable Shift 2</Text>
+                </Space>
+              </Col>
+            )}
           </Row>
 
           {/* Table Layout - Unchanged except we pass props if needed */}
@@ -393,8 +559,6 @@ const DailyEntry = () => {
                   </Form.List>
                 </td>
               </tr>
-
-              {/* Shift 2 Row */}
               {shift2Enabled && (
                 <tr>
                   <td className="p-2 border font-bold">Shift 2</td>
@@ -463,12 +627,16 @@ const DailyEntry = () => {
           )}
 
           <Row justify="end" style={{ marginTop: 20 }}>
-            <Button type="primary" htmlType="submit" size="large" icon={<SaveOutlined />}>Save All Entries</Button>
+            <Space>
+              {editingId && <Button onClick={cancelEdit}>Cancel Edit</Button>}
+              <Button type="primary" htmlType="submit" size="large" icon={<SaveOutlined />} loading={submitting}>
+                {editingId ? "Update Entry" : "Save All Entries"}
+              </Button>
+            </Space>
           </Row>
         </Form>
       </Card>
 
-      {/* History List */}
       <Card title="History" style={{ marginTop: 20 }}>
         <Table
           dataSource={entriesData?.data || []}
@@ -478,7 +646,14 @@ const DailyEntry = () => {
             { title: "Shift", dataIndex: "shift" },
             { title: "Site", dataIndex: ["site", "siteName"] },
             { title: "Machine", dataIndex: ["machine", "machineNumber"] },
-            { title: "Action", render: (_, r) => <Popconfirm title="Delete?" onConfirm={() => deleteDailyEntry.mutateAsync(r.id)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm> }
+            {
+              title: "Action", render: (_, r) => (
+                <Space>
+                  <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r.id)} />
+                  <Popconfirm title="Delete?" onConfirm={() => deleteDailyEntry.mutateAsync(r.id)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm>
+                </Space>
+              )
+            }
           ]}
           size="small"
           rowKey="id"

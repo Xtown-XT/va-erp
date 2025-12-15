@@ -107,7 +107,8 @@ export const InventoryController = {
                     spareId: s.spareId,
                     name: s.spare?.name,
                     quantity: s.quantity,
-                    partNumber: s.spare?.partNumber
+                    partNumber: s.spare?.partNumber,
+                    type: s.spare?.spareType
                 }));
 
                 const tools = stocks.filter(s => s.drillingToolId).map(s => ({
@@ -125,7 +126,7 @@ export const InventoryController = {
                     siteId: site.id,
                     siteName: site.siteName,
                     sparesCount: spares.reduce((sum, s) => sum + s.quantity, 0),
-                    toolsCount: tools.length,
+                    toolsCount: tools.reduce((sum, t) => sum + t.quantity, 0),
                     spares,
                     tools
                 };
@@ -160,7 +161,7 @@ export const InventoryController = {
                 transaction: t
             });
 
-            const qtyChange = quantity;
+            const qtyChange = Number(quantity);
 
             if (!stock) {
                 if (mode === 'add' && qtyChange < 0) {

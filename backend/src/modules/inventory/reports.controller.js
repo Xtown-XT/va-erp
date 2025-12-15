@@ -151,17 +151,8 @@ class ReportsController {
                 });
             }
 
-            const whereClause = {
-                serviceDate: {
-                    [Op.between]: [startDate, endDate],
-                }
-            };
-
-            if (siteId) {
-                whereClause.siteId = siteId;
-            }
-
-            const usage = await ServiceItem.findAll({
+            // 1. Fetch Spares Usage (ServiceItem)
+            const sparesUsage = await ServiceItem.findAll({
                 attributes: ["id", "quantity", "spareId", "itemType"],
                 include: [
                     {
@@ -189,17 +180,88 @@ class ReportsController {
                 order: [[{ model: ServiceHistory, as: "serviceHistory" }, "serviceDate", "DESC"]]
             });
 
-            const data = usage.map(u => ({
+            const sparesData = sparesUsage.map(u => ({
                 id: u.id,
-                date: u.serviceHistory?.serviceDate,
+                fittedDate: u.serviceHistory?.serviceDate, // Map serviceDate to fittedDate for uniform sorting
                 siteName: u.serviceHistory?.site?.siteName,
-                spareName: u.spare?.name,
-                partNumber: u.spare?.partNumber,
+                item: {
+                    itemName: u.spare?.name,
+                    partNumber: u.spare?.partNumber,
+                },
                 quantity: u.quantity,
-                serviceType: u.serviceHistory?.serviceType,
-                machineNumber: u.serviceHistory?.machine?.machineNumber,
-                compressorName: u.serviceHistory?.compressor?.compressorName
+                serviceType: u.serviceHistory?.serviceType || 'spare',
+                machine: u.serviceHistory?.machine,
+                compressor: u.serviceHistory?.compressor,
+                machineId: u.serviceHistory?.machineId,
+                compressorId: u.serviceHistory?.compressorId,
+                status: 'consumed' // Spares are consumed immediately
             }));
+
+            // 2. Fetch Drilling Tool Usage (DrillingToolInstallation)
+            // Filter by fittedDate or removedDate overlapping the range? 
+            // Or just fittedDate in range? Usually logs show activity in range.
+            // Let's use fittedDate for now to align with "Spares Usage Log".
+
+            // Need to import model first! Assuming I can add it to imports or it's available.
+            // Wait, need to check if imported. If not, add import at top of file.
+            const { default: DrillingToolInstallation } = await import("../drillingTools/drillingToolInstallation.model.js");
+            const { default: DrillingTools } = await import("../drillingTools/drillingTools.model.js");
+
+            const toolsWhere = {
+                fittedDate: { [Op.between]: [startDate, endDate] }
+            };
+            if (siteId) toolsWhere.siteId = siteId;
+
+            const toolsUsage = await DrillingToolInstallation.findAll({
+                where: toolsWhere,
+                include: [
+                    { model: DrillingTools, as: "drillingTool", attributes: ["name", "partNumber"] },
+                    { model: Site, as: "site", attributes: ["siteName"] },
+                    { model: Machine, as: "machine", attributes: ["machineNumber"] },
+                    // { model: Compressor, as: "compressor", attributes: ["compressorName"] } // Installation currently links to machine/site principally? 
+                    // Model def Check: machineId, siteId. No compressorId in Installation model definition I saw? 
+                    // Checking Task 553 output: attributes are machineId, siteId, drillingToolId. No compressorId.
+                    // But in dailyEntry controller line 446 it uses currentCompressorRPM. 
+                    // The Installation model links to Machine primarily. Tools on compressor? 
+                    // If compressors uses tools, Installation model needs compressorId? 
+                    // Line 41 in model definition file doesn't show compressorId... 
+                    // Wait, dailyEntry controller line 475 creates with: drillingToolId, machineId, siteId.
+                    // Where does it handle compressor tools?
+                    // dailyEntry controller line 753 checks compressorRPM.
+                    // But create() call at 754 passes `compressorId` to `processDrillingTools`.
+                    // `processDrillingTools` at 475 calls `DrillingToolInstallation.create`.
+                    // IF `machineId` is passed, it uses it. If tool is on compressor, is `machineId` null?
+                    // Model at 553: machineId allowNull: false.
+                    // So tools are always linked to a machine?
+                    // User request said: "show in report for that vehicle in that site".
+                    // So assuming Machine link is fine.
+                ]
+            });
+
+            const toolsData = toolsUsage.map(t => {
+                const totalRPM = t.removedRPM ? (t.removedRPM - (t.fittedRPM || 0)) : 0;
+                // If active, maybe show currentRPM - fittedRPM? But we don't have real-time currentRPM here easily unless linked to machine status.
+                // User asked "removed rpm - fitted rpm is total rpm". So mostly relevant for removed items.
+
+                return {
+                    id: t.id,
+                    fittedDate: t.fittedDate,
+                    siteName: t.site?.siteName,
+                    item: {
+                        itemName: t.drillingTool?.name,
+                        partNumber: t.drillingTool?.partNumber
+                    },
+                    quantity: 1, // Installations are always single items tracking
+                    serviceType: 'drilling_tool',
+                    machine: t.machine,
+                    machineId: t.machineId,
+                    totalRPMRun: totalRPM,
+                    totalMeterRun: t.currentAccumulatedMeter, // Tracks total meter for this installation
+                    status: t.status === 'ACTIVE' ? 'fitted' : 'removed'
+                };
+            });
+
+            const data = [...sparesData, ...toolsData].sort((a, b) => new Date(b.fittedDate) - new Date(a.fittedDate));
 
             return res.json({
                 success: true,

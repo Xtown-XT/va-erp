@@ -1,7 +1,7 @@
 import DailyEntry from "./dailyEntry.model.js";
 import Machine from "../machine/machine.model.js";
 import Compressor from "../compressor/compressor.model.js";
-import Service from "../service/serviceHistory.model.js";
+import Service from "../service/models/serviceHistory.model.js";
 import EmployeeList from "../employee/employeeList.model.js";
 import SiteStock from "../inventory/models/siteStock.model.js";
 import DrillingToolItems from "../drillingTools/drillingToolItems.model.js";
@@ -14,6 +14,7 @@ import DailyEntryEmployee from "./dailyEntryEmployee.model.js";
 import { Op } from "sequelize";
 import DrillingToolInstallation from "../drillingTools/drillingToolInstallation.model.js";
 import DrillingToolLog from "../drillingTools/drillingToolLog.model.js";
+import ServiceItem from "../service/models/serviceItem.model.js";
 
 // 1. Create CRUD service from model
 const DailyEntryCrud = new BaseCrud(DailyEntry);
@@ -54,9 +55,8 @@ class DailyEntryCustomController extends BaseController {
       const { compressorId, machineId } = req.query;
       const where = {};
 
-      // Filter logs by compressor/machine if provided
-      // Note: Tools are fitted to a compressor or machine.
-      if (compressorId) where.compressorId = compressorId;
+      // Filter logs by machine if provided (Tools are fitted to machine)
+      // Note: DrillingToolLog does not track compressorId, so we ignore it if passed.
       if (machineId) where.machineId = machineId;
 
       // Fetch all logs for relevant scope
@@ -64,7 +64,7 @@ class DailyEntryCustomController extends BaseController {
         where: where,
         order: [['date', 'ASC'], ['createdAt', 'ASC']],
         include: [
-          { model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'serialNumber'] }
+          { model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber'] }
         ]
       });
 
@@ -225,6 +225,12 @@ class DailyEntryCustomController extends BaseController {
           },
           { model: Machine, as: "machine", attributes: ["id", "machineType", "machineNumber"] },
           { model: Site, as: "site", attributes: ["id", "siteName"] },
+          { model: Service, as: "services", include: [{ model: ServiceItem, as: 'items' }] }, // Include items if needed for detailed edit
+          {
+            model: DrillingToolLog,
+            as: "drillingLogs",
+            include: [{ model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber', 'copyRpm'] }]
+          },
         ],
       });
       if (!entry) return res.status(404).json({ success: false, message: "DailyEntry not found" });

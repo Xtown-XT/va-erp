@@ -40,17 +40,7 @@ const Machine = sequelize.define(
             },
         },
 
-        /**
-         * maintenanceConfig: [
-         *   {
-         *     id: "uuid",
-         *     name: "Hydraulic Oil",
-         *     cycle: 3000,
-         *     lastServiceRPM: 1050,
-         *     alertThreshold: 50
-         *   }
-         * ]
-         */
+  
         maintenanceConfig: {
             type: DataTypes.JSON,
             allowNull: true,

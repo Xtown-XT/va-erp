@@ -1,7 +1,7 @@
 import React from "react";
 import { Form, Button, Select, InputNumber, Row, Col, Card } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
-import { useItemsByType } from "../hooks/useQueries";
+import { useItemsByType, useSiteStock } from "../hooks/useQueries";
 
 const DailyServiceSection = ({ machines, compressor, form, siteId }) => {
     // Determine assets available for service
@@ -9,11 +9,23 @@ const DailyServiceSection = ({ machines, compressor, form, siteId }) => {
     const watchedMachineId = Form.useWatch('machineId', form);
     const watchedCompressorId = Form.useWatch('compressorId', form);
 
-    const machine = machines.find(m => m.id === watchedMachineId);
-    const compressorId = watchedCompressorId || machine?.compressorId;
+    const { data: stockData } = useSiteStock(siteId);
+    const spares = stockData?.spares || [];
 
-    // Fetch spares with stock for the selected site
-    const { data: spares = [] } = useItemsByType('spare', siteId);
+    const machine = machines.find(m => m.id === watchedMachineId);
+
+    // Helper to safely parse config
+    const getSafeConfig = (config) => {
+        if (!config) return [];
+        if (Array.isArray(config)) return config;
+        if (typeof config === 'string') {
+            try { return JSON.parse(config); } catch (e) { return []; }
+        }
+        return [];
+    };
+
+    const machineConfig = getSafeConfig(machine?.maintenanceConfig);
+    const compressorConfig = getSafeConfig(compressor?.maintenanceConfig);
 
     const assetOptions = [];
     if (machine) assetOptions.push({ label: `Machine: ${machine.machineNumber}`, value: `MACHINE:${machine.id}` });
@@ -39,77 +51,101 @@ const DailyServiceSection = ({ machines, compressor, form, siteId }) => {
                                     </Col>
                                     <Col span={6}>
                                         <Form.Item
-                                            {...restField}
-                                            name={[name, 'serviceName']}
-                                            label="Service Name"
-                                            rules={[{ required: true }]}
+                                            noStyle
+                                            shouldUpdate={(prevValues, curValues) =>
+                                                prevValues.services?.[name]?.assetKey !== curValues.services?.[name]?.assetKey
+                                            }
                                         >
-                                            <Select
-                                                mode="tags"
-                                                placeholder="Service Name"
-                                                onDropdownVisibleChange={(open) => {
-                                                    // Optional: Fetch latest config if needed, but prop update should suffice
-                                                }}
-                                            >
-                                                {/* Dynamic Options based on selected asset in this row */}
-                                                <Select.Option value="Breakdown">Breakdown</Select.Option>
-                                                <Select.Option value="General Service">General Service</Select.Option>
-                                                {/* Logic to inject machine/compressor config options */}
-                                                {(fields.map(f => form.getFieldValue(['services', f.name, 'assetKey'])).find((val, idx) => idx === fields.findIndex(x => x.key === key))?.startsWith('MACHINE') && machine?.maintenanceConfig || []).map(c => (
-                                                    <Select.Option key={c.name} value={c.name}>{c.name}</Select.Option>
-                                                ))}
-                                                {(fields.map(f => form.getFieldValue(['services', f.name, 'assetKey'])).find((val, idx) => idx === fields.findIndex(x => x.key === key))?.startsWith('COMPRESSOR') && compressor?.maintenanceConfig || []).map(c => (
-                                                    <Select.Option key={c.name} value={c.name}>{c.name}</Select.Option>
-                                                ))}
-                                            </Select>
+                                            {() => {
+                                                const assetKey = form.getFieldValue(['services', name, 'assetKey']);
+                                                let configOptions = [];
+
+                                                if (assetKey?.startsWith('MACHINE')) {
+                                                    if (assetKey.includes(`:${machine?.id}`)) {
+                                                        configOptions = machineConfig;
+                                                    }
+                                                } else if (assetKey?.startsWith('COMPRESSOR')) {
+                                                    if (assetKey.includes(`:${compressor?.id}`)) {
+                                                        configOptions = compressorConfig;
+                                                    }
+                                                }
+
+                                                return (
+                                                    <Form.Item
+                                                        {...restField}
+                                                        name={[name, 'serviceName']}
+                                                        label="Service Name"
+                                                        rules={[{ required: true, message: 'Select a Service' }]}
+                                                    >
+                                                        <Select
+                                                            placeholder="Select Service"
+                                                        >
+                                                            {configOptions.map(c => (
+                                                                <Select.Option key={c.name} value={c.name}>{c.name}</Select.Option>
+                                                            ))}
+                                                        </Select>
+                                                    </Form.Item>
+                                                );
+                                            }}
                                         </Form.Item>
                                     </Col>
-                                    <Col span={4}>
-                                        <Form.Item
-                                            {...restField}
-                                            name={[name, 'currentRpm']}
-                                            label="Current RPM"
-                                        >
-                                            <InputNumber className="w-full" placeholder="Auto" />
-                                        </Form.Item>
-                                    </Col>
+
                                     <Col span={2}>
                                         <Button danger icon={<DeleteOutlined />} onClick={() => remove(name)} style={{ marginTop: 30 }} />
                                     </Col>
                                 </Row>
                                 <Row>
                                     <Col span={24}>
-                                        <Form.Item label="Spares Used">
-                                            <Form.List name={[name, 'spares']}>
-                                                {(spareFields, { add: addSpare, remove: removeSpare }) => (
-                                                    <>
-                                                        {spareFields.map(({ key: sKey, name: sName, ...sRest }) => (
-                                                            <Row key={sKey} gutter={8} className="mb-1">
-                                                                <Col span={10}>
-                                                                    <Form.Item {...sRest} name={[sName, 'itemId']} noStyle rules={[{ required: true }]}>
-                                                                        <Select placeholder="Spare" showSearch optionFilterProp="children">
-                                                                            {spares.map(s => (
-                                                                                <Select.Option key={s.id} value={s.id} disabled={s.balance <= 0}>
-                                                                                    {s.itemName} (Stock: {s.balance})
-                                                                                </Select.Option>
-                                                                            ))}
-                                                                        </Select>
-                                                                    </Form.Item>
-                                                                </Col>
-                                                                <Col span={4}>
-                                                                    <Form.Item {...sRest} name={[sName, 'quantity']} noStyle rules={[{ required: true }]}>
-                                                                        <InputNumber placeholder="Qty" min={1} />
-                                                                    </Form.Item>
-                                                                </Col>
-                                                                <Col span={2}>
-                                                                    <DeleteOutlined onClick={() => removeSpare(sName)} className="text-red-500 cursor-pointer" />
-                                                                </Col>
-                                                            </Row>
-                                                        ))}
-                                                        <Button type="dashed" size="small" onClick={() => addSpare()} icon={<PlusOutlined />}>Add Spare</Button>
-                                                    </>
-                                                )}
-                                            </Form.List>
+                                        <Form.Item
+                                            noStyle
+                                            shouldUpdate={(prev, cur) => prev.services?.[name]?.assetKey !== cur.services?.[name]?.assetKey}
+                                        >
+                                            {() => {
+                                                const assetKey = form.getFieldValue(['services', name, 'assetKey']);
+                                                let targetType = null;
+                                                if (assetKey?.startsWith('MACHINE')) targetType = 'machine';
+                                                else if (assetKey?.startsWith('COMPRESSOR')) targetType = 'compressor';
+
+                                                const filteredSpares = spares.filter(s => {
+                                                    if (!s.type) return true; // Show general spares
+                                                    return s.type === targetType;
+                                                });
+
+                                                return (
+                                                    <Form.Item label="Spares Used">
+                                                        <Form.List name={[name, 'spares']}>
+                                                            {(spareFields, { add: addSpare, remove: removeSpare }) => (
+                                                                <>
+                                                                    {spareFields.map(({ key: sKey, name: sName, ...sRest }) => (
+                                                                        <Row key={sKey} gutter={8} className="mb-1">
+                                                                            <Col span={10}>
+                                                                                <Form.Item {...sRest} name={[sName, 'itemId']} noStyle rules={[{ required: true }]}>
+                                                                                    <Select placeholder="Spare" showSearch optionFilterProp="children">
+                                                                                        {filteredSpares.map(s => (
+                                                                                            <Select.Option key={s.id} value={s.spareId} disabled={s.quantity <= 0}>
+                                                                                                {s.name} (Stock: {s.quantity})
+                                                                                            </Select.Option>
+                                                                                        ))}
+                                                                                    </Select>
+                                                                                </Form.Item>
+                                                                            </Col>
+                                                                            <Col span={4}>
+                                                                                <Form.Item {...sRest} name={[sName, 'quantity']} noStyle rules={[{ required: true }]}>
+                                                                                    <InputNumber placeholder="Qty" min={1} />
+                                                                                </Form.Item>
+                                                                            </Col>
+                                                                            <Col span={2}>
+                                                                                <DeleteOutlined onClick={() => removeSpare(sName)} className="text-red-500 cursor-pointer" />
+                                                                            </Col>
+                                                                        </Row>
+                                                                    ))}
+                                                                    <Button type="dashed" size="small" onClick={() => addSpare()} icon={<PlusOutlined />}>Add Spare</Button>
+                                                                </>
+                                                            )}
+                                                        </Form.List>
+                                                    </Form.Item>
+                                                );
+                                            }}
                                         </Form.Item>
                                     </Col>
                                 </Row>

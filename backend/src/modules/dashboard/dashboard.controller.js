@@ -6,6 +6,8 @@ import EmployeeAttendance from "../employee/employeeAttendance.model.js";
 import Site from "../site/site.model.js";
 import Machine from "../machine/machine.model.js";
 import EmployeeList from "../employee/employeeList.model.js";
+import Compressor from "../compressor/compressor.model.js";
+import Supplier from "../supplier/supplier.model.js";
 
 export const DashboardController = {
     getStats: async (req, res, next) => {
@@ -24,8 +26,6 @@ export const DashboardController = {
             const siteFilter = siteId ? { siteId } : {};
 
             // 1. PO Stats (Global - POs are not strictly linked to one site usually)
-            // If siteId is present, we might want to exclude POs or show them generally.
-            // For now, we'll show Global PO stats for the period unless explicitly asked to filter (which we can't easily).
             const poWhere = { ...dateFilter };
 
             const poStats = await PurchaseOrder.findAll({
@@ -52,7 +52,6 @@ export const DashboardController = {
                     [sequelize.fn('SUM', sequelize.col('meter')), 'totalMeter'],
                     [sequelize.fn('SUM', sequelize.col('noOfHoles')), 'totalHoles'],
                     // Diesel is sum of machineHSD + compressorHSD + dieselUsed
-                    // MySQL requires backticks for columns in literals if not using ANSI_QUOTES
                     [sequelize.literal('SUM(COALESCE(`machineHSD`, 0) + COALESCE(`compressorHSD`, 0) + COALESCE(`dieselUsed`, 0))'), 'totalDiesel']
                 ],
                 raw: true
@@ -60,11 +59,10 @@ export const DashboardController = {
 
             // 3. Labor Stats (Employee Attendance)
             const laborWhere = {
-                ...dateFilter, // Attendance model has 'date' field? Need to verify.
-                ...siteFilter // Attendance model has 'siteId'?
+                ...dateFilter,
+                ...siteFilter
             };
 
-            // Check Attendance Model fields: usually 'date' and 'siteId' exist.
             const laborStats = await EmployeeAttendance.count({
                 where: {
                     ...laborWhere,
@@ -72,12 +70,12 @@ export const DashboardController = {
                 }
             });
 
-            // 4. New Operational Stats (Sites, Machines, Workers)
-            // These generally reflect CURRENT state, not filtered by date, unless we track history.
-            // For now, we return current active counts.
+            // 4. Counts (Static / Current State)
             const totalSites = await Site.count({ where: { siteStatus: true } });
             const totalMachines = await Machine.count({ where: { status: 'active' } });
             const totalWorkers = await EmployeeList.count({ where: { status: 'active' } });
+            const totalCompressors = await Compressor.count({ where: { status: 'active' } });
+            const totalSuppliers = await Supplier.count({ where: { status: 'active' } });
 
             // 5. Financials
             // Total Salary Paid (sum of salary in attendance for the period)
@@ -96,25 +94,24 @@ export const DashboardController = {
             res.json({
                 success: true,
                 data: {
-                    po: {
-                        count: parseInt(poStats[0]?.count || 0),
-                        totalValue: parseFloat(poStats[0]?.totalValue || 0),
-                        receivedValue: parseFloat(poStats[0]?.receivedValue || 0)
+                    // Counts Section
+                    counts: {
+                        employees: totalWorkers,
+                        machines: totalMachines,
+                        sites: totalSites,
+                        compressors: totalCompressors,
+                        suppliers: totalSuppliers,
+                        employeeAdvance: parseFloat(totalPendingAdvance || 0)
                     },
-                    production: {
-                        totalMeter: Math.round(parseFloat(productionStats[0]?.totalMeter || 0)),
-                        totalHoles: parseFloat(productionStats[0]?.totalHoles || 0),
-                        totalDiesel: parseFloat(productionStats[0]?.totalDiesel || 0)
-                    },
-                    labor: {
-                        totalManDays: laborStats,
-                        totalWorkers,
-                        totalSalaryPaid: totalSalaryPaid || 0,
-                        totalPendingAdvance: totalPendingAdvance || 0
-                    },
-                    operations: {
-                        totalSites,
-                        totalMachines
+                    // Filtered Metrics
+                    metrics: {
+                        poCreated: parseFloat(poStats[0]?.totalValue || 0),
+                        poReceived: parseFloat(poStats[0]?.receivedValue || 0),
+                        salariesPaid: parseFloat(totalSalaryPaid || 0),
+                        productionMeter: Math.round(parseFloat(productionStats[0]?.totalMeter || 0)),
+                        holesDrilled: parseFloat(productionStats[0]?.totalHoles || 0),
+                        dieselConsumed: parseFloat(productionStats[0]?.totalDiesel || 0),
+                        manDays: laborStats
                     }
                 }
             });

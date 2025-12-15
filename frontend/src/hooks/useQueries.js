@@ -172,6 +172,27 @@ export const useFittedDrillingTools = (compressorId) => {
   });
 };
 
+// Site Stock
+export const useSiteStock = (siteId) => {
+  return useQuery({
+    queryKey: ["siteStock", siteId],
+    queryFn: async () => {
+      if (!siteId) return { spares: [], tools: [] };
+      const res = await api.get(`/api/inventory/stock/sitewise?siteId=${siteId}`);
+      // API returns: { success: true, data: { sites: [ { siteId, spares:[], tools:[] } ] } }
+      // We need to find the specific site's stock from the response if it returns all, 
+      // OR if we implement siteId filter on backend it returns just that.
+      // Currently getSiteWiseStock returns ALL sites. We filter here or update backend.
+      // Let's filter here for safety.
+      const sites = res.data.data.sites || [];
+      const siteData = sites.find(s => s.siteId === siteId);
+      return siteData || { spares: [], tools: [] };
+    },
+    enabled: !!siteId,
+    staleTime: 1 * 60 * 1000,
+  });
+};
+
 // Inventory Report
 export const useInventoryReport = (month, year, itemType, siteId) => {
   return useQuery({

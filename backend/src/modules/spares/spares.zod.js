@@ -5,7 +5,7 @@ export const createSparesSchema = z.object({
     partNumber: z.string().optional(),
     units: z.enum(['kg', 'litre', 'meters', 'nos', 'set', 'unit', 'kit']).optional().nullable(),
     spareType: z.enum(['machine', 'compressor']).optional().nullable(),
-    price: z.number().optional().nullable(),
+    price: z.coerce.number().optional().nullable(),
 });
 
 export const updateSparesSchema = z.object({
@@ -13,7 +13,7 @@ export const updateSparesSchema = z.object({
     partNumber: z.string().optional(),
     units: z.enum(['kg', 'litre', 'meters', 'nos', 'set', 'unit', 'kit']).optional().nullable(),
     spareType: z.enum(['machine', 'compressor']).optional().nullable(),
-    price: z.number().optional().nullable(),
+    price: z.coerce.number().optional().nullable(),
 });
 
 export const deleteSparesSchema = z.any();

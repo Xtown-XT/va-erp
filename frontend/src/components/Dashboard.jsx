@@ -72,238 +72,107 @@ const Dashboard = () => {
     }
   };
 
-  // Custom Compact Card Component
-  // Mimics a clean, "shadcn-like" aesthetic with a circular icon and compact text.
-  const StatCard = ({ title, value, prefix, suffix, color, icon, secondaryText }) => (
-    <div style={{
-      background: '#fff',
-      borderRadius: '12px',
-      border: '1px solid #e5e7eb', // subtle border
-      padding: '16px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '16px',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-      height: '100%',
-      minHeight: '100px'
-    }}>
-      {/* Icon Circle */}
-      <div style={{
-        flexShrink: 0,
-        width: '48px',
-        height: '48px',
-        borderRadius: '50%',
-        background: color ? `${color}15` : '#f3f4f6', // 10% opacity of color or gray
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: color || '#6b7280',
-        fontSize: '20px'
-      }}>
-        {icon || prefix}
-      </div>
+  const formatCurrency = (val) => {
+    if (!val) return '₹0';
+    // Compact currency format for mobile (e.g. 1.2k, 1.5L) could be good, but standard locale string is safer for accuracy requested.
+    return val.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 });
+  };
 
-      {/* Content */}
-      <div style={{ flex: 1, overflow: 'hidden' }}>
-        <div style={{
-          fontSize: '13px',
-          color: '#6b7280',
-          fontWeight: 500,
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          marginBottom: '4px',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis'
-        }}>
-          {title}
-        </div>
-
-        <div style={{
-          fontSize: '24px',
-          fontWeight: 700,
-          color: '#111827',
-          lineHeight: '1.2',
-          display: 'flex',
-          alignItems: 'baseline',
-          gap: '4px'
-        }}>
-          {/* We handle prefix manually in the icon circle primarily, but if passed explicitly as text: */}
-          {!icon && prefix}
-          <span title={value}>{value}</span>
-          {suffix && <span style={{ fontSize: '14px', color: '#9ca3af', fontWeight: 500 }}>{suffix}</span>}
-        </div>
-
-        {secondaryText && (
-          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-            {secondaryText}
-          </div>
-        )}
-      </div>
+  // Ultra-Compact Stat Item
+  const CountItem = ({ title, value, color }) => (
+    <div className="bg-white rounded border p-2 flex flex-col items-center justify-center text-center shadow-sm h-full">
+      <div className="text-xs text-gray-500 uppercase tracking-wide font-semibold">{title}</div>
+      <div className="text-xl font-bold mt-1" style={{ color: color }}>{value}</div>
     </div>
   );
 
-  // Helper for large numbers
-  const formatCurrency = (val) => {
-    if (!val) return 0;
-    return val.toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
-  };
+  const MetricItem = ({ title, value, sub, color }) => (
+    <div className="flex justify-between items-center p-3 bg-white rounded border shadow-sm">
+      <div>
+        <div className="text-xs text-gray-500 uppercase font-semibold">{title}</div>
+        <div className="text-lg font-bold text-gray-800">{value}</div>
+      </div>
+      {sub && <div className="text-xs font-medium px-2 py-1 rounded bg-gray-50 text-gray-600">{sub}</div>}
+    </div>
+  );
 
   return (
-    <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <div>
-          <Title level={3} style={{ margin: 0 }}>Dashboard</Title>
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          {installPrompt && (
-            <Button type="primary" onClick={handleInstallClick} icon={<DollarCircleOutlined />}>
-              Install App
-            </Button>
-          )}
-
-          <Select
-            placeholder="All Sites"
-            allowClear
-            className="w-full sm:w-48"
-            onChange={setSelectedSite}
-            value={selectedSite}
-          >
-            {sites.map(site => (
-              <Select.Option key={site.id} value={site.id}>{site.siteName}</Select.Option>
-            ))}
-          </Select>
-          <RangePicker
-            value={dates}
-            onChange={setDates}
-            allowClear={false}
-            className="w-full sm:w-auto"
-          />
-        </div>
+    <div className="p-2 sm:p-4 bg-gray-50 min-h-screen">
+      {/* 1. Header & Install */}
+      <div className="flex justify-between items-center mb-4">
+        <Title level={4} style={{ margin: 0 }}>Dashboard</Title>
+        {installPrompt && (
+          <Button type="primary" size="small" onClick={handleInstallClick} icon={<DollarCircleOutlined />}>
+            Install App
+          </Button>
+        )}
       </div>
 
       <Spin spinning={loading}>
         {stats && (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
 
-            {/* Operations Overview Row */}
-            <div>
-              <Title level={4}><ShoppingOutlined /> Operations Overview</Title>
-              <Row gutter={[16, 16]}>
-                <Col xs={24} sm={8}>
-                  <StatCard
-                    title="Active Sites"
-                    value={stats.operations?.totalSites || 0}
-                    icon={<EnvironmentOutlined />}
-                    color="#1890ff"
-                  />
-                </Col>
-                <Col xs={24} sm={8}>
-                  <StatCard
-                    title="Active Machines"
-                    value={stats.operations?.totalMachines || 0}
-                    icon={<CarOutlined />}
-                    color="#faad14"
-                  />
-                </Col>
-                <Col xs={24} sm={8}>
-                  <StatCard
-                    title="Total Workforce"
-                    value={stats.labor?.totalWorkers || 0}
-                    icon={<TeamOutlined />}
-                    color="#52c41a"
-                    secondaryText="Active employees"
-                  />
-                </Col>
-              </Row>
+            {/* 2. Top Calls: Counts (Grid of 3x2 on mobile, 6x1 on PC) */}
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-4">
+              <CountItem title="Employees" value={stats.counts?.employees} color="#1890ff" />
+              <CountItem title="Machines" value={stats.counts?.machines} color="#faad14" />
+              <CountItem title="Sites" value={stats.counts?.sites} color="#52c41a" />
+              <CountItem title="Compressors" value={stats.counts?.compressors} color="#eb2f96" />
+              <CountItem title="Suppliers" value={stats.counts?.suppliers} color="#722ed1" />
+              {/* Employee Advance is a sum, but placed here as requested */}
+              <div className="bg-white rounded border p-2 flex flex-col items-center justify-center text-center shadow-sm h-full border-red-100 bg-red-50">
+                <div className="text-[10px] text-red-500 uppercase font-bold">Total Advance</div>
+                <div className="text-sm font-bold text-red-700">{formatCurrency(stats.counts?.employeeAdvance)}</div>
+              </div>
             </div>
 
-            {/* Financials Row */}
-            <div>
-              <Title level={4}><DollarCircleOutlined /> Financials</Title>
-              <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="PO Value Created"
-                    value={formatCurrency(stats.po.totalValue)}
-                    icon={<DollarCircleOutlined />}
-                    color="#cf1322"
-                    secondaryText="Total Expenses Raised"
-                  />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="PO Value Received"
-                    value={formatCurrency(stats.po.receivedValue)}
-                    icon={<DollarCircleOutlined />}
-                    color="#3f8600"
-                    secondaryText="Goods Received"
-                  />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="Salaries Paid"
-                    value={formatCurrency(stats.labor?.totalSalaryPaid || 0)}
-                    icon={<TeamOutlined />}
-                    color="#096dd9"
-                    secondaryText="From Attendance"
-                  />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="Pending Advances"
-                    value={formatCurrency(stats.labor?.totalPendingAdvance || 0)}
-                    icon={<DollarCircleOutlined />}
-                    color="#d48806"
-                    secondaryText="Outstanding Amount"
-                  />
-                </Col>
-              </Row>
+            {/* 3. Date Filter */}
+            <div className="bg-white p-2 rounded border shadow-sm w-full md:w-auto md:max-w-md">
+              <div className="text-xs text-gray-400 mb-1 font-semibold uppercase">Filter Range</div>
+              <RangePicker
+                value={dates}
+                onChange={setDates}
+                allowClear={false}
+                className="w-full"
+                size="small"
+              />
             </div>
 
-            {/* Production Row */}
-            <div>
-              <Title level={4}><ThunderboltOutlined /> Production</Title>
-              <Row gutter={[16, 16]}>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="Meters Drilled"
-                    value={stats.production.totalMeter}
-                    suffix="m"
-                    icon={<ThunderboltOutlined />}
-                    color="#1890ff"
-                  />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="Holes Drilled"
-                    value={stats.production.totalHoles}
-                    icon={<EnvironmentOutlined />}
-                    color="#722ed1"
-                  />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="Diesel Consumed"
-                    value={stats.production.totalDiesel}
-                    suffix="L"
-                    icon={<FireOutlined />}
-                    color="#d46b08"
-                  />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                  <StatCard
-                    title="Total Man-Days"
-                    value={stats.labor.totalManDays}
-                    suffix="days"
-                    icon={<TeamOutlined />}
-                    color="#eb2f96"
-                    secondaryText="Total Daily Attendance"
-                  />
-                </Col>
-              </Row>
+            {/* 4. Filtered Metrics List */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-4">
+              <MetricItem
+                title="PO Created Used"
+                value={formatCurrency(stats.metrics?.poCreated)}
+                color="blue"
+                sub="Expense"
+              />
+              <MetricItem
+                title="PO Received Value"
+                value={formatCurrency(stats.metrics?.poReceived)}
+                color="green"
+                sub="Goods"
+              />
+              <MetricItem
+                title="Salaries Paid"
+                value={formatCurrency(stats.metrics?.salariesPaid)}
+                color="indigo"
+                sub="Paid"
+              />
+              <MetricItem
+                title="Total Meters"
+                value={`${stats.metrics?.productionMeter} m`}
+                color="cyan"
+              />
+              <MetricItem
+                title="Holes Drilled"
+                value={stats.metrics?.holesDrilled}
+                color="purple"
+              />
+              <MetricItem
+                title="Diesel Consumed"
+                value={`${stats.metrics?.dieselConsumed} L`}
+                color="orange"
+              />
             </div>
 
           </div>
