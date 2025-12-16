@@ -33,14 +33,25 @@ const SparesManagement = () => {
     const [editingSpare, setEditingSpare] = useState(null);
     const [form] = Form.useForm();
     const [searchText, setSearchText] = useState("");
-    const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+    const [pagination, setPagination] = useState({
+        current: 1,
+        pageSize: 10,
+        total: 0
+    });
 
-    const fetchSpares = async () => {
+    const fetchSpares = async (page = 1, pageSize = 10) => {
         setLoading(true);
         try {
-            const response = await api.get('/api/spares');
+            const search = searchText ? `&search=${encodeURIComponent(searchText)}` : '';
+            const response = await api.get(`/api/spares?page=${page}&limit=${pageSize}${search}`);
             if (response.data.success) {
                 setSpares(response.data.data);
+                setPagination(prev => ({
+                    ...prev,
+                    current: page,
+                    pageSize: pageSize,
+                    total: response.data.total || 0
+                }));
             }
         } catch (error) {
             message.error("Failed to fetch spares");
@@ -50,8 +61,16 @@ const SparesManagement = () => {
     };
 
     useEffect(() => {
-        fetchSpares();
+        fetchSpares(pagination.current, pagination.pageSize);
     }, []);
+
+    // Debounce search
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchSpares(1, pagination.pageSize);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchText]);
 
     const handleAdd = () => {
         setEditingSpare(null);
@@ -69,7 +88,7 @@ const SparesManagement = () => {
         try {
             await api.delete(`/api/spares/${id}`);
             message.success("Spare deleted successfully");
-            fetchSpares();
+            fetchSpares(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error("Failed to delete spare");
         }
@@ -85,16 +104,11 @@ const SparesManagement = () => {
                 message.success("Spare added successfully");
             }
             setIsModalVisible(false);
-            fetchSpares();
+            fetchSpares(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error("Operation failed");
         }
     };
-
-    const filteredSpares = spares.filter((spare) =>
-        spare.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        (spare.partNumber && spare.partNumber.toLowerCase().includes(searchText.toLowerCase()))
-    );
 
     const columns = [
         {
@@ -150,10 +164,7 @@ const SparesManagement = () => {
     ];
 
     const handleTableChange = (newPagination) => {
-        setPagination({
-            current: newPagination.current,
-            pageSize: newPagination.pageSize
-        });
+        fetchSpares(newPagination.current, newPagination.pageSize);
     };
 
     return (
@@ -174,13 +185,13 @@ const SparesManagement = () => {
                 </div>
                 <Table
                     columns={columns}
-                    dataSource={filteredSpares}
+                    dataSource={spares}
                     rowKey="id"
                     loading={loading}
                     pagination={{
                         current: pagination.current,
                         pageSize: pagination.pageSize,
-                        total: filteredSpares.length,
+                        total: pagination.total,
                         showSizeChanger: true,
                         showTotal: (total) => `Total ${total} items`
                     }}
