@@ -33,6 +33,7 @@ const SparesManagement = () => {
     const [editingSpare, setEditingSpare] = useState(null);
     const [form] = Form.useForm();
     const [searchText, setSearchText] = useState("");
+    const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
     const fetchSpares = async () => {
         setLoading(true);
@@ -148,6 +149,13 @@ const SparesManagement = () => {
         },
     ];
 
+    const handleTableChange = (newPagination) => {
+        setPagination({
+            current: newPagination.current,
+            pageSize: newPagination.pageSize
+        });
+    };
+
     return (
         <div className="p-4">
             <Card title="Spares Management" extra={
@@ -169,7 +177,14 @@ const SparesManagement = () => {
                     dataSource={filteredSpares}
                     rowKey="id"
                     loading={loading}
-                    pagination={{ pageSize: 10 }}
+                    pagination={{
+                        current: pagination.current,
+                        pageSize: pagination.pageSize,
+                        total: filteredSpares.length,
+                        showSizeChanger: true,
+                        showTotal: (total) => `Total ${total} items`
+                    }}
+                    onChange={handleTableChange}
                 />
             </Card>
 

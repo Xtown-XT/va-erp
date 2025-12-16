@@ -210,8 +210,66 @@ const DailyEntry = () => {
           startingRPM: log.currentMachinePRM,
           currentRPM: log.currentMachinePRM,
           currentMeter: log.currentMachineMeter,
-          isExisting: true
+          accumulatedMeter: log.currentMachineMeter || 0, // Add accumulated meter from log
+          isExisting: true,
+          origin: 'log',
+          copyRpm: log.drillingTool?.copyRpm
         })));
+      }
+
+
+      if (primaryEntry.machineId || primaryEntry.compressorId) {
+        try {
+          const res = await api.get(`/api/dailyEntries/fitted-drilling-tools?compressorId=${primaryEntry.compressorId}&machineId=${primaryEntry.machineId}`);
+          if (res.data.success) {
+            const activeTools = res.data.data.map(t => ({
+              ...t,
+              id: t.installationId, // Ensure ID is installation ID
+              itemId: t.drillingToolId,
+              itemName: t.toolName,
+              partNumber: t.partNumber,
+              isExisting: true,
+              origin: 'historical',
+              startingRPM: t.fittedRPM || 0, // Fix: Use fittedRPM from backend
+              currentRPM: t.fittedRPM || 0,
+              accumulatedMeter: t.accumulatedMeter || 0,
+              currentMeter: t.accumulatedMeter || 0,
+              copyRpm: t.rpmSource
+            }));
+
+            setDrillingTools(prev => {
+              // Filter out active tools that are already present in the current list (prev)
+              // 'prev' contains tools populated from 'drillingLogs' (origin: 'log')
+              // 'activeTools' contains currently fitted tools from the machine (origin: 'historical')
+
+              const loggedToolIds = new Set(prev.map(p => p.itemId || p.id));
+
+              // Only add active tools that are NOT already in the list
+              const missingActive = activeTools.filter(a => !loggedToolIds.has(a.drillingToolId));
+
+              const formattedActive = missingActive.map(inst => ({
+                id: inst.installationId, // Use installationId as unique key for historical items
+                itemId: inst.drillingToolId,
+                itemName: inst.toolName,
+                partNumber: inst.partNumber,
+                quantity: 1,
+                action: '', // No action needed, they are just "there"
+                startingRPM: inst.fittedRPM,
+                currentRPM: inst.fittedRPM, // Default to fitted, will be updated if removed
+                startingMeter: inst.accumulatedMeter,
+                currentMeter: inst.accumulatedMeter,
+                accumulatedMeter: inst.accumulatedMeter,
+                isExisting: true,
+                origin: 'historical',
+                installationId: inst.installationId,
+                fittedDate: inst.fittedDate,
+                rpmSource: inst.rpmSource
+              }));
+
+              return [...prev, ...formattedActive];
+            });
+          }
+        } catch (e) { console.error("Failed to merge active tools", e); }
       }
 
       form.setFieldsValue(formVals);
@@ -241,8 +299,7 @@ const DailyEntry = () => {
       try {
         const r = await api.get("/api/dailyEntries/generate-ref");
         setRefNo1(r.data.refNo);
-        // Rough logic for Shift 2 ref
-        setRefNo2(r.data.refNo.slice(0, -3) + String(parseInt(r.data.refNo.slice(-3)) + 1).padStart(3, '0'));
+        setRefNo2(r.data.refNo);
       } catch (e) { }
     };
     gen();
@@ -258,8 +315,18 @@ const DailyEntry = () => {
 
   // Helper to handle machine change
   const onMachineChange = async (machineId, isEditing = false) => {
-    const machine = machines.find(m => m.id === machineId);
+    // Fetch fresh machine details to get latest RPM
+    let machine = machines.find(m => m.id === machineId);
     if (!machine) return;
+
+    try {
+      const res = await api.get(`/api/machines/${machineId}`);
+      if (res.data && res.data.data) {
+        machine = res.data.data;
+      }
+    } catch (e) {
+      console.error("Failed to fetch fresh machine details", e);
+    }
 
     setSelectedMachine(machine);
     if (!isEditing) {
@@ -270,13 +337,15 @@ const DailyEntry = () => {
 
     // Compressor
     if (machine.compressorId) {
-      let comp = compressors.find(c => c.id === machine.compressorId);
-      if (!comp) {
-        try {
-          const res = await api.get(`/api/compressors/${machine.compressorId}`);
-          comp = res.data.data;
-        } catch (e) { }
+      let comp = null;
+      try {
+        const res = await api.get(`/api/compressors/${machine.compressorId}`);
+        comp = res.data.data;
+      } catch (e) {
+        // Fallback to list if fetch fails
+        comp = compressors.find(c => c.id === machine.compressorId);
       }
+
       if (comp) {
         setSelectedCompressor(comp);
         if (!isEditing) {
@@ -284,32 +353,60 @@ const DailyEntry = () => {
             shift1_compressorOpeningRPM: comp.compressorRPM || 0,
             shift1_compressorId: comp.id
           });
-          fetchFittedTools(comp.id);
+          fetchFittedTools(comp.id, machine.id);
         }
       }
     } else {
       setSelectedCompressor(null);
-      if (!isEditing) setDrillingTools([]);
+      // Fetch tools for machine even if no compressor
+      if (!isEditing) {
+        fetchFittedTools(null, machine.id);
+      }
     }
   };
 
-  const fetchFittedTools = async (compressorId) => {
+  const fetchFittedTools = async (compressorId, machineId) => {
     try {
-      const res = await api.get(`/api/dailyEntries/fitted-drilling-tools?compressorId=${compressorId}`);
+      const res = await api.get(`/api/dailyEntries/fitted-drilling-tools?compressorId=${compressorId}&machineId=${machineId}`);
       if (res.data.success) {
         setDrillingTools(res.data.data.map(t => ({
-          ...t,
+          id: t.installationId, // Use installationId as unique key
+          itemId: t.drillingToolId,
+          itemName: t.toolName,
+          partNumber: t.partNumber,
+          quantity: 1,
+          action: '', // No action needed, they are just "there"
           isExisting: true,
-          startingRPM: t.currentRPM || 0,
-          currentRPM: t.currentRPM || 0,
-          currentMeter: t.currentMeter || 0
+          origin: 'historical', // It's from previous entries
+          startingRPM: t.fittedRPM || 0, // Fix: Use fittedRPM from API response
+          currentRPM: t.fittedRPM || 0, // Fix: Use fittedRPM from API response
+          accumulatedMeter: t.accumulatedMeter || 0,
+          currentMeter: t.accumulatedMeter || 0, // Fix: Use accumulatedMeter from API response
+          copyRpm: t.rpmSource, // Fix: Use rpmSource from API response
+          installationId: t.installationId,
+          fittedDate: t.fittedDate,
+          rpmSource: t.rpmSource
         })));
       }
     } catch (e) { console.error("Error fetching fittings", e); }
   };
 
   // Tool Handlers
-  const handleAddTool = (item, qty) => {
+  // Helper to get current Max Closing RPM from form
+  const getMaxRPM = (type) => { // type: 'machine' or 'compressor'
+    const s1M = form.getFieldValue('shift1_machineClosingRPM') || 0;
+    const s2M = form.getFieldValue('shift2_machineClosingRPM') || 0;
+    const s1C = form.getFieldValue('shift1_compressorClosingRPM') || 0;
+    const s2C = form.getFieldValue('shift2_compressorClosingRPM') || 0;
+
+    if (type === 'compressor') return Math.max(Number(s1C), Number(s2C));
+    return Math.max(Number(s1M), Number(s2M));
+  };
+
+  const handleAddTool = (item, qty, currentMeterValue = 0) => {
+    const isCompressor = item.copyRpm && item.copyRpm.toLowerCase() === 'compressor';
+    const targetRPM = getMaxRPM(isCompressor ? 'compressor' : 'machine');
+
     setDrillingTools(prev => [...prev, {
       id: Date.now(),
       itemId: item.toolId || item.id,
@@ -317,20 +414,98 @@ const DailyEntry = () => {
       partNumber: item.partNumber,
       quantity: qty,
       action: 'fit',
-      startingRPM: selectedCompressor?.compressorRPM || 0,
-      currentRPM: selectedCompressor?.compressorRPM || 0,
-      currentMeter: 0,
-      isExisting: false
+      startingRPM: targetRPM,
+      currentRPM: targetRPM,
+      currentMeter: currentMeterValue, // Auto-fill with current meter
+      accumulatedMeter: currentMeterValue, // Initialize accumulated meter
+      isExisting: false,
+      origin: 'new',
+      copyRpm: item.copyRpm
     }]);
   };
 
-  const handleRemoveTool = (id) => {
-    setDrillingTools(prev => prev.map(t => t.id === id ? { ...t, action: 'remove' } : t));
+  const handleRemoveTool = async (id) => {
+    // Find the tool first
+    const tool = drillingTools.find(t => t.id === id);
+    if (!tool) return;
+
+    if (tool.origin === 'historical' || (tool.isExisting && tool.installationId)) {
+      // It's an active installation from DB. Call API to complete it.
+
+      // Calculate closing details
+      const isCompressor = tool.copyRpm && tool.copyRpm.toLowerCase() === 'compressor';
+      const targetRPM = getMaxRPM(isCompressor ? 'compressor' : 'machine');
+      const currentShiftMeter = (form.getFieldValue('shift1_meter') || 0) + (form.getFieldValue('shift2_meter') || 0);
+
+      try {
+        await api.post('/api/drilling-tools/remove', {
+          installationId: tool.installationId || tool.id, // Usually installationId is correct
+          removedDate: selectedDate.format("YYYY-MM-DD"),
+          removedRPM: targetRPM,
+          removedMeter: currentShiftMeter
+        });
+        message.success("Tool removed and status updated to COMPLETED");
+
+        // Remove from UI
+        setDrillingTools(prev => prev.filter(t => t.id !== id));
+      } catch (error) {
+        console.error(error);
+        message.error("Failed to remove tool: " + (error.response?.data?.message || error.message));
+      }
+    } else {
+      // Just a local new entry, remove from state
+      setDrillingTools(prev => prev.filter(t => t.id !== id));
+    }
   };
 
   const handleUpdateTool = (id, field, value) => {
     setDrillingTools(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   };
+
+  // Watch Closing RPMs for Drilling Tools Auto-Calc
+  const s1M_w = Form.useWatch('shift1_machineClosingRPM', form);
+  const s2M_w = Form.useWatch('shift2_machineClosingRPM', form);
+  const s1C_w = Form.useWatch('shift1_compressorClosingRPM', form);
+  const s2C_w = Form.useWatch('shift2_compressorClosingRPM', form);
+
+  useEffect(() => {
+    const maxMachine = Math.max(Number(s1M_w) || 0, Number(s2M_w) || 0);
+    const maxCompressor = Math.max(Number(s1C_w) || 0, Number(s2C_w) || 0);
+
+    setDrillingTools(prev => prev.map(t => {
+      // Determine target RPM based on copyRpm (default to machine if undefined/null)
+      const targetRPM = (t.copyRpm && t.copyRpm.toLowerCase() === 'compressor') ? maxCompressor : maxMachine;
+
+      let updates = {};
+
+      // If New Fit: Auto-set Starting RPM to today's closing
+      if (t.action === 'fit' && !t.isExisting) {
+        updates.startingRPM = targetRPM;
+        // Also set currentRPM initially to avoid 0, but user might remove it later?
+        // If fit only, currentRPM (end of day) likely matches starting if not used? 
+        // Or if used, it should be higher?
+        // User said: "starting rpm for that tool is .. closing rpm".
+        // Let's set both for new fit to be safe, user can edit Current if needed (though fit action usually assumes installed at end of day?).
+        // Actually fit happens at some point. If fit at closing, then start=closing.
+        updates.currentRPM = targetRPM;
+      }
+
+      // If Removing: Auto-set Removal (Current) RPM to today's closing
+      if (t.action === 'remove') {
+        updates.currentRPM = targetRPM;
+      }
+
+      // Only update if changed to avoid loop/flicker?
+      // React state update checks equality but object reference changes.
+      // But dependency is [s1Ms2M...]. Only runs when inputs change.
+      // So simple mapping is fine.
+      if (Object.keys(updates).length > 0) {
+        return { ...t, ...updates };
+      }
+
+      return t;
+    }));
+  }, [s1M_w, s2M_w, s1C_w, s2C_w]);
 
   // Submit
   const onFinish = async (values) => {
@@ -535,11 +710,11 @@ const DailyEntry = () => {
               action: t.action === 'fit' ? 'fit' : (t.action === 'remove' ? 'remove' : 'update'),
               quantity: t.quantity,
               currentRPM: t.currentRPM,
-              currentMachineRPM: t.currentRPM, // Backend expects this
-              currentCompressorRPM: t.currentRPM, // Backend expects this
-              dailyMeter: t.currentMeter, // Schema has dailyMeter, usage tracking
-              addedDate: dateStr // Should this be t.addedDate? Or Date of entry? Tools can be added on past days. Use Entry Date.
-            })).filter(t => t.action)
+              currentMachineRPM: (t.action === 'remove') ? t.currentRPM : (t.startingRPM ?? t.currentRPM),
+              currentCompressorRPM: (t.action === 'remove') ? t.currentRPM : (t.startingRPM ?? t.currentRPM),
+              currentMachineMeter: t.currentMeter,
+              addedDate: dateStr
+            })).filter(t => t.action && t.itemId)
           };
 
           // Determine ID for S1
@@ -632,11 +807,11 @@ const DailyEntry = () => {
               action: t.action === 'fit' ? 'fit' : (t.action === 'remove' ? 'remove' : 'update'),
               quantity: t.quantity,
               currentRPM: t.currentRPM,
-              currentMachineRPM: t.currentRPM, // Backend expects this for 'machine' copyRpm
-              currentCompressorRPM: t.currentRPM, // Backend expects this for 'compressor' copyRpm
-              dailyMeter: t.currentMeter,
+              currentMachineRPM: (t.action === 'remove') ? t.currentRPM : (t.startingRPM ?? t.currentRPM),
+              currentCompressorRPM: (t.action === 'remove') ? t.currentRPM : (t.startingRPM ?? t.currentRPM),
+              currentMachineMeter: t.currentMeter,
               addedDate: dateStr
-            })).filter(t => t.action)
+            })).filter(t => t.action && t.itemId)
           };
           await createDailyEntry.mutateAsync(payload1);
         }
@@ -712,7 +887,7 @@ const DailyEntry = () => {
             </Col>
             <Col span={6}>
               <Form.Item label="Machine" name="machineId" rules={[{ required: true }]}>
-                <Select showSearch optionFilterProp="children" onChange={onMachineChange}>
+                <Select showSearch optionFilterProp="children" onChange={(val) => onMachineChange(val)}>
                   {machines.filter(m => !selectedSite || m.siteId === selectedSite).map(m => (
                     <Select.Option key={m.id} value={m.id}>{m.machineNumber}</Select.Option>
                   ))}
@@ -727,13 +902,11 @@ const DailyEntry = () => {
           </Row>
 
           <Row>
-            {!editingId && (
-              <Col>
-                <Space>
-                  <Switch checked={shift2Enabled} onChange={setShift2Enabled} /> <Text>Enable Shift 2</Text>
-                </Space>
-              </Col>
-            )}
+            <Col>
+              <Space>
+                <Switch checked={shift2Enabled} onChange={setShift2Enabled} /> <Text>Enable Shift 2</Text>
+              </Space>
+            </Col>
           </Row>
 
           {/* Table Layout - Unchanged except we pass props if needed */}
@@ -755,41 +928,68 @@ const DailyEntry = () => {
                 <td className="p-2 border font-bold">Shift 1</td>
                 <td className="p-2 border">
                   <Space direction="vertical" size={0}>
-                    <Form.Item name="shift1_machineOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" /></Form.Item>
-                    <Form.Item name="shift1_machineClosingRPM" noStyle>
-                      <InputNumber
-                        placeholder="Close" size="small"
-                        onChange={(v) => {
-                          if (shift2Enabled) form.setFieldsValue({ shift2_machineOpeningRPM: v });
-                        }}
-                      />
-                    </Form.Item>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_machineOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" style={{ width: 80 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Open</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_machineClosingRPM" noStyle>
+                        <InputNumber
+                          placeholder="Close" size="small" style={{ width: 80 }}
+                          onChange={(v) => {
+                            if (shift2Enabled) form.setFieldsValue({ shift2_machineOpeningRPM: v });
+                          }}
+                        />
+                      </Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Close</span>
+                    </div>
                   </Space>
                 </td>
                 <td className="p-2 border">
                   <Space direction="vertical" size={0}>
-                    <Form.Item name="shift1_compressorOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" /></Form.Item>
-                    <Form.Item name="shift1_compressorClosingRPM" noStyle>
-                      <InputNumber
-                        placeholder="Close" size="small"
-                        onChange={(v) => {
-                          if (shift2Enabled) form.setFieldsValue({ shift2_compressorOpeningRPM: v });
-                        }}
-                      />
-                    </Form.Item>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_compressorOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" style={{ width: 80 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Open</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_compressorClosingRPM" noStyle>
+                        <InputNumber
+                          placeholder="Close" size="small" style={{ width: 80 }}
+                          onChange={(v) => {
+                            if (shift2Enabled) form.setFieldsValue({ shift2_compressorOpeningRPM: v });
+                          }}
+                        />
+                      </Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Close</span>
+                    </div>
                   </Space>
                 </td>
                 <td className="p-2 border">
                   <Space direction="vertical" size={0}>
-                    <Form.Item name="shift1_noOfHoles" noStyle><InputNumber placeholder="Holes" size="small" /></Form.Item>
-                    <Form.Item name="shift1_meter" noStyle><InputNumber placeholder="Meter" size="small" /></Form.Item>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_noOfHoles" noStyle><InputNumber placeholder="Holes" size="small" style={{ width: 70 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Holes</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_meter" noStyle><InputNumber placeholder="Meter" size="small" style={{ width: 70 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Meter</span>
+                    </div>
                   </Space>
                 </td>
                 <td className="p-2 border">
                   <Space direction="vertical" size={0}>
-                    <Form.Item name="shift1_dieselUsed" noStyle><InputNumber placeholder="Diesel" size="small" /></Form.Item>
-                    <Form.Item name="shift1_machineHSD" noStyle><InputNumber placeholder="M. HSD" size="small" /></Form.Item>
-                    <Form.Item name="shift1_compressorHSD" noStyle><InputNumber placeholder="C. HSD" size="small" /></Form.Item>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_dieselUsed" noStyle><InputNumber placeholder="Diesel" size="small" style={{ width: 65 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>Diesel</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_machineHSD" noStyle><InputNumber placeholder="M.HSD" size="small" style={{ width: 65 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>M.HSD</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Form.Item name="shift1_compressorHSD" noStyle><InputNumber placeholder="C.HSD" size="small" style={{ width: 65 }} /></Form.Item>
+                      <span style={{ fontSize: 11, color: '#666' }}>C.HSD</span>
+                    </div>
                   </Space>
                 </td>
                 <td className="p-2 border">
@@ -864,15 +1064,19 @@ const DailyEntry = () => {
           <DailyServiceSection form={form} machines={machines} compressor={selectedCompressor} siteId={selectedSite} />
 
           {/* Drilling Tools */}
-          {selectedCompressor && (
+          {selectedMachine && (
             <div style={{ marginTop: 20 }}>
               <DrillingToolsSection
                 drillingTools={drillingTools}
                 onAddTool={handleAddTool}
                 onRemoveTool={handleRemoveTool}
                 onUpdateTool={handleUpdateTool}
-                compressorName={selectedCompressor.compressorName}
+                compressorName={selectedCompressor?.compressorName}
                 siteId={selectedSite}
+                currentMeterValue={
+                  (form.getFieldValue('shift1_meter') || 0) +
+                  (form.getFieldValue('shift2_meter') || 0)
+                }
               />
             </div>
           )}

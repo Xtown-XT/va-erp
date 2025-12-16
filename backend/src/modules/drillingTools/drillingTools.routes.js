@@ -37,4 +37,8 @@ router.delete(
 router.delete("/:id/hard", authorize("delete"), DrillingToolsController.hardDelete);
 router.post("/:id/restore", authorize("update"), DrillingToolsController.restore);
 
+// Report routes
+router.get("/reports/machine-wise", authorize("read"), DrillingToolsController.getMachineWiseReport);
+router.get("/reports/site-wise", authorize("read"), DrillingToolsController.getSiteWiseReport);
+
 export default router;

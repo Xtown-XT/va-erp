@@ -24,10 +24,11 @@ const DrillingTools = sequelize.define(
             type: DataTypes.DECIMAL(10, 2),
             defaultValue: 0,
         },
-        copyRpm: {
-            type: DataTypes.ENUM("machine", "compressor", "none"),
-            defaultValue: "none",
-            comment: "Inherit RPM from Machine or Compressor",
+        rpmSource: {
+            type: DataTypes.ENUM("machine", "compressor"),
+            allowNull: false,
+            defaultValue: "machine",
+            comment: "Determines which closing RPM to record (machine or compressor)",
         },
         ...commonFields,
     },

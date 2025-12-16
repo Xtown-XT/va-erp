@@ -9,55 +9,67 @@ const DrillingToolsSection = ({
     onRemoveTool,
     onUpdateTool,
     compressorName,
-    siteId
+    siteId,
+    currentMeterValue = 0 // Total meter from shift1 + shift2
 }) => {
     // Fetch Site Stock (contains { spares: [], tools: [] })
     const { data: stockData } = useSiteStock(siteId);
     const availableTools = stockData?.tools || [];
 
     const [selectedItem, setSelectedItem] = useState(null);
-    const [quantity, setQuantity] = useState(1);
 
     const handleAdd = () => {
         if (!selectedItem) return;
-        onAddTool(selectedItem, quantity);
+        // Always fit 1 tool with current meter value (shift1 + shift2)
+        onAddTool(selectedItem, 1, currentMeterValue);
         setSelectedItem(null);
-        setQuantity(1);
     };
 
     const columns = [
-        { title: "Item Name", dataIndex: "itemName", key: "itemName" },
-        { title: "Part Number", dataIndex: "partNumber", key: "partNumber" },
-        { title: "Starting RPM", dataIndex: "startingRPM", key: "startingRPM" },
         {
-            title: "Current RPM",
-            dataIndex: "currentRPM",
-            key: "currentRPM",
-            render: (val, record) => (
-                <InputNumber
-                    value={val}
-                    disabled={!record.isExisting} // New tools auto-calc from 0? or daily RPM?
-                    onChange={(v) => onUpdateTool(record.id, 'currentRPM', v)}
-                />
-            )
+            title: "Tool Name",
+            dataIndex: "itemName",
+            key: "itemName",
+            width: 200
         },
         {
-            title: "Current Meter",
-            dataIndex: "currentMeter",
-            key: "currentMeter",
-            render: (val, record) => (
-                <InputNumber
-                    value={val}
-                    onChange={(v) => onUpdateTool(record.id, 'currentMeter', v)}
-                />
+            title: "Part Number",
+            dataIndex: "partNumber",
+            key: "partNumber",
+            width: 150
+        },
+        {
+            title: "Fitted RPM",
+            dataIndex: "startingRPM",
+            key: "startingRPM",
+            width: 120,
+            render: (val) => val || '-'
+        },
+        {
+            title: "Removed RPM",
+            dataIndex: "removedRPM",
+            key: "removedRPM",
+            width: 120,
+            render: (val, record) => record.action === 'remove' ? (val || record.currentRPM) : '-'
+        },
+        {
+            title: "Accumulated Meter",
+            dataIndex: "accumulatedMeter",
+            key: "accumulatedMeter",
+            width: 150,
+            render: (val) => (
+                <span style={{ fontWeight: 'bold', color: '#1890ff' }}>
+                    {val || 0}
+                </span>
             )
         },
         {
             title: "Action",
             key: "action",
+            width: 100,
             render: (_, record) => (
                 <Popconfirm title="Remove tool?" onConfirm={() => onRemoveTool(record.id)}>
-                    <Button icon={<DeleteOutlined />} danger size="small" />
+                    <Button icon={<DeleteOutlined />} danger size="small">Remove</Button>
                 </Popconfirm>
             )
         }
@@ -70,15 +82,18 @@ const DrillingToolsSection = ({
         item: t
     }));
 
+    // Filter out tools marked for removal so they don't appear in the UI
+    const visibleTools = (drillingTools || []).filter(t => t.action !== 'remove');
+
     return (
         <Card
             className="mb-4 shadow-md"
             title={<Space><ToolOutlined /> <span>Drilling Tools (Compressor: {compressorName || 'None'})</span></Space>}
         >
-            <div className="mb-4 bg-gray-50 p-2 rounded">
+            <div className="mb-4 bg-gray-50 p-3 rounded">
                 <Space>
                     <Select
-                        style={{ width: 300 }}
+                        style={{ width: 350 }}
                         placeholder="Select Drilling Tool to Fit"
                         showSearch
                         optionFilterProp="label"
@@ -86,25 +101,29 @@ const DrillingToolsSection = ({
                         onChange={(val, opt) => setSelectedItem(opt.item)}
                         options={toolOptions}
                     />
-                    <InputNumber
-                        min={1}
-                        value={quantity}
-                        onChange={setQuantity}
-                        placeholder="Qty"
-                    />
-                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} disabled={!selectedItem}>
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={handleAdd}
+                        disabled={!selectedItem || selectedItem.quantity <= 0}
+                    >
                         Fit Tool
                     </Button>
+                    {selectedItem && (
+                        <span style={{ color: '#666', fontSize: '12px' }}>
+                            (Will fit 1 tool with current meter: {currentMeterValue})
+                        </span>
+                    )}
                 </Space>
             </div>
 
             <Table
-                dataSource={drillingTools}
+                dataSource={visibleTools}
                 columns={columns}
                 rowKey="id"
                 pagination={false}
                 size="small"
-                rowClassName={(record) => record.action === 'remove' ? 'bg-red-50 opacity-50' : ''}
+                locale={{ emptyText: 'No tools fitted yet' }}
             />
         </Card>
     );

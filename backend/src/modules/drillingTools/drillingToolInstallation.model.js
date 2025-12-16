@@ -48,10 +48,6 @@ const DrillingToolInstallation = sequelize.define(
             type: DataTypes.DOUBLE,
             allowNull: true,
         },
-        fittedMeter: {
-            type: DataTypes.DOUBLE,
-            allowNull: true,
-        },
         // Removed Details
         removedDate: {
             type: DataTypes.DATEONLY,
@@ -61,20 +57,11 @@ const DrillingToolInstallation = sequelize.define(
             type: DataTypes.DOUBLE,
             allowNull: true,
         },
-        removedMeter: {
-            type: DataTypes.DOUBLE,
-            allowNull: true,
-        },
         // Tracking
-        initialAccumulatedMeter: {
+        accumulatedMeter: {
             type: DataTypes.DOUBLE,
             defaultValue: 0,
-            comment: "Accumulated meter of the tool BEFORE this installation",
-        },
-        currentAccumulatedMeter: {
-            type: DataTypes.DOUBLE,
-            defaultValue: 0,
-            comment: "Total meter run by tool including current installation",
+            comment: "Total meter run during this installation period",
         },
         ...commonFields,
     },

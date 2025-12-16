@@ -172,6 +172,13 @@ const ServiceUsageReport = () => {
       width: 100,
     },
     {
+      title: "Site",
+      dataIndex: ["site", "siteName"],
+      key: "site",
+      width: 120,
+      render: (val, record) => record.site?.siteName || '-'
+    },
+    {
       title: "Machine",
       dataIndex: ["machine", "machineNumber"],
       key: "machine",

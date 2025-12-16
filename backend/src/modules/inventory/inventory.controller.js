@@ -119,7 +119,8 @@ export const InventoryController = {
                     partNumber: s.drillingTool?.partNumber,
                     totalRPM: s.drillingTool?.totalRPM,
                     totalMeter: s.drillingTool?.totalMeter,
-                    price: s.drillingTool?.price
+                    price: s.drillingTool?.price,
+                    rpmSource: s.drillingTool?.rpmSource
                 }));
 
                 return {

@@ -49,66 +49,41 @@ class DailyEntryCustomController extends BaseController {
   };
 
   // Endpoint: Get fitted drilling tools
-  // Returns tools that have been INSTALLED but not REMOVED (latest log status)
+  // Returns tools that have been INSTALLED but not REMOVED (status = ACTIVE)
   getFittedDrillingTools = async (req, res, next) => {
     try {
-      const { compressorId, machineId } = req.query;
-      const where = {};
+      const { machineId } = req.query;
 
-      // Filter logs by machine if provided (Tools are fitted to machine)
-      // Note: DrillingToolLog does not track compressorId, so we ignore it if passed.
-      if (machineId) where.machineId = machineId;
+      if (!machineId) {
+        return res.status(400).json({ success: false, message: "machineId is required" });
+      }
 
-      // Fetch all logs for relevant scope
-      const logs = await DrillingToolLog.findAll({
-        where: where,
-        order: [['date', 'ASC'], ['createdAt', 'ASC']],
+      const installations = await DrillingToolInstallation.findAll({
+        where: {
+          machineId,
+          status: 'ACTIVE'
+        },
         include: [
-          { model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber'] }
+          {
+            model: DrillingTools,
+            as: 'drillingTool',
+            attributes: ['id', 'name', 'partNumber', 'rpmSource']
+          }
         ]
       });
 
-      // Compute status per tool - Aggregate quantity
-      const toolMap = new Map(); // drillingToolId -> { log, netQuantity }
-
-      logs.forEach(log => {
-        const toolId = log.drillingToolId;
-        const qty = log.quantity || 1;
-
-        if (!toolMap.has(toolId)) {
-          // Initialize with basic info from first encounter
-          toolMap.set(toolId, {
-            ...log.toJSON(),
-            netQuantity: 0
-          });
-        }
-
-        const entry = toolMap.get(toolId);
-
-        if (log.action === 'INSTALL') {
-          entry.netQuantity += qty;
-          // Update with latest log details (since logs are ordered ASC, later logs overwrite early ones for metadata)
-          Object.assign(entry, log.toJSON());
-        } else if (log.action === 'REMOVE') {
-          entry.netQuantity -= qty;
-        }
-      });
-
-      const fittedTools = [];
-      for (const [toolId, data] of toolMap.entries()) {
-        if (data.netQuantity > 0) {
-          fittedTools.push({
-            ...data,
-            quantity: data.netQuantity,
-            status: 'FITTED',
-            // Flatten for frontend
-            itemServiceId: toolId,
-            itemId: toolId,
-            itemName: data.drillingTool?.name,
-            partNumber: data.drillingTool?.partNumber
-          });
-        }
-      }
+      const fittedTools = installations.map(inst => ({
+        installationId: inst.id,
+        drillingToolId: inst.drillingToolId,
+        toolName: inst.drillingTool?.name,
+        partNumber: inst.drillingTool?.partNumber,
+        rpmSource: inst.drillingTool?.rpmSource,
+        fittedDate: inst.fittedDate,
+        fittedRPM: inst.fittedRPM,
+        removedRPM: inst.removedRPM,
+        accumulatedMeter: inst.accumulatedMeter || 0,
+        status: inst.status
+      }));
 
       return res.json({ success: true, data: fittedTools });
 
@@ -229,7 +204,7 @@ class DailyEntryCustomController extends BaseController {
           {
             model: DrillingToolLog,
             as: "drillingLogs",
-            include: [{ model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber', 'copyRpm'] }]
+            include: [{ model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber', 'rpmSource'] }]
           },
         ],
       });
@@ -421,93 +396,136 @@ class DailyEntryCustomController extends BaseController {
   };
 
   // Helper: Process drilling tools
-  processDrillingTools = async (drillingTools, dailyEntryId, compressorId, machineId, siteId, date, username, transaction) => {
+  processDrillingTools = async (drillingTools, dailyEntryId, compressorId, machineId, siteId, date, machineClosingRPM, compressorClosingRPM, meter, username, initialAccumulatedMeter = 0, transaction) => {
     if (!drillingTools || drillingTools.length === 0) return;
 
-    // Pre-fetch all tool definitions to check copyRpm setting
-    const toolIds = drillingTools.map(t => t.toolId);
+    // Pre-fetch all tool definitions to check rpmSource setting
+    const validTools = drillingTools.filter(t => t.itemId || t.drillingToolId);
+    if (validTools.length === 0) return;
+
+    const toolIds = validTools.map(t => t.itemId || t.drillingToolId);
     const toolDefs = await DrillingTools.findAll({
       where: { id: toolIds },
-      attributes: ['id', 'copyRpm'],
+      attributes: ['id', 'name', 'rpmSource'],
       transaction
     });
-    const toolDefMap = new Map(toolDefs.map(td => [td.id, td.copyRpm]));
+    const toolDefMap = new Map(toolDefs.map(td => [td.id, td]));
 
-    for (const tool of drillingTools) {
-      const logDate = tool.date || date;
-      const qty = tool.quantity || 1;
+    for (const tool of validTools) {
+      const toolId = tool.itemId || tool.drillingToolId;
+      const toolDef = toolDefMap.get(toolId);
 
-      const copySetting = toolDefMap.get(tool.toolId);
-      let logRPM = 0;
-
-      if (copySetting === 'machine') {
-        logRPM = tool.currentMachineRPM || 0;
-      } else if (copySetting === 'compressor') {
-        logRPM = tool.currentCompressorRPM || 0;
+      if (!toolDef) {
+        console.warn(`Tool definition not found for ID: ${toolId}`);
+        continue;
       }
 
-      await DrillingToolLog.create({
-        drillingToolId: tool.toolId,
-        siteId,
-        machineId,
-        action: (tool.action === 'fit' ? 'INSTALL' : (tool.action === 'remove' ? 'REMOVE' : 'INSTALL')), // Map fit/remove. Fallback 'update' -> 'INSTALL'? Or ignore? Zod allows 'update'. Log model only INSTALL/REMOVE. Assuming update=install for now or needs DB migration.
-        date: logDate,
-        quantity: qty,
-        currentMachinePRM: logRPM,
-        currentMachineMeter: tool.currentMachineMeter || 0,
-        createdBy: username,
-        dailyEntryId
-      }, { transaction });
+      // Determine RPM based on tool's rpmSource setting
+      const rpmSource = toolDef.rpmSource || 'machine';
+      const recordedRPM = rpmSource === 'compressor' ? compressorClosingRPM : machineClosingRPM;
 
-      const stock = await SiteStock.findOne({
-        where: { siteId, drillingToolId: tool.toolId },
-        transaction
-      });
+      const action = (tool.action || 'fit').toLowerCase();
+      console.log(`Processing drilling tool: ${toolDef.name}, action: ${action}, toolId: ${toolId}`);
 
-      if (tool.action === 'INSTALL') {
-        // 1. Decrement Stock
-        if (stock && stock.quantity > 0) {
-          await stock.decrement('quantity', { by: qty, transaction });
-        }
-
-        // 2. Create Active Installation
-        // Check if already active? (Ideally shouldn't be)
-        await DrillingToolInstallation.create({
-          drillingToolId: tool.toolId,
-          machineId,
-          siteId,
-          fittedDate: logDate,
-          fittedRPM: logRPM,
-          fittedMeter: tool.currentMachineMeter || 0, // Snapshot meter at install
-          status: 'ACTIVE',
-          initialAccumulatedMeter: 0, // Or fetch previous history?
-          currentMeter: 0,
-          currentAccumulatedMeter: 0
-        }, { transaction });
-
-      } else if (tool.action === 'REMOVE') {
-        // Close Active Installation
-        const installation = await DrillingToolInstallation.findOne({
-          where: {
-            drillingToolId: tool.toolId,
-            machineId: machineId, // Must match machine we are removing from
-            status: 'ACTIVE'
-          },
+      if (action === 'fit') {
+        // FIT TOOL WORKFLOW
+        // 1. Check site stock
+        const stock = await SiteStock.findOne({
+          where: { siteId, drillingToolId: toolId },
           transaction
         });
 
-        if (installation) {
-          await installation.update({
-            removedDate: logDate,
-            removedRPM: logRPM,
-            removedMeter: tool.currentMachineMeter || 0,
-            status: 'COMPLETED'
-          }, { transaction });
-
-          // Note: Meter accumulation for the delta (RemovedMeter - FittedMeter) 
-          // is effectively handled by daily meter increments up to this point?
-          // If we accumulated daily, `currentAccumulatedMeter` is accurate.
+        if (!stock || stock.quantity < 1) {
+          throw new Error(`Insufficient stock for tool "${toolDef.name}" at this site`);
         }
+
+        // 2. Determine initial accumulated meter
+        // Use currentMachineMeter from tool if provided (from frontend), otherwise use initialAccumulatedMeter
+        const toolInitialMeter = tool.currentMachineMeter !== undefined ? Number(tool.currentMachineMeter) : initialAccumulatedMeter;
+
+        // 3. Create installation record
+        await DrillingToolInstallation.create({
+          drillingToolId: toolId,
+          machineId,
+          siteId,
+          fittedDate: date,
+          fittedRPM: recordedRPM || 0,
+          fittedMeter: 0, // Starting point
+          accumulatedMeter: toolInitialMeter, // Initialize with meter value from frontend
+          status: 'ACTIVE',
+          createdBy: username
+        }, { transaction });
+
+        // 4. Decrement stock
+        await stock.decrement('quantity', { by: 1, transaction });
+
+        // 5. Create log entry
+        await DrillingToolLog.create({
+          drillingToolId: toolId,
+          siteId,
+          machineId,
+          dailyEntryId,
+          action: 'INSTALL',
+          date,
+          quantity: 1,
+          currentMachinePRM: recordedRPM || 0,
+          currentMachineMeter: toolInitialMeter, // Use the same meter value
+          createdBy: username
+        }, { transaction });
+
+      } else if (action === 'remove') {
+        // REMOVE TOOL WORKFLOW
+        // 1. Find active installation by installationId (if provided) or by drillingToolId
+        let installation;
+
+        if (tool.installationId) {
+          // Use installationId for precise removal
+          installation = await DrillingToolInstallation.findOne({
+            where: { id: tool.installationId, status: 'ACTIVE' },
+            transaction
+          });
+        } else {
+          // Fallback: find by drillingToolId
+          installation = await DrillingToolInstallation.findOne({
+            where: { drillingToolId: toolId, machineId, status: 'ACTIVE' },
+            transaction
+          });
+        }
+
+        if (!installation) {
+          console.warn(`No active installation found for tool "${toolDef.name}" on this machine`);
+          continue;
+        }
+
+        // 2. Close installation
+        // Accumulate the current shift's meter to the total before closing
+        const currentShiftMeter = Number(meter) || 0;
+        const finalAccumulated = (installation.accumulatedMeter || 0) + currentShiftMeter;
+
+        await installation.update({
+          removedDate: date,
+          removedRPM: recordedRPM || 0,
+          removedMeter: finalAccumulated, // Store final accumulated meter
+          accumulatedMeter: finalAccumulated, // Ensure accumulated meter is up to date
+          status: 'COMPLETED',
+          updatedBy: username
+        }, { transaction });
+
+        // 3. Create log entry
+        await DrillingToolLog.create({
+          drillingToolId: toolId,
+          siteId,
+          machineId,
+          dailyEntryId,
+          action: 'REMOVE',
+          date,
+          quantity: 1,
+          currentMachinePRM: recordedRPM || 0,
+          currentMachineMeter: installation.accumulatedMeter || 0,
+          createdBy: username
+        }, { transaction });
+
+        // Note: Stock is NOT incremented (tools are consumed/worn)
       }
     }
   };
@@ -749,23 +767,27 @@ class DailyEntryCustomController extends BaseController {
 
       // Drilling Tools
       if (req.body.drillingTools && req.body.drillingTools.length > 0) {
-        const machineRPM = finalMachineClosingRPM || 0;
-        const compressorRPM = compressorClosingRPM || 0;
         await this.processDrillingTools(
-          req.body.drillingTools.map(t => ({
-            ...t,
-            toolId: t.itemId, // Map itemId (from schema) to toolId (for logic)
-            currentMachineRPM: machineRPM,
-            currentCompressorRPM: compressorRPM,
-            currentMachineMeter: req.body.machineEndMeter || 0
-          })),
-          entry.id, compressorId, machineId, siteId, entry.date, req.user.username, transaction
+          req.body.drillingTools,
+          entry.id,
+          compressorId,
+          machineId,
+          siteId,
+          entry.date,
+          finalMachineClosingRPM || 0,
+          compressorClosingRPM || 0,
+          entry.meter || 0, // Pass meter for accumulation/removal
+          req.user.username,
+          0, // initialAccumulatedMeter for Create is 0
+          transaction
         );
       }
 
       // Drilling Tools Meter Accumulation
-      const entryMeter = req.body.meter || 0;
-      if (entryMeter > 0 && machineId) {
+      // Use the meter value from the created entry
+      const totalMeter = entry.meter || 0;
+
+      if (totalMeter > 0 && machineId) {
         const activeInstallations = await DrillingToolInstallation.findAll({
           where: {
             machineId: machineId,
@@ -775,7 +797,7 @@ class DailyEntryCustomController extends BaseController {
         });
 
         for (const install of activeInstallations) {
-          await install.increment('currentAccumulatedMeter', { by: entryMeter, transaction });
+          await install.increment('accumulatedMeter', { by: totalMeter, transaction });
         }
       }
 
@@ -838,28 +860,20 @@ class DailyEntryCustomController extends BaseController {
         await svc.destroy({ transaction });
       }
 
-      // === 2. Revert Old Drilling Tools (Restore Tool Stock) ===
+      // === 2. Delete Old Drilling Tool Logs ===
+      // Note: We only delete the logs, NOT the installations or stock
+      // Installations are permanent historical records
       const oldLogs = await DrillingToolLog.findAll({ where: { dailyEntryId: id }, transaction });
       for (const log of oldLogs) {
-        if (log.action === 'INSTALL') {
-          // If it was installed, we deducted stock. Now put it back.
-          const stock = await SiteStock.findOne({
-            where: { siteId: log.siteId, drillingToolId: log.drillingToolId },
-            transaction
-          });
-          if (stock) {
-            await stock.increment('quantity', { by: log.quantity, transaction });
-          }
-        }
-        // If REMOVE, we assume it went to "Loose/Broken" or wasn't added back to stock in original logic,
-        // so we don't reverse anything stock-wise (unless we change Remove logic too).
-        // For now, mirroring create logic: only INSTALL affects stock.
         await log.destroy({ transaction });
       }
 
       // === 3. Update Entry Basic Fields ===
       // Note: We use the values from req.body, falling back to existing if undefined?
       // actually update() will set them.
+      // Capture old meter for delta calculation
+      const oldMeter = existingEntry.meter || 0;
+
       await existingEntry.update({
         date, shift, machineId, compressorId,
         machineOpeningRPM, machineClosingRPM,
@@ -892,7 +906,7 @@ class DailyEntryCustomController extends BaseController {
       }
 
       // === 5. Apply New Services (Consume Spares) ===
-      const siteId = existingEntry.siteId; // Site shouldn't change typically, or we use new siteId if updated
+      const siteId = req.body.siteId || existingEntry.siteId; // Use new siteId if provided, else existing
       // But update above updated existingEntry.
       // Note: If siteId changed, existingEntry.siteId is new siteId.
 
@@ -980,18 +994,45 @@ class DailyEntryCustomController extends BaseController {
       }
 
       // === 6. Apply New Drilling Tools ===
+      // === 6. Apply New Drilling Tools ===
       if (req.body.drillingTools && req.body.drillingTools.length > 0) {
         const machineRPM = existingEntry.machineClosingRPM || 0;
         const compressorRPM = existingEntry.compressorClosingRPM || 0;
+        // Calculate new effective meter for removal logic
+        const currentMeter = req.body.meter !== undefined ? Number(req.body.meter) : oldMeter;
+
         await this.processDrillingTools(
-          req.body.drillingTools.map(t => ({
-            ...t,
-            currentMachineRPM: machineRPM,
-            currentCompressorRPM: compressorRPM,
-            currentMachineMeter: existingEntry.meter || 0
-          })),
-          id, effectiveCompressorId, effectiveMachineId, siteId, existingEntry.date, req.user.username, transaction
+          req.body.drillingTools,
+          id,
+          effectiveCompressorId,
+          effectiveMachineId,
+          siteId,
+          existingEntry.date,
+          machineRPM,
+          compressorRPM,
+          currentMeter, // Pass CURRENT meter for removal logic
+          req.user.username,
+          oldMeter, // Pass OLD meter as initial value for new tools
+          transaction
         );
+      }
+
+      // Drilling Tools Meter Accumulation (Delta Logic)
+      const newMeter = req.body.meter !== undefined ? Number(req.body.meter) : oldMeter;
+      const meterDiff = newMeter - oldMeter;
+
+      if (meterDiff !== 0 && effectiveMachineId) {
+        const activeInstallations = await DrillingToolInstallation.findAll({
+          where: {
+            machineId: effectiveMachineId,
+            status: 'ACTIVE'
+          },
+          transaction
+        });
+
+        for (const install of activeInstallations) {
+          await install.increment('accumulatedMeter', { by: meterDiff, transaction });
+        }
       }
 
       await transaction.commit();
@@ -1006,6 +1047,110 @@ class DailyEntryCustomController extends BaseController {
 
       return res.json({ success: true, message: "DailyEntry updated successfully", data: updatedEntry });
 
+    } catch (error) {
+      if (transaction) await transaction.rollback();
+      next(error);
+    }
+  };
+  delete = async (req, res, next) => {
+    let transaction;
+    try {
+      transaction = await DailyEntry.sequelize.transaction();
+      const { id } = req.params;
+
+      const entry = await DailyEntry.findByPk(id, { transaction });
+      if (!entry) {
+        await transaction.rollback();
+        return res.status(404).json({ success: false, message: "DailyEntry not found" });
+      }
+
+      // 1. Revert Services (Spares)
+      const services = await Service.findAll({ where: { dailyEntryId: id }, transaction });
+      for (const svc of services) {
+        if (svc.sparesUsed && svc.sparesUsed.length > 0) {
+          for (const spare of svc.sparesUsed) {
+            if (spare.itemId && spare.quantity) {
+              const stock = await SiteStock.findOne({
+                where: { siteId: svc.siteId, spareId: spare.itemId },
+                transaction
+              });
+              if (stock) {
+                await stock.increment('quantity', { by: spare.quantity, transaction });
+              }
+            }
+          }
+        }
+        await svc.destroy({ transaction });
+      }
+
+      // 2. Revert Drilling Tools
+      const logs = await DrillingToolLog.findAll({ where: { dailyEntryId: id }, transaction });
+      for (const log of logs) {
+        if (log.action === 'INSTALL') {
+          // Revert Install: Back to Stock, Delete Installation
+          const stock = await SiteStock.findOne({
+            where: { siteId: log.siteId, drillingToolId: log.drillingToolId },
+            transaction
+          });
+          if (stock) {
+            await stock.increment('quantity', { by: log.quantity, transaction });
+          }
+          // Remove Installation Record
+          await DrillingToolInstallation.destroy({
+            where: {
+              drillingToolId: log.drillingToolId,
+              machineId: log.machineId,
+              fittedDate: log.date
+            },
+            transaction
+          });
+        } else if (log.action === 'REMOVE') {
+          // Revert Remove: Re-activate Installation, Revert Master Stats
+          const installation = await DrillingToolInstallation.findOne({
+            where: {
+              drillingToolId: log.drillingToolId,
+              machineId: log.machineId,
+              removedDate: log.date,
+              status: 'COMPLETED'
+            },
+            transaction
+          });
+
+          if (installation) {
+            // Calculate what was added to Master Stats
+            const runMeter = Math.max(0, (log.currentMachineMeter || 0) - (installation.fittedMeter || 0));
+            // For RPM, we used log.currentMachinePRM - installation.fittedRPM
+            // But valid data only if logRPM > fittedRPM.
+            // We need to fetch original log logic for RPM calculation?
+            // In processDrillingTools: logRPM - fittedRPM.
+            // We use log.currentMachinePRM.
+            const runRPM = Math.max(0, (log.currentMachinePRM || 0) - (installation.fittedRPM || 0));
+
+            await DrillingTools.decrement({
+              totalMeter: runMeter,
+              totalRPM: runRPM
+            }, { where: { id: log.drillingToolId }, transaction });
+
+            await installation.update({
+              status: 'ACTIVE',
+              removedDate: null,
+              removedRPM: null,
+              removedMeter: null
+            }, { transaction });
+          }
+        }
+        // Force delete log
+        await log.destroy({ force: true, transaction });
+      }
+
+      // 3. Delete Employees
+      await DailyEntryEmployee.destroy({ where: { dailyEntryId: id }, transaction });
+
+      // 4. Delete Entry
+      await entry.destroy({ transaction });
+
+      await transaction.commit();
+      return res.json({ success: true, message: "DailyEntry deleted successfully" });
     } catch (error) {
       if (transaction) await transaction.rollback();
       next(error);

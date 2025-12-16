@@ -241,9 +241,13 @@ const DrillingToolsManagement = () => {
                         <Input />
                     </Form.Item>
 
-                    <Form.Item name="copyRpm" label="RPM Source" initialValue="none">
+                    <Form.Item
+                        name="rpmSource"
+                        label="RPM Source"
+                        initialValue="machine"
+                        rules={[{ required: true, message: "Please select RPM source" }]}
+                    >
                         <Select>
-                            <Select.Option value="none">None (Manual/Fixed)</Select.Option>
                             <Select.Option value="machine">Machine RPM</Select.Option>
                             <Select.Option value="compressor">Compressor RPM</Select.Option>
                         </Select>

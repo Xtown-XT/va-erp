@@ -20,6 +20,7 @@ import PurchaseOrder from "../../modules/inventory/models/purchaseOrder.model.js
 import PurchaseOrderItem from "../../modules/inventory/models/purchaseOrderItem.model.js";
 import ServiceHistory from "../../modules/service/models/serviceHistory.model.js";
 import ServiceItem from "../../modules/service/models/serviceItem.model.js";
+import DrillingToolInstallation from "../../modules/drillingTools/drillingToolInstallation.model.js";
 
 export const defineAssociations = () => {
 
@@ -162,4 +163,14 @@ export const defineAssociations = () => {
   // Missing association causing EagerLoadingError
   DrillingToolLog.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
   DrillingTools.hasMany(DrillingToolLog, { foreignKey: "drillingToolId", as: "logs" });
+
+  // ========== DRILLING TOOL INSTALLATION RELATIONSHIPS ==========
+  DrillingToolInstallation.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
+  DrillingTools.hasMany(DrillingToolInstallation, { foreignKey: "drillingToolId", as: "installations" });
+
+  DrillingToolInstallation.belongsTo(Site, { foreignKey: "siteId", as: "site" });
+  Site.hasMany(DrillingToolInstallation, { foreignKey: "siteId", as: "toolInstallations" });
+
+  DrillingToolInstallation.belongsTo(Machine, { foreignKey: "machineId", as: "machine" });
+  Machine.hasMany(DrillingToolInstallation, { foreignKey: "machineId", as: "toolInstallations" });
 };

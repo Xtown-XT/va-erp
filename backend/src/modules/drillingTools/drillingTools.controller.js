@@ -139,23 +139,17 @@ controller.removeTool = async (req, res, next) => {
             return res.status(404).json({ success: false, message: "Installation not found" });
         }
 
-        // Calculate run meter
-        const runMeter = (removedMeter || 0) - (installation.fittedMeter || 0);
+        // Accumulate meter before closing
+        // removedMeter from body is treated as the current shift's run
+        const currentShiftMeter = Number(removedMeter) || 0;
+        const finalAccumulated = (installation.accumulatedMeter || 0) + currentShiftMeter;
 
         await installation.update({
             removedDate,
             removedRPM,
-            removedMeter,
+            removedMeter: finalAccumulated, // Store total accumulated
+            accumulatedMeter: finalAccumulated, // Update reference
             status: 'COMPLETED',
-            // Update accumulated one last time if we rely on removedMeter
-            // But we were updating it daily. 
-            // If we trust daily entry, currentAccumulatedMeter is up to date.
-            // If we trust removedMeter, we might want to reconcile.
-            // Let's assume Daily Entry kept it mostly up to date, but removedMeter is the final truth?
-            // User said: "Removed - Fitted"
-            // Let's NOT overwrite accumulatedMeter here to avoid conflict with daily entries, 
-            // unless we want to enforce consistency.
-            // For now just close it.
         }, { transaction: t });
 
         // NOTE: Stock is NOT incremented upon removal (assumed used/broken).
@@ -164,6 +158,106 @@ controller.removeTool = async (req, res, next) => {
         return res.json({ success: true, message: "Tool Removed", data: installation });
     } catch (error) {
         await t.rollback();
+        next(error);
+    }
+};
+
+// Report: Machine-wise drilling tools usage
+controller.getMachineWiseReport = async (req, res, next) => {
+    try {
+        const { startDate, endDate, machineId, siteId } = req.query;
+        const Machine = await import("../machine/machine.model.js").then(m => m.default);
+        const Site = await import("../site/site.model.js").then(m => m.default);
+        const DrillingToolInstallation = await import("./drillingToolInstallation.model.js").then(m => m.default);
+
+        const where = {};
+        if (startDate) where.fittedDate = { [Op.gte]: startDate };
+        if (endDate) {
+            where.fittedDate = where.fittedDate || {};
+            where.fittedDate[Op.lte] = endDate;
+        }
+        if (machineId) where.machineId = machineId;
+        if (siteId) where.siteId = siteId;
+
+        const installations = await DrillingToolInstallation.findAll({
+            where,
+            include: [
+                { model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber', 'rpmSource'] },
+                { model: Machine, as: 'machine', attributes: ['id', 'machineType', 'machineNumber'] },
+                { model: Site, as: 'site', attributes: ['id', 'siteName'] }
+            ],
+            order: [['fittedDate', 'DESC']]
+        });
+
+        const report = installations.map(inst => ({
+            installationId: inst.id,
+            toolName: inst.drillingTool?.name,
+            partNumber: inst.drillingTool?.partNumber,
+            rpmSource: inst.drillingTool?.rpmSource,
+            machine: `${inst.machine?.machineType} ${inst.machine?.machineNumber}`,
+            machineId: inst.machineId,
+            site: inst.site?.siteName,
+            siteId: inst.siteId,
+            fittedDate: inst.fittedDate,
+            fittedRPM: inst.fittedRPM,
+            removedDate: inst.removedDate,
+            removedRPM: inst.removedRPM,
+            accumulatedMeter: inst.accumulatedMeter || 0,
+            status: inst.status
+        }));
+
+        return res.json({ success: true, data: report, total: report.length });
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Report: Site-wise drilling tools usage
+controller.getSiteWiseReport = async (req, res, next) => {
+    try {
+        const { startDate, endDate, siteId, machineId } = req.query;
+        const Machine = await import("../machine/machine.model.js").then(m => m.default);
+        const Site = await import("../site/site.model.js").then(m => m.default);
+        const DrillingToolInstallation = await import("./drillingToolInstallation.model.js").then(m => m.default);
+
+        const where = {};
+        if (startDate) where.fittedDate = { [Op.gte]: startDate };
+        if (endDate) {
+            where.fittedDate = where.fittedDate || {};
+            where.fittedDate[Op.lte] = endDate;
+        }
+        if (siteId) where.siteId = siteId;
+        if (machineId) where.machineId = machineId;
+
+        const installations = await DrillingToolInstallation.findAll({
+            where,
+            include: [
+                { model: DrillingTools, as: 'drillingTool', attributes: ['id', 'name', 'partNumber', 'rpmSource'] },
+                { model: Machine, as: 'machine', attributes: ['id', 'machineType', 'machineNumber'] },
+                { model: Site, as: 'site', attributes: ['id', 'siteName'] }
+            ],
+            order: [['siteId', 'ASC'], ['fittedDate', 'DESC']]
+        });
+
+        const report = installations.map(inst => ({
+            installationId: inst.id,
+            toolName: inst.drillingTool?.name,
+            partNumber: inst.drillingTool?.partNumber,
+            rpmSource: inst.drillingTool?.rpmSource,
+            site: inst.site?.siteName,
+            siteId: inst.siteId,
+            machine: `${inst.machine?.machineType} ${inst.machine?.machineNumber}`,
+            machineId: inst.machineId,
+            fittedDate: inst.fittedDate,
+            fittedRPM: inst.fittedRPM,
+            removedDate: inst.removedDate,
+            removedRPM: inst.removedRPM,
+            accumulatedMeter: inst.accumulatedMeter || 0,
+            status: inst.status
+        }));
+
+        return res.json({ success: true, data: report, total: report.length });
+    } catch (error) {
         next(error);
     }
 };
