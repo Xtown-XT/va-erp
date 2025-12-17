@@ -74,7 +74,20 @@ const PurchaseOrderComplete = () => {
         api.get("/api/items?limit=1000"),
       ]);
 
-      setPurchaseOrders(posRes.data.data || []);
+      // Transform PO data to include poItems with proper item structure for PDF generation
+      const transformedPOs = (posRes.data.data || []).map(po => ({
+        ...po,
+        poItems: (po.items || []).map(i => ({
+          id: i.id,
+          itemId: i.spareId || i.drillingToolId,
+          quantity: i.quantity,
+          rate: i.unitPrice,
+          total: i.totalPrice,
+          item: i.spare || i.drillingTool // This contains itemName
+        }))
+      }));
+
+      setPurchaseOrders(transformedPOs);
       setSuppliers(suppliersRes.data.data || []);
       setAddresses(addressesRes.data.data || []);
       setItems(itemsRes.data.data || []);
@@ -374,7 +387,7 @@ const PurchaseOrderComplete = () => {
     const address = po.address;
 
     // Calculate totals using unified function
-    const { subTotal: calcSubTotal, taxTotal: calcTaxTotal, grandTotal: calcGrandTotal } = 
+    const { subTotal: calcSubTotal, taxTotal: calcTaxTotal, grandTotal: calcGrandTotal } =
       calculateGSTTotals(po.poItems || [], po.gstInclude || false, po.gstPercent || 18);
 
     // Calculate per-item values for display
@@ -1118,7 +1131,7 @@ const PurchaseOrderComplete = () => {
                   type="primary"
                   htmlType="submit"
                   disabled={poItems.length === 0}
-                 
+
                 >
                   {editingId ? "Update Purchase Order" : "Create Purchase Order"}
                 </Button>
@@ -1250,7 +1263,7 @@ const PurchaseOrderComplete = () => {
                   {(() => {
                     // Use backend values if available, otherwise calculate
                     let displaySubTotal, displayTaxTotal, displayGrandTotal;
-                    
+
                     if (selectedPO.subTotal !== undefined && selectedPO.taxTotal !== undefined && selectedPO.grandTotal !== undefined) {
                       // Use backend calculated values
                       displaySubTotal = selectedPO.subTotal;
@@ -1267,7 +1280,7 @@ const PurchaseOrderComplete = () => {
                       displayTaxTotal = calculated.taxTotal;
                       displayGrandTotal = calculated.grandTotal;
                     }
-                    
+
                     return (
                       <>
                         <p><strong>Sub Total:</strong> ₹{truncateToFixed(displaySubTotal, 2)}</p>

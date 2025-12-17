@@ -224,10 +224,6 @@ const CreatePurchaseOrder = ({ visible, onCancel, onSuccess, editingPO }) => {
                     min={1}
                     value={record.quantity}
                     onChange={(val) => handleRowChange(record.key, 'quantity', val)}
-                    disabled={record.itemType === 'drillingTool'} // Disable qty for drilling tools per user logic? usually tools are unique. Or allow > 1? User didn't specify, but often tools are 1. Let's keep enabled unless requested. Wait, previous code had disabled={!type} logic but not specifically Qty disable. I will leave ENABLED for now.
-                // Actually, in the Modal version previously, it had `disabled={isTool}` for Qty. Tools are usually serialized. 
-                // Let's re-add that logic if it was there. Checking line 209 in original view (line 209 in step 2399 view said disabled={isTool}).
-                // So yes, I should disable qty for tools or set to 1.
                 />
             )
         },

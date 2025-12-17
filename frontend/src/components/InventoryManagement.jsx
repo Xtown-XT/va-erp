@@ -140,12 +140,6 @@ const InventoryManagement = () => {
     { title: 'Tool Name', dataIndex: 'name', key: 'name', sorter: (a, b) => a.name.localeCompare(b.name) },
     { title: 'Part Number', dataIndex: 'partNumber', key: 'partNumber' },
     {
-      title: 'Price',
-      dataIndex: 'price',
-      key: 'price',
-      render: (price) => price ? `₹${price}` : '-'
-    },
-    {
       title: 'Total Quantity',
       dataIndex: 'quantity',
       key: 'quantity',
