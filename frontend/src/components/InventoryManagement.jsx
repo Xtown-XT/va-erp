@@ -26,9 +26,9 @@ const InventoryManagement = () => {
   useEffect(() => {
     fetchSiteWiseStock();
     // Fetch dropdown data
-    api.get('/api/sites').then(res => setSites(res.data.data)).catch(console.error);
-    api.get('/api/spares').then(res => setSpares(res.data.data)).catch(console.error);
-    api.get('/api/drilling-tools').then(res => setTools(res.data.data)).catch(console.error);
+    api.get('/api/sites?limit=1000').then(res => setSites(res.data.data)).catch(console.error);
+    api.get('/api/spares?limit=1000').then(res => setSpares(res.data.data)).catch(console.error);
+    api.get('/api/drilling-tools?limit=1000').then(res => setTools(res.data.data)).catch(console.error);
   }, []);
 
   const fetchSiteWiseStock = async () => {

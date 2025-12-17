@@ -27,7 +27,7 @@ const ReceivePurchaseOrder = ({ visible, po, onCancel, onSuccess }) => {
     useEffect(() => {
         const fetchSites = async () => {
             try {
-                const res = await api.get('/api/sites');
+                const res = await api.get('/api/sites?limit=1000');
                 if (res.data.success) setSites(res.data.data);
             } catch (e) { }
         };

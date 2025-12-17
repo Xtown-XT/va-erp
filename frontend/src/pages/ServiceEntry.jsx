@@ -34,7 +34,7 @@ const ServiceEntry = () => {
 
     const fetchSites = async () => {
         try {
-            const res = await api.get('/api/sites');
+            const res = await api.get('/api/sites?limit=1000');
             if (res.data.success) setSites(res.data.data);
         } catch (error) {
             console.error("Error fetching sites:", error);
@@ -43,7 +43,7 @@ const ServiceEntry = () => {
 
     const fetchSpares = async () => {
         try {
-            const res = await api.get('/api/spares'); // Assuming global list needed for selector
+            const res = await api.get('/api/spares?limit=1000'); // Assuming global list needed for selector
             if (res.data.success) setSpares(res.data.data);
         } catch (error) {
             console.error("Error fetching spares:", error);

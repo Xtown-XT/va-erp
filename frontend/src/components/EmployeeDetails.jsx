@@ -61,8 +61,8 @@ const EmployeeDetails = () => {
     setLoading(true);
     try {
       const [sitesRes, machinesRes] = await Promise.all([
-        api.get("/api/sites"),
-        api.get("/api/machines"),
+        api.get("/api/sites?limit=1000"),
+        api.get("/api/machines?limit=1000"),
       ]);
       const sitesData = sitesRes.data.data || [];
       const machinesData = machinesRes.data.data || [];
