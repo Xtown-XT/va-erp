@@ -79,7 +79,7 @@ const MaintenanceModal = ({ visible, onClose, asset, assetType, onSuccess, sites
             if (!Array.isArray(rawConfig)) rawConfig = [];
 
             const newConfigItem = {
-                id: editingConfig?.id,
+                id: editingConfig?.id || Date.now(),
                 name: values.name,
                 cycle: parseInt(values.cycle),
                 lastServiceRPM: parseInt(values.lastServiceRPM) || editingConfig?.lastServiceRPM || 0,
