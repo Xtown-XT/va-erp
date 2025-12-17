@@ -1,4 +1,6 @@
 // utils/baseCrud.js
+import { Op } from 'sequelize';
+
 export class BaseCrud {
   constructor(model) {
     this.model = model;
@@ -21,15 +23,35 @@ export class BaseCrud {
     return this.model.create(data);
   }
 
-  //  READ ALL with pagination
+  //  READ ALL with pagination and search
   async getAll(page = 1, limit = 10, options = {}) {
     const { limit: l, offset, page: safePage } = BaseCrud.paginate(page, limit);
+
+    // Extract search and searchFields from options
+    const { search, searchFields = [], ...otherOptions } = options;
+
+    // Build where clause for search
+    let whereClause = otherOptions.where || {};
+
+    if (search && searchFields.length > 0) {
+      const searchConditions = searchFields.map(field => ({
+        [field]: {
+          [Op.like]: `%${search}%`
+        }
+      }));
+
+      whereClause = {
+        ...whereClause,
+        [Op.or]: searchConditions
+      };
+    }
 
     const { rows, count } = await this.model.findAndCountAll({
       limit: l,
       offset,
       order: [["createdAt", "DESC"]],
-      ...options, // allow filters, includes, etc.
+      ...otherOptions,
+      where: whereClause,
     });
 
     return {
@@ -57,12 +79,12 @@ export class BaseCrud {
   async softDelete(id, userData = {}) {
     const item = await this.model.findByPk(id);
     if (!item) return null;
-    
+
     // Update with user data before soft delete
     if (userData.deletedBy) {
       await item.update({ deletedBy: userData.deletedBy });
     }
-    
+
     await item.destroy(); // Sequelize will set deletedAt instead of removing
     return item;
   }

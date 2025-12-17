@@ -13,7 +13,7 @@ export class BaseController {
         ...req.body,
         createdBy: req.user.username, // Store username from JWT token
       };
-      
+
       const item = await this.service.create(userData);
       return res.status(201).json({
         success: true,
@@ -28,8 +28,8 @@ export class BaseController {
   //  READ ALL
   getAll = async (req, res, next) => {
     try {
-      const { page = 1, limit = 10  } = req.query;
-      const items = await this.service.getAll(page, limit);
+      const { page = 1, limit = 10, search } = req.query;
+      const items = await this.service.getAll(page, limit, { search });
       return res.json({ success: true, ...items });
     } catch (error) {
       next(error);
@@ -60,7 +60,7 @@ export class BaseController {
         ...req.body,
         updatedBy: req.user.username, // Store username from JWT token
       };
-      
+
       const item = await this.service.update(req.params.id, userData);
       if (!item) {
         return res.status(404).json({
@@ -85,7 +85,7 @@ export class BaseController {
       const userData = {
         deletedBy: req.user.username, // Store username from JWT token
       };
-      
+
       const item = await this.service.softDelete(req.params.id, userData);
       if (!item) {
         return res.status(404).json({

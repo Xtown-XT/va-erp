@@ -167,6 +167,7 @@ const Machine = () => {
       setEditingId(null);
       form.resetFields();
       fetchMachines();
+      fetchBrands(); // Refresh brands in case a new brand was created
     } catch (err) {
       console.error("Error saving machine", err);
       const errorMessage = err.response?.data?.message || err.message || "Failed to save machine";
