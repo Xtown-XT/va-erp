@@ -14,7 +14,7 @@ import { FileExcelOutlined } from "@ant-design/icons";
 import * as XLSX from "xlsx";
 import api from "../service/api";
 import dayjs from "dayjs";
-import { useSites } from "../hooks/useQueries";
+import { useSites, useMachines } from "../hooks/useQueries";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -26,14 +26,16 @@ const SiteProductionReport = () => {
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState("sitewise"); // 'sitewise', 'machinewise', 'daywise'
   const [selectedSite, setSelectedSite] = useState(null);
+  const [selectedMachine, setSelectedMachine] = useState(null);
   const [dateRange, setDateRange] = useState([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
   ]);
   const [reportData, setReportData] = useState([]);
 
-  // Fetch sites for the day-wise filter
+  // Fetch sites and machines
   const { data: sites = [] } = useSites();
+  const { data: machines = [] } = useMachines();
 
   const fetchReport = async () => {
     if (!dateRange || dateRange.length !== 2) {
@@ -59,6 +61,9 @@ const SiteProductionReport = () => {
       } else if (viewMode === "daywise") {
         endpoint = "/api/reports/production-daywise";
         params += `&siteId=${selectedSite}`;
+        if (selectedMachine) {
+          params += `&machineId=${selectedMachine}`;
+        }
       }
 
       const res = await api.get(`${endpoint}?${params}`);
@@ -394,23 +399,48 @@ const SiteProductionReport = () => {
             </div>
 
             {viewMode === "daywise" && (
-              <div style={{ minWidth: 200 }}>
-                <Text strong className="block mb-1">
-                  Select Site
-                </Text>
-                <Select
-                  placeholder="Select Site"
-                  value={selectedSite}
-                  onChange={setSelectedSite}
-                  options={sites.map((s) => ({
-                    label: s.siteName,
-                    value: s.id,
-                  }))}
-                  style={{ width: "100%" }}
-                  showSearch
-                  optionFilterProp="label"
-                />
-              </div>
+              <>
+                <div style={{ minWidth: 200 }}>
+                  <Text strong className="block mb-1">
+                    Select Site
+                  </Text>
+                  <Select
+                    placeholder="Select Site"
+                    value={selectedSite}
+                    onChange={(val) => {
+                      setSelectedSite(val);
+                      setSelectedMachine(null); // Reset machine when site changes
+                    }}
+                    options={sites.map((s) => ({
+                      label: s.siteName,
+                      value: s.id,
+                    }))}
+                    style={{ width: "100%" }}
+                    showSearch
+                    optionFilterProp="label"
+                  />
+                </div>
+                <div style={{ minWidth: 200 }}>
+                  <Text strong className="block mb-1">
+                    Select Machine (Optional)
+                  </Text>
+                  <Select
+                    placeholder="All Machines"
+                    value={selectedMachine}
+                    onChange={setSelectedMachine}
+                    allowClear
+                    options={machines
+                      .filter(m => !selectedSite || m.siteId === selectedSite) // Filter machines by selected site if possible, or show all
+                      .map((m) => ({
+                        label: `${m.machineType} ${m.machineNumber}`,
+                        value: m.id,
+                      }))}
+                    style={{ width: "100%" }}
+                    showSearch
+                    optionFilterProp="label"
+                  />
+                </div>
+              </>
             )}
 
             <div>

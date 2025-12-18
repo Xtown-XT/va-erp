@@ -202,71 +202,8 @@ class ReportsController {
                 status: 'consumed' // Spares are consumed immediately
             }));
 
-            // 2. Fetch Drilling Tool Usage (DrillingToolInstallation)
-            // Filter by fittedDate or removedDate overlapping the range? 
-            // Or just fittedDate in range? Usually logs show activity in range.
-            // Let's use fittedDate for now to align with "Spares Usage Log".
-
-            // Need to import model first! Assuming I can add it to imports or it's available.
-            // Wait, need to check if imported. If not, add import at top of file.
-            const { default: DrillingToolInstallation } = await import("../drillingTools/drillingToolInstallation.model.js");
-            const { default: DrillingTools } = await import("../drillingTools/drillingTools.model.js");
-
-            const toolsWhere = {
-                fittedDate: { [Op.between]: [startDate, endDate] }
-            };
-            if (siteId) toolsWhere.siteId = siteId;
-
-            const toolsUsage = await DrillingToolInstallation.findAll({
-                where: toolsWhere,
-                include: [
-                    { model: DrillingTools, as: "drillingTool", attributes: ["name", "partNumber"] },
-                    { model: Site, as: "site", attributes: ["siteName"] },
-                    { model: Machine, as: "machine", attributes: ["machineNumber"] },
-                    // { model: Compressor, as: "compressor", attributes: ["compressorName"] } // Installation currently links to machine/site principally? 
-                    // Model def Check: machineId, siteId. No compressorId in Installation model definition I saw? 
-                    // Checking Task 553 output: attributes are machineId, siteId, drillingToolId. No compressorId.
-                    // But in dailyEntry controller line 446 it uses currentCompressorRPM. 
-                    // The Installation model links to Machine primarily. Tools on compressor? 
-                    // If compressors uses tools, Installation model needs compressorId? 
-                    // Line 41 in model definition file doesn't show compressorId... 
-                    // Wait, dailyEntry controller line 475 creates with: drillingToolId, machineId, siteId.
-                    // Where does it handle compressor tools?
-                    // dailyEntry controller line 753 checks compressorRPM.
-                    // But create() call at 754 passes `compressorId` to `processDrillingTools`.
-                    // `processDrillingTools` at 475 calls `DrillingToolInstallation.create`.
-                    // IF `machineId` is passed, it uses it. If tool is on compressor, is `machineId` null?
-                    // Model at 553: machineId allowNull: false.
-                    // So tools are always linked to a machine?
-                    // User request said: "show in report for that vehicle in that site".
-                    // So assuming Machine link is fine.
-                ]
-            });
-
-            const toolsData = toolsUsage.map(t => {
-                const totalRPM = t.removedRPM ? (t.removedRPM - (t.fittedRPM || 0)) : 0;
-                // If active, maybe show currentRPM - fittedRPM? But we don't have real-time currentRPM here easily unless linked to machine status.
-                // User asked "removed rpm - fitted rpm is total rpm". So mostly relevant for removed items.
-
-                return {
-                    id: t.id,
-                    fittedDate: t.fittedDate,
-                    siteName: t.site?.siteName,
-                    item: {
-                        itemName: t.drillingTool?.name,
-                        partNumber: t.drillingTool?.partNumber
-                    },
-                    quantity: 1, // Installations are always single items tracking
-                    serviceType: 'drilling_tool',
-                    machine: t.machine,
-                    machineId: t.machineId,
-                    totalRPMRun: totalRPM,
-                    totalMeterRun: t.currentAccumulatedMeter, // Tracks total meter for this installation
-                    status: t.status === 'ACTIVE' ? 'fitted' : 'removed'
-                };
-            });
-
-            const data = [...sparesData, ...toolsData].sort((a, b) => new Date(b.fittedDate) - new Date(a.fittedDate));
+            // Return strictly spares data
+            const data = sparesData.sort((a, b) => new Date(b.fittedDate) - new Date(a.fittedDate));
 
             return res.json({
                 success: true,
@@ -465,13 +402,21 @@ class ReportsController {
     // Production Report: Day-wise breakdown for a specific site
     productionDaywise = async (req, res) => {
         try {
-            const { startDate, endDate, siteId } = req.query;
+            const { startDate, endDate, siteId, machineId } = req.query; // Added machineId
 
             if (!startDate || !endDate || !siteId) {
                 return res.status(400).json({
                     success: false,
                     message: "startDate, endDate, and siteId are required",
                 });
+            }
+
+            let machineFilter = "";
+            const replacements = { startDate, endDate, siteId };
+
+            if (machineId) {
+                machineFilter = "AND de.machineId = :machineId";
+                replacements.machineId = machineId;
             }
 
             const results = await sequelize.query(`
@@ -499,10 +444,11 @@ class ReportsController {
                 JOIN machine m ON de.machineId = m.id
                 WHERE de.siteId = :siteId 
                   AND de.date BETWEEN :startDate AND :endDate
+                  ${machineFilter}
                 GROUP BY de.date
                 ORDER BY de.date
             `, {
-                replacements: { startDate, endDate, siteId },
+                replacements: replacements,
                 type: sequelize.QueryTypes.SELECT,
             });
 

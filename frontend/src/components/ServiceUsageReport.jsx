@@ -43,13 +43,13 @@ const ServiceUsageReport = () => {
     selectedCompressor
   );
 
-  // Filter only Drilling Tools
-  const usageData = allUsageData.filter(item => item.serviceType === 'drilling_tool');
+  // No filter needed as backend now returns only spares
+  const usageData = allUsageData;
 
   // Export to Excel (CSV format)
   const exportToExcel = () => {
     const csv = [
-      ["Drilling Tools Report"],
+      ["Spares Usage Report"],
       [`Date Range: ${startDate} to ${endDate}`],
       [`Generated: ${new Date().toLocaleString()}`],
       [],
@@ -79,7 +79,7 @@ const ServiceUsageReport = () => {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `drilling-tools-report-${startDate}-to-${endDate}.csv`;
+    link.download = `spares-usage-report-${startDate}-to-${endDate}.csv`;
     link.click();
   };
 
@@ -89,7 +89,7 @@ const ServiceUsageReport = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Drilling Tools Report</title>
+          <title>Spares Usage Report</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -102,7 +102,7 @@ const ServiceUsageReport = () => {
         </head>
         <body>
           <div class="header">
-            <h1>Drilling Tools Report</h1>
+            <h1>Spares Usage Report</h1>
             <p><strong>Date Range:</strong> ${startDate} to ${endDate}</p>
             <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
             ${selectedMachine ? `<p><strong>Machine:</strong> ${machines.find(m => m.id === selectedMachine)?.machineNumber || ""}</p>` : ""}
@@ -236,8 +236,8 @@ const ServiceUsageReport = () => {
       width: 80,
       render: (value) => {
         const colors = {
-          fitted: "blue",
-          removed: "default",
+          consumed: "blue",
+          removed: "red",
         };
         return <Tag color={colors[value] || "default"}>{value}</Tag>;
       },
@@ -249,7 +249,7 @@ const ServiceUsageReport = () => {
       <Card>
         <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
           <Col>
-            <Title level={2}>Drilling Tools Report</Title>
+            <Title level={2}>Spares Usage Report</Title>
           </Col>
           <Col>
             <Space>
@@ -346,15 +346,15 @@ const ServiceUsageReport = () => {
           </Col>
           <Col xs={24} sm={8}>
             <Card size="small">
-              <Text strong>Currently Fitted: </Text>
+              <Text strong>Total Consumed: </Text>
               <Text style={{ fontSize: "20px", color: "#52c41a" }}>
-                {usageData.filter((i) => i.status === "fitted").length}
+                {usageData.filter((i) => i.status === "consumed").length}
               </Text>
             </Card>
           </Col>
           <Col xs={24} sm={8}>
             <Card size="small">
-              <Text strong>Removed: </Text>
+              <Text strong>Returned/Removed: </Text>
               <Text style={{ fontSize: "20px", color: "#ff4d4f" }}>
                 {usageData.filter((i) => i.status === "removed").length}
               </Text>
