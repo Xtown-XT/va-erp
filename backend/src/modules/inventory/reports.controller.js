@@ -151,6 +151,11 @@ class ReportsController {
                 });
             }
 
+            const whereClause = {
+                serviceDate: { [Op.between]: [startDate, endDate] }
+            };
+            if (siteId) whereClause.siteId = siteId;
+
             // 1. Fetch Spares Usage (ServiceItem)
             const sparesUsage = await ServiceItem.findAll({
                 attributes: ["id", "quantity", "spareId", "itemType"],

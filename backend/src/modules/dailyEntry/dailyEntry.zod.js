@@ -38,6 +38,19 @@ export const createDailyEntrySchema = z.object({
   siteId: z.string().uuid("Invalid site ID format").optional(),
   vehicleId: z.string().uuid("Invalid vehicle ID format").optional(),
   compressorId: z.string().uuid("Invalid compressor ID format").optional(),
+
+  // Generic Services (Unified)
+  services: z.array(z.object({
+    entityType: z.enum(['MACHINE', 'COMPRESSOR']),
+    entityId: z.string().uuid("Invalid entity ID"),
+    serviceName: z.string().min(1, "Service name is required"),
+    currentRpm: z.number().min(0).optional(),
+    spares: z.array(z.object({
+      itemId: z.string().uuid("Invalid spare ID"),
+      quantity: z.number().int().min(1)
+    })).optional()
+  })).optional(),
+
   // New spares structure
   machineSpares: z.array(z.object({
     itemId: z.string().uuid("Invalid item ID format"),
