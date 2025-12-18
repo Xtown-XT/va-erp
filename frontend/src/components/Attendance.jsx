@@ -190,6 +190,13 @@ const Attendance = () => {
   // Columns
   const columns = [
     {
+      title: "Emp ID",
+      dataIndex: "empId",
+      key: "empId",
+      width: 100,
+      render: (text) => <span className="text-gray-600 font-medium">{text}</span>
+    },
+    {
       title: "Employee",
       dataIndex: "name",
       key: "name",

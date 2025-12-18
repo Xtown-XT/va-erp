@@ -132,37 +132,16 @@ const AttendanceReport = () => {
         });
 
         const advance = Number(employee.advancedAmount) || 0;
-        // Calculated Net Pay Logic:
-        // If Advance > Total Salary -> Deduct full salary from debt (virtually), Net Pay = 0, Remaining Advance = Advance - Salary
-        // If Advance < Total Salary -> Deduct Advance from Salary, Net Pay = Salary - Advance, Remaining Advance = 0
 
-        let netPay = 0;
-        let advanceDeducted = 0;
-        let remainingAdvance = advance;
-
-        if (advance > 0) {
-            if (advance >= totalSalary) {
-                advanceDeducted = totalSalary;
-                netPay = 0;
-                remainingAdvance = advance - totalSalary;
-            } else {
-                advanceDeducted = advance;
-                netPay = totalSalary - advance;
-                remainingAdvance = 0;
-            }
-        } else {
-            netPay = totalSalary;
-        }
+        // Removed Advance Deduction Logic as per request
+        // Just return the raw values
 
         return {
             present,
             absent,
             nonWorking,
             totalSalary,
-            originalAdvance: advance,
-            advanceDeducted,
-            remainingAdvance,
-            netPay
+            originalAdvance: advance
         };
     };
 
@@ -183,6 +162,7 @@ const AttendanceReport = () => {
                 "Designation": emp.designation,
                 "Total Present": emp.stats.present,
                 "Total Salary": emp.stats.totalSalary,
+                "Total Advance": emp.stats.originalAdvance,
             };
             dates.forEach(d => {
                 const dateStr = d.format("YYYY-MM-DD");
@@ -206,7 +186,7 @@ const AttendanceReport = () => {
         doc.text(`Attendance Report - ${selectedSite ? sites.find(s => s.id === selectedSite)?.siteName : ''}`, 14, 15);
         doc.text(`Period: ${dateRange[0].format("DD/MM/YYYY")} - ${dateRange[1].format("DD/MM/YYYY")}`, 14, 22);
 
-        const tableColumn = ["Emp ID", "Name", ...dates.map(d => d.format("DD/MM")), "Total (₹)"];
+        const tableColumn = ["Emp ID", "Name", ...dates.map(d => d.format("DD/MM")), "Total (₹)", "Adv (₹)"];
         const tableRows = reportData.map(emp => {
             return [
                 emp.empId,
@@ -218,7 +198,8 @@ const AttendanceReport = () => {
                     if (rec.workStatus === 'non-working') return 'NW';
                     return 'P';
                 }),
-                emp.stats.totalSalary.toFixed(2)
+                emp.stats.totalSalary.toFixed(2),
+                emp.stats.originalAdvance.toFixed(2)
             ];
         });
 
@@ -259,11 +240,18 @@ const AttendanceReport = () => {
             }
         })),
         {
-            title: "Total",
+            title: "Total Salary",
             key: "totalSalary",
             fixed: 'right',
             width: 100,
             render: (_, record) => <Text strong>₹{record.stats.totalSalary}</Text>
+        },
+        {
+            title: "Total Advance",
+            key: "totalAdvance",
+            fixed: 'right',
+            width: 120,
+            render: (_, record) => <Text type="danger">₹{record.stats.originalAdvance}</Text>
         }
     ];
 
@@ -342,22 +330,14 @@ const AttendanceReport = () => {
                             </Col>
                         </Row>
                         <Divider />
-                        <Title level={5}>Advance Deduction Calculation</Title>
+                        <Title level={5}>Payment Summary</Title>
                         <div className="bg-gray-50 p-4 rounded-md">
                             <Row gutter={[16, 8]}>
-                                <Col span={12}><Text>Original Advance:</Text></Col>
-                                <Col span={12} className="text-right"><Text strong>₹{selectedEmployeeStats.originalAdvance.toFixed(2)}</Text></Col>
+                                <Col span={12}><Text>Total Salary:</Text></Col>
+                                <Col span={12} className="text-right"><Text strong className="text-lg text-green-600">₹{selectedEmployeeStats.totalSalary.toFixed(2)}</Text></Col>
 
-                                <Col span={12}><Text type="danger">Less: Advance Adjusted:</Text></Col>
-                                <Col span={12} className="text-right"><Text type="danger">- ₹{selectedEmployeeStats.advanceDeducted.toFixed(2)}</Text></Col>
-
-                                <Col span={24}><Divider className="my-2" /></Col>
-
-                                <Col span={12}><Text strong>Net Salary Payable:</Text></Col>
-                                <Col span={12} className="text-right"><Text strong className="text-lg text-green-600">₹{selectedEmployeeStats.netPay.toFixed(2)}</Text></Col>
-
-                                <Col span={12}><Text type="secondary">Remaining Advance:</Text></Col>
-                                <Col span={12} className="text-right"><Text type="secondary">₹{selectedEmployeeStats.remainingAdvance.toFixed(2)}</Text></Col>
+                                <Col span={12}><Text>Total Advance Taken:</Text></Col>
+                                <Col span={12} className="text-right"><Text strong type="danger">₹{selectedEmployeeStats.originalAdvance.toFixed(2)}</Text></Col>
                             </Row>
                         </div>
                     </div>

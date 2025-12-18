@@ -76,22 +76,7 @@ export class EmployeeAttendanceController extends BaseController {
       };
       const attendance = await this.service.create(attendancePayload, { transaction });
 
-      // If salary is provided and greater than 0, deduct from advance
-      if (salary && salary > 0) {
-        const employee = await EmployeeList.findByPk(employeeId, { transaction });
-        if (employee) {
-          const currentAdvance = Number(employee.advancedAmount) || 0;
-          const salaryNumber = Number(salary) || 0;
-          const newAdvanceAmount = Math.max(0, currentAdvance - salaryNumber);
-
-          if (currentAdvance > 0) {
-            await employee.update({
-              advancedAmount: newAdvanceAmount,
-              updatedBy: username
-            }, { transaction });
-          }
-        }
-      }
+      // Advance deduction logic removed as per user request.
 
       await transaction.commit();
 
@@ -129,28 +114,7 @@ export class EmployeeAttendanceController extends BaseController {
 
       const updatedAttendance = await this.service.update(id, updatePayload, { transaction });
 
-      // Handle salary deduction if salary changed
-      if (salary !== undefined && salary !== existingAttendance.salary) {
-        const employee = await EmployeeList.findByPk(employeeId, { transaction });
-        if (employee) {
-          const currentAdvance = Number(employee.advancedAmount) || 0;
-          const previousSalary = Number(existingAttendance.salary) || 0;
-          const newSalary = Number(salary) || 0;
-          const salaryDifference = newSalary - previousSalary;
-
-          // Only deduct when increasing salary; never re-credit on decrease
-          if (salaryDifference > 0) {
-            const newAdvanceAmount = Math.max(0, currentAdvance - salaryDifference);
-
-            if (currentAdvance > 0) {
-              await employee.update({
-                advancedAmount: newAdvanceAmount,
-                updatedBy: username
-              }, { transaction });
-            }
-          }
-        }
-      }
+      // Advance deduction logic removed as per user request.
 
       await transaction.commit();
 
@@ -227,21 +191,7 @@ export class EmployeeAttendanceController extends BaseController {
           updatedBy: username,
         };
 
-        // Handle salary deduction if salary changed
-        const salaryDiff = Number(updatePayload.salary || 0) - Number(existingAttendance.salary || 0);
-        if (salaryDiff > 0) {
-          const employee = await EmployeeList.findByPk(employeeId, { transaction });
-          if (employee) {
-            const currentAdvance = Number(employee.advancedAmount) || 0;
-            const newAdvanceAmount = Math.max(0, currentAdvance - salaryDiff);
-            if (currentAdvance > 0) {
-              await employee.update({
-                advancedAmount: newAdvanceAmount,
-                updatedBy: username
-              }, { transaction });
-            }
-          }
-        }
+        // Advance deduction logic removed as per user request.
 
         await existingAttendance.update(updatePayload, { transaction });
         attendance = existingAttendance;
@@ -261,20 +211,7 @@ export class EmployeeAttendanceController extends BaseController {
 
         attendance = await EmployeeAttendance.create(createPayload, { transaction });
 
-        // Deduct salary from advance for new records
-        if (createPayload.salary > 0) {
-          const employee = await EmployeeList.findByPk(employeeId, { transaction });
-          if (employee) {
-            const currentAdvance = Number(employee.advancedAmount) || 0;
-            const newAdvanceAmount = Math.max(0, currentAdvance - createPayload.salary);
-            if (currentAdvance > 0) {
-              await employee.update({
-                advancedAmount: newAdvanceAmount,
-                updatedBy: username
-              }, { transaction });
-            }
-          }
-        }
+        // Advance deduction logic removed as per user request.
       }
 
       await transaction.commit();
@@ -332,38 +269,11 @@ export class EmployeeAttendanceController extends BaseController {
       const attendanceUpserts = [];
       const employeeUpdates = [];
 
-      // 2. Process records in memory
+      // 3. Process records in memory
       for (const record of records) {
         const { employeeId, presence, workStatus, salary, siteId, machineId } = record;
-        const employee = employeeMap.get(employeeId);
+        // const employee = employeeMap.get(employeeId); // Employee data not needed for deduction anymore
         const existingAttendance = attendanceMap.get(employeeId);
-
-        // Calculate Salary Difference for Advance Deduction
-        let salaryDiff = 0;
-        const newSalary = Number(salary) || 0;
-
-        if (existingAttendance) {
-          salaryDiff = newSalary - (Number(existingAttendance.salary) || 0);
-        } else {
-          salaryDiff = newSalary;
-        }
-
-        // Logic: specific business rule for advance deduction
-        // If salary increases (or is new), we MIGHT deduct from advance
-        if (employee && salaryDiff > 0) {
-          const currentAdvance = Number(employee.advancedAmount) || 0;
-          if (currentAdvance > 0) {
-            const newAdvanceAmount = Math.max(0, currentAdvance - salaryDiff);
-            if (newAdvanceAmount !== currentAdvance) {
-              employee.advancedAmount = newAdvanceAmount; // Update in memory object for consistency if duplicates in batch (unlikely but safe)
-              employeeUpdates.push({
-                id: employee.id,
-                advancedAmount: newAdvanceAmount,
-                updatedBy: username
-              });
-            }
-          }
-        }
 
         // Prepare Attendance Upsert Data
         attendanceUpserts.push({
@@ -372,33 +282,22 @@ export class EmployeeAttendanceController extends BaseController {
           date,
           presence: presence || 'present',
           workStatus: workStatus || 'working',
-          salary: newSalary,
-          siteId: siteId || null,
+          salary: Number(salary) || 0,
+          siteId: siteId || null, // Keep existing siteId if not provided? No, payload usually has it.
           machineId: machineId || null,
-          createdBy: existingAttendance ? undefined : username,
+          createdBy: existingAttendance?.createdBy || username, // FIX: Always provide createdBy
           updatedBy: username
         });
       }
 
-      // 3. Perform Bulk Operations
-      // A. Bulk Create/Update Attendance using bulkCreate with updateOnDuplicate
+      // 4. Perform Bulk Operations
+      // Bulk Create/Update Attendance using bulkCreate with updateOnDuplicate
       await EmployeeAttendance.bulkCreate(attendanceUpserts, {
         updateOnDuplicate: ['presence', 'workStatus', 'salary', 'siteId', 'machineId', 'updatedBy'],
         transaction
       });
 
-      // B. Update Employees (Advance Amount)
-      // Since Sequelize doesn't have a simple bulkUpdate with different values, we use Promise.all with individual updates
-      // This is still faster than finding them again. We already have the IDs.
-      // Optimization: Only update if there are changes.
-      if (employeeUpdates.length > 0) {
-        await Promise.all(employeeUpdates.map(updateData =>
-          EmployeeList.update(
-            { advancedAmount: updateData.advancedAmount, updatedBy: updateData.updatedBy },
-            { where: { id: updateData.id }, transaction }
-          )
-        ));
-      }
+      // Advance deduction logic removed as per user request.
 
       await transaction.commit();
 
@@ -407,7 +306,7 @@ export class EmployeeAttendanceController extends BaseController {
         message: `Processed ${records.length} records successfully`,
         data: {
           total: records.length,
-          updatedEmployees: employeeUpdates.length
+          updatedEmployees: 0
         }
       });
 
