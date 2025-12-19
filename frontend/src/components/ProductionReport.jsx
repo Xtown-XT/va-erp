@@ -653,25 +653,22 @@ const ProductionReport = () => {
       const periodStart = dateRange[0].format("DD/MM/YYYY");
       const periodEnd = dateRange[1].format("DD/MM/YYYY");
       const siteName = selectedSiteName || 'All Sites';
-      const generatedDate = new Date().toLocaleDateString();
+      const machineName = selectedMachineName || '';
+      const entityName = machineName ? machineName : siteName;
+      const reportHeader = `${entityName} - Production Report (${periodStart} - ${periodEnd})`;
 
       let htmlContent = '<html><head><title>' + reportTitle + '</title>' +
         '<style>' +
         'body { font-family: Arial, sans-serif; margin: 20px; }' +
-        '.header { text-align: center; margin-bottom: 20px; position: relative; }' +
-        '.header h1 { margin: 0; font-size: 24px; }' +
-        '.header p { margin: 5px 0; }' +
-        '.generated-on { position: absolute; top: 0; right: 0; font-size: 12px; }' +
-        'table { width: 100%; border-collapse: collapse; margin-top: 20px; }' +
-        'th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; }' +
+        '.header { text-align: center; margin-bottom: 10px; }' +
+        '.header h3 { margin: 0; font-size: 18px; }' +
+        'table { width: 100%; border-collapse: collapse; margin-top: 10px; }' +
+        'th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 9px; }' +
         'th { background-color: #f2f2f2; }' +
         '.total-row { background-color: #f9f9f9; font-weight: bold; }' +
         '</style></head><body>' +
         '<div class="header">' +
-        '<h1>Daily Production Report</h1>' +
-        '<p>Period: ' + periodStart + ' to ' + periodEnd + '</p>' +
-        '<p>Site: ' + siteName + '</p>' +
-        '<p class="generated-on">Generated on: ' + generatedDate + '</p>' +
+        '<h3>' + reportHeader + '</h3>' +
         '</div>' +
         '<table><thead><tr>' +
         '<th>Date</th><th>Shift</th><th>Site</th><th>Meter</th>' +
@@ -827,14 +824,15 @@ const ProductionReport = () => {
       const periodStart = dateRange[0].format("DD/MM/YYYY");
       const periodEnd = dateRange[1].format("DD/MM/YYYY");
       const siteName = selectedSiteName || 'All Sites';
-      const generatedDate = new Date().toLocaleDateString();
+      const machineName = selectedMachineName || '';
+      const entityName = machineName ? machineName : siteName;
+
+      // Compact Header: "Entity Name Production Report (Start - End)"
+      const headerText = `${entityName} Production Report (${periodStart} - ${periodEnd})`;
 
       // Create worksheet data
       const worksheetData = [
-        ['Daily Production Report'],
-        [`Period: ${periodStart} to ${periodEnd}`],
-        [`Site: ${siteName}`],
-        [`Generated on: ${generatedDate}`],
+        [headerText],
         [], // Empty row
         [
           'Date',

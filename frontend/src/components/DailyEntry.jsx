@@ -56,6 +56,13 @@ const DailyEntry = () => {
   const [shift2Enabled, setShift2Enabled] = useState(false);
   const [selectedSite, setSelectedSite] = useState(null);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  const [historyRange, setHistoryRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
+  const [historySite, setHistorySite] = useState(null);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, current: 1 }));
+  }, [historyRange, historySite]);
 
   // Data Selectors
   const { data: sites = [] } = useSites();
@@ -67,8 +74,9 @@ const DailyEntry = () => {
   const { data: entriesData, isLoading: loadingList, refetch: refetchEntries } = useDailyEntries({
     page: pagination.current,
     limit: pagination.pageSize,
-    date: selectedDate.format("YYYY-MM-DD") // Filter list by date? Old UI did this?
-    // If I filter by date, users see what they just entered.
+    startDate: historyRange && historyRange[0] ? historyRange[0].format("YYYY-MM-DD") : undefined,
+    endDate: historyRange && historyRange[1] ? historyRange[1].format("YYYY-MM-DD") : undefined,
+    siteId: historySite
   });
   const createDailyEntry = useCreateDailyEntry();
   const deleteDailyEntry = useDeleteDailyEntry();
@@ -1093,6 +1101,30 @@ const DailyEntry = () => {
       </Card>
 
       <Card title="History" style={{ marginTop: 20 }}>
+        <div style={{ marginBottom: 16 }}>
+          <Space>
+            <DatePicker.RangePicker
+              placeholder={["Start Date", "End Date"]}
+              format="DD/MM/YYYY"
+              value={historyRange}
+              onChange={setHistoryRange}
+              allowClear={false}
+            />
+            <Select
+              placeholder="Filter Site"
+              style={{ width: 200 }}
+              allowClear
+              value={historySite}
+              onChange={setHistorySite}
+            >
+              {sites.map(s => <Select.Option key={s.id} value={s.id}>{s.siteName}</Select.Option>)}
+            </Select>
+            <Button onClick={() => {
+              setHistoryRange([dayjs().startOf('month'), dayjs().endOf('month')]);
+              setHistorySite(null);
+            }}>Clear Filters</Button>
+          </Space>
+        </div>
         <Table
           dataSource={entriesData?.data || []}
           columns={[
