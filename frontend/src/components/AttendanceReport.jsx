@@ -82,17 +82,34 @@ const AttendanceReport = () => {
             const dateList = generateDateArray(dateRange[0], dateRange[1]);
             setDates(dateList);
 
-            // Fetch Employees of the site
-            const empRes = await api.get("/api/employeeLists?limit=1000");
-            const siteEmps = (empRes.data.data || []).filter(e => e.siteId === selectedSite);
+            // Fetch All Employees
+            const empRes = await api.get("/api/employeeLists?limit=5000");
+            const allEmployees = empRes.data.data || [];
 
             // Fetch Attendance for the range and site
-            const attRes = await api.get(`/api/employeeAttendance?startDate=${startDate}&endDate=${endDate}&siteId=${selectedSite}&limit=2000`);
+            const attRes = await api.get(`/api/employeeAttendance?startDate=${startDate}&endDate=${endDate}&siteId=${selectedSite}&limit=5000`);
             const attendanceRecords = attRes.data.data || [];
 
+            // Identify employees to show:
+            // 1. Employees currently assigned to the site
+            // 2. Employees who have attendance at the site during this period
+            const relevantEmployeeIds = new Set();
+
+            // Add current site employees
+            allEmployees.forEach(e => {
+                if (e.siteId === selectedSite) relevantEmployeeIds.add(e.id);
+            });
+
+            // Add employees with attendance
+            attendanceRecords.forEach(r => {
+                if (r.employeeId) relevantEmployeeIds.add(r.employeeId);
+            });
+
+            // Filter relevant employees
+            const reportEmployees = allEmployees.filter(e => relevantEmployeeIds.has(e.id));
+
             // Process Data into Matrix
-            // Row: Employee, Cols: Dates
-            const processed = siteEmps.map(emp => {
+            const processed = reportEmployees.map(emp => {
                 const empRecords = attendanceRecords.filter(r => r.employeeId === emp.id);
                 const recordMap = {}; // Date -> Record
                 empRecords.forEach(r => {
@@ -106,7 +123,7 @@ const AttendanceReport = () => {
                 };
             });
 
-            setEmployees(siteEmps);
+            setEmployees(reportEmployees);
             setReportData(processed);
 
         } catch (err) {

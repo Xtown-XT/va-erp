@@ -76,7 +76,7 @@ const DailyEntry = () => {
     limit: pagination.pageSize,
     startDate: historyRange && historyRange[0] ? historyRange[0].format("YYYY-MM-DD") : undefined,
     endDate: historyRange && historyRange[1] ? historyRange[1].format("YYYY-MM-DD") : undefined,
-    siteId: historySite
+    siteId: historySite || undefined
   });
   const createDailyEntry = useCreateDailyEntry();
   const deleteDailyEntry = useDeleteDailyEntry();

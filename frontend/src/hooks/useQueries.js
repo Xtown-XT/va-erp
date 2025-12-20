@@ -115,7 +115,11 @@ export const useDailyEntries = (params = { page: 1, limit: 10 }) => {
   return useQuery({
     queryKey: queryKeys.dailyEntries(params),
     queryFn: async () => {
-      const queryString = new URLSearchParams(params).toString();
+      // Filter out undefined and null values
+      const cleanParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v != null)
+      );
+      const queryString = new URLSearchParams(cleanParams).toString();
       const res = await api.get(`/api/dailyEntries?${queryString}`);
       return {
         data: res.data.data || [],
