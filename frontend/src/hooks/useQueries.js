@@ -214,15 +214,16 @@ export const useInventoryReport = (month, year, itemType, siteId) => {
 };
 
 // Service Usage Report
-export const useServiceUsageReport = (startDate, endDate, machineId, compressorId) => {
+export const useServiceUsageReport = (startDate, endDate, machineId, compressorId, siteId) => {
   return useQuery({
-    queryKey: ["serviceUsageReport", { startDate, endDate, machineId, compressorId }],
+    queryKey: ["serviceUsageReport", { startDate, endDate, machineId, compressorId, siteId }],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (startDate) params.append("startDate", startDate);
       if (endDate) params.append("endDate", endDate);
       if (machineId) params.append("machineId", machineId);
       if (compressorId) params.append("compressorId", compressorId);
+      if (siteId) params.append("siteId", siteId);
       const res = await api.get(`/api/reports/spares-usage-log?${params.toString()}`);
       return res.data.data || [];
     },

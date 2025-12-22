@@ -42,8 +42,8 @@ const SiteProductionReport = () => {
       return message.error("Please select a date range");
     }
 
-    if (viewMode === "daywise" && !selectedSite) {
-      return message.error("Please select a site for Day-wise report");
+    if (viewMode === "daywise" && !selectedSite && !selectedMachine) {
+      return message.error("Please select a Site OR a Machine for Day-wise report");
     }
 
     setLoading(true);
@@ -402,14 +402,13 @@ const SiteProductionReport = () => {
               <>
                 <div style={{ minWidth: 200 }}>
                   <Text strong className="block mb-1">
-                    Select Site
+                    Select Site (Optional if Machine selected)
                   </Text>
                   <Select
                     placeholder="Select Site"
                     value={selectedSite}
                     onChange={(val) => {
                       setSelectedSite(val);
-                      setSelectedMachine(null); // Reset machine when site changes
                     }}
                     options={sites.map((s) => ({
                       label: s.siteName,
@@ -422,7 +421,7 @@ const SiteProductionReport = () => {
                 </div>
                 <div style={{ minWidth: 200 }}>
                   <Text strong className="block mb-1">
-                    Select Machine (Optional)
+                    Select Machine (Optional if Site selected)
                   </Text>
                   <Select
                     placeholder="All Machines"

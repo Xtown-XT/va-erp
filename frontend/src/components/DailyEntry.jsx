@@ -39,6 +39,7 @@ import {
 import { useCreateDailyEntry, useDeleteDailyEntry, useUpdateDailyEntry } from "../hooks/useMutations";
 import DrillingToolsSection from "./DrillingToolsSection";
 import DailyServiceSection from "./DailyServiceSection";
+import DailySparesSection from "./DailySparesSection";
 
 const { Title, Text } = Typography;
 
@@ -190,12 +191,20 @@ const DailyEntry = () => {
         ...(shift2 ? mapShiftData(shift2, 'shift2') : {}),
 
         // Map Services from Primary (usually Shift 1)
+        // Map Services from Primary (usually Shift 1)
         services: (primaryEntry.services || []).map(svc => ({
-          assetKey: `${svc.entityType}:${svc.entityId}`,
+          assetKey: svc.machineId
+            ? `MACHINE:${svc.machineId}`
+            : (svc.compressorId ? `COMPRESSOR:${svc.compressorId}` : ""),
           serviceName: svc.serviceName,
-          currentRpm: svc.currentRPM,
+          currentRpm: svc.currentRPM, // Use RPM from ServiceHistory (ensure backend returns casing correctly?) 
+          // Backend ServiceHistory uses currentRpm. API response likely keeps it. 
+          // Let's use svc.currentRpm || svc.currentRPM
+          currentRpm: svc.currentRpm || svc.currentRPM,
           spares: svc.items?.map(item => ({
             itemId: item.spareId,
+            itemName: item.spare?.name, // Use spare details if included
+            partNumber: item.spare?.partNumber,
             quantity: item.quantityUsed || item.quantity
           })) || []
         }))
@@ -215,8 +224,8 @@ const DailyEntry = () => {
           quantity: log.quantity,
           action: (log.action === 'INSTALL' || log.action === 'fit') ? 'fit' :
             ((log.action === 'REMOVE' || log.action === 'remove') ? 'remove' : 'update'),
-          startingRPM: log.currentMachinePRM,
-          currentRPM: log.currentMachinePRM,
+          startingRPM: log.currentMachineRPM,
+          currentRPM: log.currentMachineRPM,
           currentMeter: log.currentMachineMeter,
           accumulatedMeter: log.currentMachineMeter || 0, // Add accumulated meter from log
           isExisting: true,
@@ -546,6 +555,16 @@ const DailyEntry = () => {
         };
       });
 
+      // Pre-process Spares Consumption
+      const processedSpares = (values.sparesConsumption || []).map(sc => {
+        const [type, id] = (sc.entityKey || "").split(":");
+        return {
+          entityType: type,
+          entityId: id,
+          spares: sc.spares
+        };
+      });
+
       const dateStr = selectedDate.format("YYYY-MM-DD");
 
       // Handle Edit Mode (Combined or Single)
@@ -713,6 +732,7 @@ const DailyEntry = () => {
             compressorHSD: values.shift1_compressorHSD,
             employees: (values.shift1_employees || []).map(e => ({ ...e, shift: 1 })),
             services: processedServices, // S1 owns services
+            sparesConsumption: processedSpares, // S1 owns spares consumption
             drillingTools: drillingTools.map(t => ({
               itemId: t.itemId,
               action: t.action === 'fit' ? 'fit' : (t.action === 'remove' ? 'remove' : 'update'),
@@ -808,6 +828,7 @@ const DailyEntry = () => {
             // Since backend handles array now, we can attach to Shift 1 entry.
             // We should send it only once.
             services: processedServices,
+            sparesConsumption: processedSpares,
 
             // Drilling Tools (Logs) attached to Shift 1
             drillingTools: drillingTools.map(t => ({
@@ -1007,8 +1028,22 @@ const DailyEntry = () => {
                         {fields.map(({ key, name, ...restField }) => (
                           <Space key={key} align="baseline">
                             <Form.Item {...restField} name={[name, 'employeeId']} noStyle>
-                              <Select style={{ width: 120 }} size="small" placeholder="Emp">
-                                {employees.map(e => <Select.Option key={e.id} value={e.id}>{e.name}</Select.Option>)}
+                              <Select
+                                style={{ width: 160 }}
+                                size="small"
+                                placeholder="Search Emp"
+                                showSearch
+                                filterOption={(input, option) => {
+                                  // Check against displayed text (Name (ID))
+                                  const text = (option?.children || "").toString().toLowerCase();
+                                  return text.includes(input.toLowerCase());
+                                }}
+                              >
+                                {employees.map(e => (
+                                  <Select.Option key={e.id} value={e.id}>
+                                    {e.name} ({e.empId})
+                                  </Select.Option>
+                                ))}
                               </Select>
                             </Form.Item>
                           </Space>
@@ -1053,8 +1088,21 @@ const DailyEntry = () => {
                           {fields.map(({ key, name, ...restField }) => (
                             <Space key={key} align="baseline">
                               <Form.Item {...restField} name={[name, 'employeeId']} noStyle>
-                                <Select style={{ width: 120 }} size="small" placeholder="Emp">
-                                  {employees.map(e => <Select.Option key={e.id} value={e.id}>{e.name}</Select.Option>)}
+                                <Select
+                                  style={{ width: 160 }}
+                                  size="small"
+                                  placeholder="Search Emp"
+                                  showSearch
+                                  filterOption={(input, option) => {
+                                    const text = (option?.children || "").toString().toLowerCase();
+                                    return text.includes(input.toLowerCase());
+                                  }}
+                                >
+                                  {employees.map(e => (
+                                    <Select.Option key={e.id} value={e.id}>
+                                      {e.name} ({e.empId})
+                                    </Select.Option>
+                                  ))}
                                 </Select>
                               </Form.Item>
                             </Space>
@@ -1088,6 +1136,9 @@ const DailyEntry = () => {
               />
             </div>
           )}
+
+          {/* New Changing Spares Section */}
+          <DailySparesSection form={form} machines={machines} compressor={selectedCompressor} siteId={selectedSite} />
 
           <Row justify="end" style={{ marginTop: 20 }}>
             <Space>

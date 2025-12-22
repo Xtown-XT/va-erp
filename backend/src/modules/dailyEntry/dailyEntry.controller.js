@@ -4,6 +4,7 @@ import Compressor from "../compressor/compressor.model.js";
 import Service from "../service/models/serviceHistory.model.js";
 import EmployeeList from "../employee/employeeList.model.js";
 import SiteStock from "../inventory/models/siteStock.model.js";
+import Spares from "../spares/spares.model.js";
 import DrillingToolItems from "../drillingTools/drillingToolItems.model.js";
 import DrillingTools from "../drillingTools/drillingTools.model.js";
 import EmployeeAttendance from "../employee/employeeAttendance.model.js";
@@ -200,7 +201,18 @@ class DailyEntryCustomController extends BaseController {
           },
           { model: Machine, as: "machine", attributes: ["id", "machineType", "machineNumber"] },
           { model: Site, as: "site", attributes: ["id", "siteName"] },
-          { model: Service, as: "services", include: [{ model: ServiceItem, as: 'items' }] }, // Include items if needed for detailed edit
+          { model: Site, as: "site", attributes: ["id", "siteName"] },
+          {
+            model: Service,
+            as: "services",
+            include: [
+              {
+                model: ServiceItem,
+                as: 'items',
+                include: [{ model: Spares, as: 'spare', attributes: ['id', 'name', 'partNumber'] }]
+              }
+            ]
+          }, // Include items if needed for detailed edit
           {
             model: DrillingToolLog,
             as: "drillingLogs",
@@ -337,14 +349,28 @@ class DailyEntryCustomController extends BaseController {
       spares = [], username, transaction, dailyEntryId
     } = params;
 
+    // Determine serviceType based on name and entity
+    let calculatedServiceType = 'Other';
+    const lowerName = (serviceName || '').toLowerCase();
+
+    if (lowerName.includes('engine')) {
+      calculatedServiceType = 'Engine Service';
+    } else if (entityType === 'MACHINE') {
+      calculatedServiceType = 'Machine Service';
+    } else if (entityType === 'COMPRESSOR') {
+      calculatedServiceType = 'Compressor Service';
+    }
+
     const serviceHistory = await Service.create({
       entityType,
       entityId,
-      serviceType: serviceName, // Use name as type string
+      serviceType: calculatedServiceType,
       serviceName: serviceName, // Redundant but clear
       date,
-      currentRPM: currentRpm,
+      currentRpm: currentRpm, // Ensure correct casing (model uses currentRpm)
       siteId,
+      machineId: entityType === 'MACHINE' ? entityId : null,
+      compressorId: entityType === 'COMPRESSOR' ? entityId : null,
       sparesUsed: spares,
       createdBy: username,
       dailyEntryId
@@ -361,6 +387,18 @@ class DailyEntryCustomController extends BaseController {
         throw new Error(`Insufficient stock for spare ID ${item.itemId}`);
       }
       await stock.decrement('quantity', { by: item.quantity, transaction });
+
+      // Create Service Item Record (Essential for Reports)
+      await ServiceItem.create({
+        serviceHistoryId: serviceHistory.id,
+        itemType: 'spare',
+        spareId: item.itemId,
+        quantity: item.quantity,
+        quantityUsed: item.quantity,
+        usageDate: date,
+        dailyEntryId: dailyEntryId // Assuming ServiceItem might need relation to Entry, or via ServiceHistory
+        // ServiceItem model doesn't have dailyEntryId in definition shown, so skipping it.
+      }, { transaction });
     }
 
     // Update Maintenance Config
@@ -375,6 +413,7 @@ class DailyEntryCustomController extends BaseController {
           config[index].lastServiceRPM = Number(currentRpm);
           // Clone to trigger update
           machine.set('maintenanceConfig', [...config]);
+          machine.changed('maintenanceConfig', true); // Force change detection
           await machine.save({ transaction });
         }
       }
@@ -387,8 +426,32 @@ class DailyEntryCustomController extends BaseController {
         const index = config.findIndex(c => c.name === serviceName);
         if (index >= 0) {
           config[index].lastServiceRPM = Number(currentRpm);
+          config[index].lastServiceRPM = Number(currentRpm);
           compressor.set('maintenanceConfig', [...config]);
+          compressor.changed('maintenanceConfig', true);
           await compressor.save({ transaction });
+        }
+      }
+
+      // Update Legacy JSON columns for DailyEntry (for frontend compatibility)
+      // We need to fetch the entry first to update it? 
+      // Actually, processService is called AFTER DailyEntry.create.
+      // But we pass dailyEntryId.
+      if (dailyEntryId) {
+        const entry = await DailyEntry.findByPk(dailyEntryId, { transaction });
+        if (entry) {
+          const serviceItem = {
+            serviceName: serviceName,
+            spares: spares
+          };
+          if (entityType === 'MACHINE') {
+            entry.machineServiceDone = true;
+            entry.machineServiceItems = serviceItem;
+          } else {
+            entry.compressorServiceDone = true;
+            entry.compressorServiceItems = serviceItem;
+          }
+          await entry.save({ transaction });
         }
       }
     }
@@ -440,11 +503,18 @@ class DailyEntryCustomController extends BaseController {
         }
 
         // 2. Determine initial accumulated meter
-        // Use currentMachineMeter from tool if provided (from frontend), otherwise use initialAccumulatedMeter
+        // Use currentMachineMeter from tool if provided (from frontend), otherwise use tool's historical totalMeters
+        // REVERTED: DrillingTools does not have totalMeters.
+        // If fitting, it starts fresh logic? No, user said "its accumulAted meter value.. until it is remvoed".
+        // Wait, if I fit a tool, it starts at 0 accumulated for THIS installation?
+        // Or does it carry over history?
+        // User request: "drilling tool A have 10 counts in inventory ... seperated 1 drilling tool is installed and i only need its accumulAted meter value.. until it is remvoed .. then again after adding new one it calculates new"
+        // This implies each installation starts at 0 (or explicitly provided start meter).
         const toolInitialMeter = tool.currentMachineMeter !== undefined ? Number(tool.currentMachineMeter) : initialAccumulatedMeter;
 
         // 3. Create installation record
         await DrillingToolInstallation.create({
+
           drillingToolId: toolId,
           machineId,
           siteId,
@@ -468,7 +538,7 @@ class DailyEntryCustomController extends BaseController {
           action: 'INSTALL',
           date,
           quantity: 1,
-          currentMachinePRM: recordedRPM || 0,
+          currentMachineRPM: recordedRPM || 0,
           currentMachineMeter: toolInitialMeter, // Use the same meter value
           createdBy: username
         }, { transaction });
@@ -511,6 +581,8 @@ class DailyEntryCustomController extends BaseController {
           updatedBy: username
         }, { transaction });
 
+        // REVERT: No updating DrillingTools model totalMeters.
+
         // 3. Create log entry
         await DrillingToolLog.create({
           drillingToolId: toolId,
@@ -527,6 +599,28 @@ class DailyEntryCustomController extends BaseController {
 
         // Note: Stock is NOT incremented (tools are consumed/worn)
       }
+    }
+  };
+
+  updateActiveDrillingToolsMeter = async (machineId, meter, transaction) => {
+    if (!machineId || !meter || Number(meter) <= 0) return;
+
+    try {
+      const activeInstallations = await DrillingToolInstallation.findAll({
+        where: {
+          machineId: machineId,
+          status: 'ACTIVE'
+        },
+        transaction
+      });
+
+      for (const installation of activeInstallations) {
+        const newAccumulated = (Number(installation.accumulatedMeter) || 0) + Number(meter);
+        await installation.update({ accumulatedMeter: newAccumulated }, { transaction });
+      }
+    } catch (error) {
+      console.error("Error updating active drilling tools meter:", error);
+      throw error;
     }
   };
 
@@ -550,7 +644,8 @@ class DailyEntryCustomController extends BaseController {
         compressorHSD,
         shift = 1,
         date,
-        siteId
+        siteId,
+        meter // Extract meter
       } = req.body;
       const machineId = reqMachineId || vehicleId;
 
@@ -644,7 +739,7 @@ class DailyEntryCustomController extends BaseController {
             date: entry.date,
             currentRpm: maxClosingRPM,
             siteId,
-            spares: req.body.machineGeneralSpares || [],
+            spares: req.body.machineGeneralSpares || req.body.machineSpares || [],
             username: req.user.username,
             transaction,
             dailyEntryId: entry.id
@@ -718,6 +813,38 @@ class DailyEntryCustomController extends BaseController {
                   currentRpm: rpm,
                   siteId,
                   spares: svc.spares || [],
+                  username: req.user.username,
+                  transaction,
+                  dailyEntryId: entry.id
+                });
+              }
+            }
+          }
+
+          // Spares Consumption (Changing Spares - No Service Name)
+          if (req.body.sparesConsumption && Array.isArray(req.body.sparesConsumption)) {
+            for (const sc of req.body.sparesConsumption) {
+              let entityId = sc.entityId;
+              // Determine entity ID if only type is given (defaults to main machine/compressor)
+              if (!entityId) {
+                if (sc.entityType === 'MACHINE') entityId = machineId;
+                else if (sc.entityType === 'COMPRESSOR') entityId = compressorId;
+              }
+
+              // RPM: Use closing RPM associated with entity
+              let rpm = 0;
+              if (sc.entityType === 'MACHINE') rpm = finalMachineClosingRPM || 0;
+              else if (sc.entityType === 'COMPRESSOR') rpm = compressorClosingRPM || 0;
+
+              if (entityId && sc.spares && sc.spares.length > 0) {
+                await this.processService({
+                  entityType: sc.entityType,
+                  entityId: entityId,
+                  serviceName: 'Spares Issue', // Fixed name
+                  date: entry.date,
+                  currentRpm: rpm,
+                  siteId,
+                  spares: sc.spares,
                   username: req.user.username,
                   transaction,
                   dailyEntryId: entry.id
@@ -1123,13 +1250,11 @@ class DailyEntryCustomController extends BaseController {
             // But valid data only if logRPM > fittedRPM.
             // We need to fetch original log logic for RPM calculation?
             // In processDrillingTools: logRPM - fittedRPM.
-            // We use log.currentMachinePRM.
-            const runRPM = Math.max(0, (log.currentMachinePRM || 0) - (installation.fittedRPM || 0));
+            // We use log.currentMachineRPM.
+            const runRPM = Math.max(0, (log.currentMachineRPM || 0) - (installation.fittedRPM || 0));
 
-            await DrillingTools.decrement({
-              totalMeter: runMeter,
-              totalRPM: runRPM
-            }, { where: { id: log.drillingToolId }, transaction });
+            // REVERT: No global meters tracking
+            // await DrillingTools.decrement({ ... });
 
             await installation.update({
               status: 'ACTIVE',

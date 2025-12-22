@@ -142,7 +142,7 @@ class ReportsController {
     // Spares Usage Log: Detailed list of usage
     sparesUsageLog = async (req, res) => {
         try {
-            const { startDate, endDate, siteId } = req.query;
+            const { startDate, endDate, siteId, machineId, compressorId } = req.query;
 
             if (!startDate || !endDate) {
                 return res.status(400).json({
@@ -155,6 +155,8 @@ class ReportsController {
                 serviceDate: { [Op.between]: [startDate, endDate] }
             };
             if (siteId) whereClause.siteId = siteId;
+            if (machineId) whereClause.machineId = machineId;
+            if (compressorId) whereClause.compressorId = compressorId;
 
             // 1. Fetch Spares Usage (ServiceItem)
             const sparesUsage = await ServiceItem.findAll({
@@ -402,22 +404,36 @@ class ReportsController {
     // Production Report: Day-wise breakdown for a specific site
     productionDaywise = async (req, res) => {
         try {
-            const { startDate, endDate, siteId, machineId } = req.query; // Added machineId
+            const { startDate, endDate, siteId, machineId } = req.query;
 
-            if (!startDate || !endDate || !siteId) {
+            if (!startDate || !endDate) {
                 return res.status(400).json({
                     success: false,
-                    message: "startDate, endDate, and siteId are required",
+                    message: "startDate and endDate are required",
                 });
             }
 
-            let machineFilter = "";
-            const replacements = { startDate, endDate, siteId };
+            if (!siteId && !machineId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Either siteId or machineId is required",
+                });
+            }
+
+            const replacements = { startDate, endDate };
+            const filters = ["de.date BETWEEN :startDate AND :endDate"];
+
+            if (siteId) {
+                filters.push("de.siteId = :siteId");
+                replacements.siteId = siteId;
+            }
 
             if (machineId) {
-                machineFilter = "AND de.machineId = :machineId";
+                filters.push("de.machineId = :machineId");
                 replacements.machineId = machineId;
             }
+
+            const whereClause = filters.join(" AND ");
 
             const results = await sequelize.query(`
                 SELECT 
@@ -442,9 +458,7 @@ class ReportsController {
                     COUNT(de.id) as entryCount
                 FROM dailyEntry de
                 JOIN machine m ON de.machineId = m.id
-                WHERE de.siteId = :siteId 
-                  AND de.date BETWEEN :startDate AND :endDate
-                  ${machineFilter}
+                WHERE ${whereClause}
                 GROUP BY de.date
                 ORDER BY de.date
             `, {

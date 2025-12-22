@@ -70,8 +70,8 @@ const AttendanceReport = () => {
     };
 
     const fetchReport = async () => {
-        if (!selectedSite || !dateRange) {
-            message.error("Please select a site and date range");
+        if (!dateRange) {
+            message.error("Please select a date range");
             return;
         }
 
@@ -87,7 +87,11 @@ const AttendanceReport = () => {
             const allEmployees = empRes.data.data || [];
 
             // Fetch Attendance for the range and site
-            const attRes = await api.get(`/api/employeeAttendance?startDate=${startDate}&endDate=${endDate}&siteId=${selectedSite}&limit=5000`);
+            // Fetch Attendance for the range
+            let url = `/api/employeeAttendance?startDate=${startDate}&endDate=${endDate}&limit=5000`;
+            if (selectedSite) url += `&siteId=${selectedSite}`;
+
+            const attRes = await api.get(url);
             const attendanceRecords = attRes.data.data || [];
 
             // Identify employees to show:
@@ -95,10 +99,15 @@ const AttendanceReport = () => {
             // 2. Employees who have attendance at the site during this period
             const relevantEmployeeIds = new Set();
 
-            // Add current site employees
-            allEmployees.forEach(e => {
-                if (e.siteId === selectedSite) relevantEmployeeIds.add(e.id);
-            });
+            // Add current site employees (only if site selected)
+            if (selectedSite) {
+                allEmployees.forEach(e => {
+                    if (e.siteId === selectedSite) relevantEmployeeIds.add(e.id);
+                });
+            } else {
+                // If no site selected, we prioritize showing employees who HAVE attendance.
+                // We don't want to show 5000 employees with no data.
+            }
 
             // Add employees with attendance
             attendanceRecords.forEach(r => {
@@ -283,6 +292,7 @@ const AttendanceReport = () => {
                             className="w-full mt-1"
                             onChange={setSelectedSite}
                             value={selectedSite}
+                            allowClear
                         >
                             {sites.map(s => <Select.Option key={s.id} value={s.id}>{s.siteName}</Select.Option>)}
                         </Select>

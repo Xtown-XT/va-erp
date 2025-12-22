@@ -118,7 +118,7 @@ export const InventoryController = {
                     quantity: s.quantity,
                     partNumber: s.drillingTool?.partNumber,
                     totalRPM: s.drillingTool?.totalRPM,
-                    totalMeter: s.drillingTool?.totalMeter,
+                    totalMeters: s.drillingTool?.totalMeters,
                     price: s.drillingTool?.price,
                     rpmSource: s.drillingTool?.rpmSource
                 }));
@@ -322,7 +322,7 @@ export const InventoryController = {
                     outward: periodOut,
                     balance: closingStock,
                     totalRPM: item.itemType === 'Drilling Tool' ? item.totalRPM : null,
-                    totalMeter: item.itemType === 'Drilling Tool' ? item.totalMeter : null,
+                    totalMeters: item.itemType === 'Drilling Tool' ? item.totalMeters : null,
                 };
             });
 

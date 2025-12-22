@@ -20,8 +20,11 @@ const DrillingToolsSection = ({
 
     const handleAdd = () => {
         if (!selectedItem) return;
-        // Always fit 1 tool with current meter value (shift1 + shift2)
-        onAddTool(selectedItem, 1, currentMeterValue);
+        // Always fit 1 tool. Use tool's historical totalMeters (if available) as base.
+        // If undefined, backend defaults to totalMeters.
+        // We pass selectedItem.totalMeters if we have it, else undefined.
+        // Note: availableTools from useSiteStock needs to have totalMeters.
+        onAddTool(selectedItem, 1, selectedItem.totalMeters || 0);
         setSelectedItem(null);
     };
 

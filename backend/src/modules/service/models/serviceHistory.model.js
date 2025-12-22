@@ -18,7 +18,7 @@ const ServiceHistory = sequelize.define(
             allowNull: false,
         },
         serviceType: {
-            type: DataTypes.ENUM("Machine Service", "Compressor Service", "Engine Service", "Other"),
+            type: DataTypes.ENUM("Machine Service", "Compressor Service", "Engine Service", "Other", "Spares Issue"),
             allowNull: false,
         },
         remarks: {

@@ -55,7 +55,7 @@ const DrillingToolLog = sequelize.define(
             defaultValue: 1,
             allowNull: false,
         },
-        currentMachinePRM: {
+        currentMachineRPM: {
             type: DataTypes.DOUBLE,
             allowNull: true,
             comment: "Machine RPM at the time of action",

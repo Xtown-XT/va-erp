@@ -12,7 +12,7 @@ import {
   Tag,
 } from "antd";
 import { FilePdfOutlined, FileExcelOutlined } from "@ant-design/icons";
-import { useServiceUsageReport, useMachines, useCompressors } from "../hooks/useQueries";
+import { useServiceUsageReport, useMachines, useCompressors, useSites } from "../hooks/useQueries";
 import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
@@ -31,6 +31,9 @@ const ServiceUsageReport = () => {
   // Fetch machines and compressors
   const { data: machines = [] } = useMachines();
   const { data: compressors = [] } = useCompressors();
+  const { data: sites = [] } = useSites(); // Added sites
+
+  const [selectedSite, setSelectedSite] = useState(null);
 
   const startDate = dateRange[0]?.format("YYYY-MM-DD");
   const endDate = dateRange[1]?.format("YYYY-MM-DD");
@@ -40,7 +43,8 @@ const ServiceUsageReport = () => {
     startDate,
     endDate,
     selectedMachine,
-    selectedCompressor
+    selectedCompressor,
+    selectedSite // Added
   );
 
   // No filter needed as backend now returns only spares
@@ -127,8 +131,8 @@ const ServiceUsageReport = () => {
               ${usageData.map(item => `
                 <tr class="${item.status === 'fitted' ? 'fitted' : 'removed'}">
                   <td>${item.fittedDate}</td>
-                  <td>${item.item?.itemName || ""}</td>
-                  <td>${item.item?.partNumber || ""}</td>
+                  <td>${item.item?.itemName || "-"}</td>
+                  <td>${item.item?.partNumber || "-"}</td>
                   <td>${item.machine?.machineNumber || machines.find(m => m.id === item.machineId)?.machineNumber || "-"}</td>
                   <td>${item.compressor?.compressorName || compressors.find(c => c.id === item.compressorId)?.compressorName || "-"}</td>
                   <td><strong>${item.totalRPMRun ? truncateToFixed(item.totalRPMRun, 2) : "-"}</strong></td>
