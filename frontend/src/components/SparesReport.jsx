@@ -67,11 +67,11 @@ const SparesReport = () => {
         const workbook = XLSX.utils.book_new();
 
         const sheetData = reportData.map((item) => ({
-            Date: dayjs(item.date).format("DD/MM/YYYY"),
+            Date: dayjs(item.fittedDate).format("DD/MM/YYYY"),
             Site: item.siteName,
-            "Machine/Compressor": item.machineNumber || item.compressorName || "-",
-            "Spare Name": item.spareName,
-            "Part Number": item.partNumber,
+            "Machine/Compressor": item.machine?.machineNumber || item.compressor?.compressorName || "-",
+            "Spare Name": item.item?.itemName,
+            "Part Number": item.item?.partNumber,
             "Quantity Used": item.quantity,
         }));
 
@@ -101,11 +101,11 @@ const SparesReport = () => {
 
         reportData.forEach(item => {
             const rowData = [
-                dayjs(item.date).format("DD/MM/YYYY"),
+                dayjs(item.fittedDate).format("DD/MM/YYYY"),
                 item.siteName,
-                item.machineNumber || item.compressorName || "-",
-                item.spareName,
-                item.partNumber,
+                item.machine?.machineNumber || item.compressor?.compressorName || "-",
+                item.item?.itemName,
+                item.item?.partNumber,
                 item.quantity
             ];
             tableRows.push(rowData);
@@ -123,8 +123,8 @@ const SparesReport = () => {
     const columns = [
         {
             title: "Date",
-            dataIndex: "date",
-            key: "date",
+            dataIndex: "fittedDate",
+            key: "fittedDate",
             render: (val) => dayjs(val).format("DD/MM/YYYY"),
             width: 100,
         },
@@ -140,10 +140,10 @@ const SparesReport = () => {
             width: 180,
             render: (_, record) => (
                 <Text>
-                    {record.machineNumber ? (
-                        <Tag color="blue">{record.machineNumber}</Tag>
-                    ) : record.compressorName ? (
-                        <Tag color="cyan">{record.compressorName}</Tag>
+                    {record.machine?.machineNumber ? (
+                        <Tag color="blue">{record.machine.machineNumber}</Tag>
+                    ) : record.compressor?.compressorName ? (
+                        <Tag color="cyan">{record.compressor.compressorName}</Tag>
                     ) : (
                         "-"
                     )}
@@ -152,7 +152,7 @@ const SparesReport = () => {
         },
         {
             title: "Spare Name",
-            dataIndex: "spareName",
+            dataIndex: ["item", "itemName"],
             key: "spareName",
             render: (text, record) => (
                 <div>
@@ -162,7 +162,7 @@ const SparesReport = () => {
         },
         {
             title: "Part Number",
-            dataIndex: "partNumber",
+            dataIndex: ["item", "partNumber"],
             key: "partNumber",
             width: 120,
         },

@@ -198,17 +198,17 @@ export const useSiteStock = (siteId) => {
 };
 
 // Inventory Report
-export const useInventoryReport = (month, year, itemType, siteId) => {
+export const useInventoryReport = (startDate, endDate, itemType, siteId) => {
   return useQuery({
-    queryKey: ["inventoryReport", { month, year, itemType, siteId }],
+    queryKey: ["inventoryReport", { startDate, endDate, itemType, siteId }],
     queryFn: async () => {
-      const params = new URLSearchParams({ month, year });
+      const params = new URLSearchParams({ startDate, endDate });
       if (itemType) params.append("itemType", itemType);
       if (siteId) params.append("siteId", siteId);
       const res = await api.get(`/api/inventory/reports/stock?${params.toString()}`);
       return res.data;
     },
-    enabled: !!(month && year),
+    enabled: !!(startDate && endDate),
     staleTime: 5 * 60 * 1000,
   });
 };

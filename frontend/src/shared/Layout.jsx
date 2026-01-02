@@ -112,7 +112,7 @@ const navArray = [
     children: [
       {
         label: "Drilling Tools Report",
-        path: "/reports/service-usage",
+        path: "/reports/drilling-tools",
         icon: <TbReport />
       },
       {
@@ -133,6 +133,11 @@ const navArray = [
       {
         label: "Attendance Report",
         path: "/reports/attendance",
+        icon: <TbReport />
+      },
+      {
+        label: "Inventory Report",
+        path: "/reports/inventory",
         icon: <TbReport />
       }
     ]

@@ -124,7 +124,7 @@ const DailyServiceSection = ({ machines, compressor, form, siteId }) => {
                                                                                     <Select placeholder="Spare" showSearch optionFilterProp="children">
                                                                                         {filteredSpares.map(s => (
                                                                                             <Select.Option key={s.id} value={s.spareId} disabled={s.quantity <= 0}>
-                                                                                                {s.name} (Stock: {s.quantity})
+                                                                                                {`${s.name} (Stock: ${s.quantity})`}
                                                                                             </Select.Option>
                                                                                         ))}
                                                                                     </Select>

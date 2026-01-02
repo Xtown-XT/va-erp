@@ -910,6 +910,26 @@ class DailyEntryCustomController extends BaseController {
         );
       }
 
+      // Spares Consumption (Direct)
+      if (req.body.sparesConsumption && req.body.sparesConsumption.length > 0) {
+        for (const sc of req.body.sparesConsumption) {
+          if (sc.spares && sc.spares.length > 0) {
+            await this.processService({
+              entityType: sc.entityType,
+              entityId: sc.entityId,
+              serviceName: 'Spares Consumption',
+              date: entry.date,
+              currentRpm: 0, // RPM not strictly tracked for direct consumption or already covered
+              siteId,
+              spares: sc.spares,
+              username: req.user.username,
+              transaction,
+              dailyEntryId: entry.id
+            });
+          }
+        }
+      }
+
       // Drilling Tools Meter Accumulation
       // Use the meter value from the created entry
       const totalMeter = entry.meter || 0;
@@ -1121,7 +1141,6 @@ class DailyEntryCustomController extends BaseController {
       }
 
       // === 6. Apply New Drilling Tools ===
-      // === 6. Apply New Drilling Tools ===
       if (req.body.drillingTools && req.body.drillingTools.length > 0) {
         const machineRPM = existingEntry.machineClosingRPM || 0;
         const compressorRPM = existingEntry.compressorClosingRPM || 0;
@@ -1142,6 +1161,26 @@ class DailyEntryCustomController extends BaseController {
           oldMeter, // Pass OLD meter as initial value for new tools
           transaction
         );
+      }
+
+      // === 7. Apply New Spares Consumption ===
+      if (req.body.sparesConsumption && req.body.sparesConsumption.length > 0) {
+        for (const sc of req.body.sparesConsumption) {
+          if (sc.spares && sc.spares.length > 0) {
+            await this.processService({
+              entityType: sc.entityType,
+              entityId: sc.entityId,
+              serviceName: 'Spares Consumption',
+              date: existingEntry.date,
+              currentRpm: 0,
+              siteId: siteId,
+              spares: sc.spares,
+              username: req.user.username,
+              transaction,
+              dailyEntryId: id
+            });
+          }
+        }
       }
 
       // Drilling Tools Meter Accumulation (Delta Logic)

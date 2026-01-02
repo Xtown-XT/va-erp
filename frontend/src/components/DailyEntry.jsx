@@ -23,7 +23,8 @@ import {
   PlusOutlined,
   SaveOutlined,
   DeleteOutlined,
-  EditOutlined
+  EditOutlined,
+  ReloadOutlined
 } from "@ant-design/icons";
 import api from "../service/api";
 import dayjs from "dayjs";
@@ -896,264 +897,292 @@ const DailyEntry = () => {
     }
   };
 
+  // Toggle Form State
+  const [isFormVisible, setIsFormVisible] = useState(false);
+
+  // Helper for toggle
+  const toggleForm = () => setIsFormVisible(!isFormVisible);
+
   return (
-    <div className="p-2">
-      <Card title="Daily Entry" size="small">
-        <Form form={form} onFinish={onFinish} layout="vertical" initialValues={initialValues}>
-          {/* Header: Date, Site, Machine - Unchanged */}
-          <Row gutter={16}>
-            <Col span={6}>
-              <Form.Item label="Date" name="date" initialValue={dayjs()}>
-                <DatePicker format="DD/MM/YYYY" onChange={setSelectedDate} allowClear={false} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="Site" name="siteId" rules={[{ required: true }]}>
-                <Select showSearch optionFilterProp="children" onChange={setSelectedSite}>
-                  {sites.map(s => <Select.Option key={s.id} value={s.id}>{s.siteName}</Select.Option>)}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="Machine" name="machineId" rules={[{ required: true }]}>
-                <Select showSearch optionFilterProp="children" onChange={(val) => onMachineChange(val)}>
-                  {machines.filter(m => !selectedSite || m.siteId === selectedSite).map(m => (
-                    <Select.Option key={m.id} value={m.id}>{m.machineNumber}</Select.Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={6}>
-              <Form.Item label="Compressor">
-                <Input value={selectedCompressor?.compressorName || "None"} disabled />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          <Row>
-            <Col>
-              <Space>
-                <Switch checked={shift2Enabled} onChange={setShift2Enabled} /> <Text>Enable Shift 2</Text>
-              </Space>
-            </Col>
-          </Row>
-
-          {/* Table Layout - Unchanged except we pass props if needed */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, marginBottom: 20 }}>
-            <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="p-2 border">Shift</th>
-                <th className="p-2 border">Machine RPM (Open/Close)</th>
-                <th className="p-2 border">Comp RPM (Open/Close)</th>
-                <th className="p-2 border">Prod (Holes/Meter)</th>
-                <th className="p-2 border">Fuel (D/M/C)</th>
-                <th className="p-2 border">Crew</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Shift 1 Row */}
-              {/* ... (Existing Shift 1/2 rows, we only removed ServiceSection below) */}
-              <tr>
-                <td className="p-2 border font-bold">Shift 1</td>
-                <td className="p-2 border">
-                  <Space direction="vertical" size={0}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_machineOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" style={{ width: 80 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Open</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_machineClosingRPM" noStyle>
-                        <InputNumber
-                          placeholder="Close" size="small" style={{ width: 80 }}
-                          onChange={(v) => {
-                            if (shift2Enabled) form.setFieldsValue({ shift2_machineOpeningRPM: v });
-                          }}
-                        />
-                      </Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Close</span>
-                    </div>
-                  </Space>
-                </td>
-                <td className="p-2 border">
-                  <Space direction="vertical" size={0}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_compressorOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" style={{ width: 80 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Open</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_compressorClosingRPM" noStyle>
-                        <InputNumber
-                          placeholder="Close" size="small" style={{ width: 80 }}
-                          onChange={(v) => {
-                            if (shift2Enabled) form.setFieldsValue({ shift2_compressorOpeningRPM: v });
-                          }}
-                        />
-                      </Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Close</span>
-                    </div>
-                  </Space>
-                </td>
-                <td className="p-2 border">
-                  <Space direction="vertical" size={0}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_noOfHoles" noStyle><InputNumber placeholder="Holes" size="small" style={{ width: 70 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Holes</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_meter" noStyle><InputNumber placeholder="Meter" size="small" style={{ width: 70 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Meter</span>
-                    </div>
-                  </Space>
-                </td>
-                <td className="p-2 border">
-                  <Space direction="vertical" size={0}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_dieselUsed" noStyle><InputNumber placeholder="Diesel" size="small" style={{ width: 65 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>Diesel</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_machineHSD" noStyle><InputNumber placeholder="M.HSD" size="small" style={{ width: 65 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>M.HSD</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Form.Item name="shift1_compressorHSD" noStyle><InputNumber placeholder="C.HSD" size="small" style={{ width: 65 }} /></Form.Item>
-                      <span style={{ fontSize: 11, color: '#666' }}>C.HSD</span>
-                    </div>
-                  </Space>
-                </td>
-                <td className="p-2 border">
-                  <Form.List name="shift1_employees">
-                    {(fields) => (
-                      <div>
-                        {fields.map(({ key, name, ...restField }) => (
-                          <Space key={key} align="baseline">
-                            <Form.Item {...restField} name={[name, 'employeeId']} noStyle>
-                              <Select
-                                style={{ width: 160 }}
-                                size="small"
-                                placeholder="Search Emp"
-                                showSearch
-                                filterOption={(input, option) => {
-                                  // Check against displayed text (Name (ID))
-                                  const text = (option?.children || "").toString().toLowerCase();
-                                  return text.includes(input.toLowerCase());
-                                }}
-                              >
-                                {employees.map(e => (
-                                  <Select.Option key={e.id} value={e.id}>
-                                    {e.name} ({e.empId})
-                                  </Select.Option>
-                                ))}
-                              </Select>
-                            </Form.Item>
-                          </Space>
-                        ))}
-                      </div>
-                    )}
-                  </Form.List>
-                </td>
-              </tr>
-              {shift2Enabled && (
-                <tr>
-                  <td className="p-2 border font-bold">Shift 2</td>
-                  <td className="p-2 border">
-                    <Space direction="vertical" size={0}>
-                      <Form.Item name="shift2_machineOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" /></Form.Item>
-                      <Form.Item name="shift2_machineClosingRPM" noStyle><InputNumber placeholder="Close" size="small" /></Form.Item>
-                    </Space>
-                  </td>
-                  <td className="p-2 border">
-                    <Space direction="vertical" size={0}>
-                      <Form.Item name="shift2_compressorOpeningRPM" noStyle><InputNumber placeholder="Open" size="small" /></Form.Item>
-                      <Form.Item name="shift2_compressorClosingRPM" noStyle><InputNumber placeholder="Close" size="small" /></Form.Item>
-                    </Space>
-                  </td>
-                  <td className="p-2 border">
-                    <Space direction="vertical" size={0}>
-                      <Form.Item name="shift2_noOfHoles" noStyle><InputNumber placeholder="Holes" size="small" /></Form.Item>
-                      <Form.Item name="shift2_meter" noStyle><InputNumber placeholder="Meter" size="small" /></Form.Item>
-                    </Space>
-                  </td>
-                  <td className="p-2 border">
-                    <Space direction="vertical" size={0}>
-                      <Form.Item name="shift2_dieselUsed" noStyle><InputNumber placeholder="Diesel" size="small" /></Form.Item>
-                      <Form.Item name="shift2_machineHSD" noStyle><InputNumber placeholder="M. HSD" size="small" /></Form.Item>
-                      <Form.Item name="shift2_compressorHSD" noStyle><InputNumber placeholder="C. HSD" size="small" /></Form.Item>
-                    </Space>
-                  </td>
-                  <td className="p-2 border">
-                    <Form.List name="shift2_employees">
-                      {(fields) => (
-                        <div>
-                          {fields.map(({ key, name, ...restField }) => (
-                            <Space key={key} align="baseline">
-                              <Form.Item {...restField} name={[name, 'employeeId']} noStyle>
-                                <Select
-                                  style={{ width: 160 }}
-                                  size="small"
-                                  placeholder="Search Emp"
-                                  showSearch
-                                  filterOption={(input, option) => {
-                                    const text = (option?.children || "").toString().toLowerCase();
-                                    return text.includes(input.toLowerCase());
-                                  }}
-                                >
-                                  {employees.map(e => (
-                                    <Select.Option key={e.id} value={e.id}>
-                                      {e.name} ({e.empId})
-                                    </Select.Option>
-                                  ))}
-                                </Select>
-                              </Form.Item>
-                            </Space>
-                          ))}
-                        </div>
-                      )}
-                    </Form.List>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          {/* New Service Section */}
-          <DailyServiceSection form={form} machines={machines} compressor={selectedCompressor} siteId={selectedSite} />
-
-          {/* Drilling Tools */}
-          {selectedMachine && (
-            <div style={{ marginTop: 20 }}>
-              <DrillingToolsSection
-                drillingTools={drillingTools}
-                onAddTool={handleAddTool}
-                onRemoveTool={handleRemoveTool}
-                onUpdateTool={handleUpdateTool}
-                compressorName={selectedCompressor?.compressorName}
-                siteId={selectedSite}
-                currentMeterValue={
-                  (form.getFieldValue('shift1_meter') || 0) +
-                  (form.getFieldValue('shift2_meter') || 0)
-                }
-              />
-            </div>
+    <div className="p-2 space-y-4">
+      {/* Top Action Bar */}
+      <div className="flex justify-between items-center bg-white p-3 rounded-lg shadow-sm">
+        <Title level={4} style={{ margin: 0 }}>Daily Entry Management</Title>
+        <Space>
+          {!isFormVisible && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setIsFormVisible(true)}>
+              Add Entry
+            </Button>
           )}
+          {isFormVisible && (
+            <Button onClick={() => setIsFormVisible(false)}>
+              Close Form
+            </Button>
+          )}
+        </Space>
+      </div>
 
-          {/* New Changing Spares Section */}
-          <DailySparesSection form={form} machines={machines} compressor={selectedCompressor} siteId={selectedSite} />
+      {/* Main Entry Form (Collapsible) */}
+      {isFormVisible && (
+        <Card title={editingId ? "Edit Entry" : "New Daily Entry"} size="small" className="shadow-md">
+          <Form form={form} onFinish={onFinish} layout="vertical" initialValues={initialValues}>
 
-          <Row justify="end" style={{ marginTop: 20 }}>
-            <Space>
-              {editingId && <Button onClick={cancelEdit}>Cancel Edit</Button>}
-              <Button type="primary" htmlType="submit" size="large" icon={<SaveOutlined />} loading={submitting}>
-                {editingId ? "Update Entry" : "Save All Entries"}
-              </Button>
-            </Space>
-          </Row>
-        </Form>
-      </Card>
+            {/* Common Header Fields */}
+            <Card type="inner" title="Entry Details" size="small" className="mb-4 bg-gray-50">
+              <Row gutter={16}>
+                <Col xs={24} sm={12} md={6}>
+                  <Form.Item label="Date" name="date" rules={[{ required: true }]}>
+                    <DatePicker format="DD/MM/YYYY" onChange={setSelectedDate} allowClear={false} className="w-full" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <Form.Item label="Site" name="siteId" rules={[{ required: true }]}>
+                    <Select showSearch optionFilterProp="children" onChange={setSelectedSite} placeholder="Select Site">
+                      {sites.map(s => <Select.Option key={s.id} value={s.id}>{s.siteName}</Select.Option>)}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <Form.Item label="Machine" name="machineId" rules={[{ required: true }]}>
+                    <Select showSearch optionFilterProp="children" onChange={(val) => onMachineChange(val)} placeholder="Select Machine">
+                      {machines.filter(m => !selectedSite || m.siteId === selectedSite).map(m => (
+                        <Select.Option key={m.id} value={m.id}>{m.machineNumber}</Select.Option>
+                      ))}
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={6}>
+                  <Form.Item label="Compressor">
+                    <Input value={selectedCompressor?.compressorName || "None"} disabled className="bg-gray-100 text-gray-700" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row>
+                <Col>
+                  <Space>
+                    <Switch checked={shift2Enabled} onChange={(checked) => {
+                      setShift2Enabled(checked);
+                      if (checked) {
+                        const s1M = form.getFieldValue('shift1_machineClosingRPM');
+                        const s1C = form.getFieldValue('shift1_compressorClosingRPM');
+                        form.setFieldsValue({
+                          shift2_machineOpeningRPM: s1M,
+                          shift2_compressorOpeningRPM: s1C
+                        });
+                      }
+                    }} /> <Text strong>Enable Shift 2</Text>
+                  </Space>
+                </Col>
+              </Row>
+            </Card>
 
-      <Card title="History" style={{ marginTop: 20 }}>
+            {/* Compact Shift Entry Table */}
+            <div className="overflow-x-auto mb-4 border rounded">
+              <table className="w-full text-xs text-center border-collapse">
+                <thead className="bg-gray-100 text-gray-700 font-semibold">
+                  <tr>
+                    <th className="p-1 border w-16">Shift</th>
+                    <th className="p-1 border w-32">Total Crawler RPM</th>
+                    <th className="p-1 border w-32">Total Compressor RPM</th>
+                    <th className="p-1 border w-16">Holes</th>
+                    <th className="p-1 border w-16">Meter</th>
+                    <th className="p-1 border w-16">M. HSD</th>
+                    <th className="p-1 border w-16">C. HSD</th>
+                    <th className="p-1 border">Employees</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Shift 1 Row */}
+                  <tr>
+                    <td className="p-1 border font-bold bg-gray-50">1st Shift</td>
+                    <td className="p-1 border">
+                      <div className="flex flex-col gap-1">
+                        <Form.Item name="shift1_machineOpeningRPM" noStyle><InputNumber size="small" placeholder="Open" className="w-full text-xs" controls={false} /></Form.Item>
+                        <Form.Item name="shift1_machineClosingRPM" noStyle>
+                          <InputNumber
+                            size="small"
+                            placeholder="Close"
+                            className="w-full text-xs"
+                            controls={false}
+                            onChange={(v) => { if (shift2Enabled) form.setFieldsValue({ shift2_machineOpeningRPM: v }); }}
+                          />
+                        </Form.Item>
+                        <Form.Item shouldUpdate={(prev, curr) => prev.shift1_machineOpeningRPM !== curr.shift1_machineOpeningRPM || prev.shift1_machineClosingRPM !== curr.shift1_machineClosingRPM} noStyle>
+                          {({ getFieldValue }) => {
+                            const o = getFieldValue('shift1_machineOpeningRPM') || 0;
+                            const c = getFieldValue('shift1_machineClosingRPM') || 0;
+                            return <span className="text-[10px] font-bold text-blue-600">Tot: {(c - o).toFixed(0)}</span>;
+                          }}
+                        </Form.Item>
+                      </div>
+                    </td>
+                    <td className="p-1 border">
+                      <div className="flex flex-col gap-1">
+                        <Form.Item name="shift1_compressorOpeningRPM" noStyle><InputNumber size="small" placeholder="Open" className="w-full text-xs" controls={false} /></Form.Item>
+                        <Form.Item name="shift1_compressorClosingRPM" noStyle>
+                          <InputNumber
+                            size="small"
+                            placeholder="Close"
+                            className="w-full text-xs"
+                            controls={false}
+                            onChange={(v) => { if (shift2Enabled) form.setFieldsValue({ shift2_compressorOpeningRPM: v }); }}
+                          />
+                        </Form.Item>
+                        <Form.Item shouldUpdate={(prev, curr) => prev.shift1_compressorOpeningRPM !== curr.shift1_compressorOpeningRPM || prev.shift1_compressorClosingRPM !== curr.shift1_compressorClosingRPM} noStyle>
+                          {({ getFieldValue }) => {
+                            const o = getFieldValue('shift1_compressorOpeningRPM') || 0;
+                            const c = getFieldValue('shift1_compressorClosingRPM') || 0;
+                            return <span className="text-[10px] font-bold text-blue-600">Tot: {(c - o).toFixed(0)}</span>;
+                          }}
+                        </Form.Item>
+                      </div>
+                    </td>
+                    <td className="p-1 border"><Form.Item name="shift1_noOfHoles" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+                    <td className="p-1 border"><Form.Item name="shift1_meter" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+                    <td className="p-1 border"><Form.Item name="shift1_machineHSD" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+                    <td className="p-1 border"><Form.Item name="shift1_compressorHSD" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+
+                    {/* Shift 1 Employees - Compact List */}
+                    <td className="p-1 border align-top">
+                      <Form.List name="shift1_employees">
+                        {(fields, { add, remove }) => (
+                          <div className="flex flex-col gap-1">
+                            {fields.map(({ key, name, ...restField }) => (
+                              <div key={key} className="flex gap-1 items-center">
+                                <Form.Item {...restField} name={[name, 'employeeId']} noStyle>
+                                  <Select
+                                    size="small"
+                                    className="w-96"
+                                    placeholder="Select"
+                                    showSearch
+                                    optionFilterProp="children"
+                                    filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+                                  >
+                                    {employees.map(e => <Select.Option key={e.id} value={e.id}>{e.empId ? `${e.empId} - ${e.name}` : e.name}</Select.Option>)}
+                                  </Select>
+                                </Form.Item>
+                                <DeleteOutlined className="text-red-500 cursor-pointer text-xs" onClick={() => remove(name)} />
+                              </div>
+                            ))}
+                            <Button type="dashed" size="small" onClick={() => add()} icon={<PlusOutlined />} className="text-[10px] h-6">Add</Button>
+                          </div>
+                        )}
+                      </Form.List>
+                    </td>
+                  </tr>
+
+                  {/* Shift 2 Row (if enabled) */}
+                  {shift2Enabled && (
+                    <tr>
+                      <td className="p-1 border font-bold bg-gray-50">2nd Shift</td>
+                      <td className="p-1 border">
+                        <div className="flex flex-col gap-1">
+                          <Form.Item name="shift2_machineOpeningRPM" noStyle><InputNumber size="small" placeholder="Open" className="w-full text-xs" controls={false} /></Form.Item>
+                          <Form.Item name="shift2_machineClosingRPM" noStyle><InputNumber size="small" placeholder="Close" className="w-full text-xs" controls={false} /></Form.Item>
+                          <Form.Item shouldUpdate={(prev, curr) => prev.shift2_machineOpeningRPM !== curr.shift2_machineOpeningRPM || prev.shift2_machineClosingRPM !== curr.shift2_machineClosingRPM} noStyle>
+                            {({ getFieldValue }) => {
+                              const o = getFieldValue('shift2_machineOpeningRPM') || 0;
+                              const c = getFieldValue('shift2_machineClosingRPM') || 0;
+                              return <span className="text-[10px] font-bold text-blue-600">Tot: {(c - o).toFixed(0)}</span>;
+                            }}
+                          </Form.Item>
+                        </div>
+                      </td>
+                      <td className="p-1 border">
+                        <div className="flex flex-col gap-1">
+                          <Form.Item name="shift2_compressorOpeningRPM" noStyle><InputNumber size="small" placeholder="Open" className="w-full text-xs" controls={false} /></Form.Item>
+                          <Form.Item name="shift2_compressorClosingRPM" noStyle><InputNumber size="small" placeholder="Close" className="w-full text-xs" controls={false} /></Form.Item>
+                          <Form.Item shouldUpdate={(prev, curr) => prev.shift2_compressorOpeningRPM !== curr.shift2_compressorOpeningRPM || prev.shift2_compressorClosingRPM !== curr.shift2_compressorClosingRPM} noStyle>
+                            {({ getFieldValue }) => {
+                              const o = getFieldValue('shift2_compressorOpeningRPM') || 0;
+                              const c = getFieldValue('shift2_compressorClosingRPM') || 0;
+                              return <span className="text-[10px] font-bold text-blue-600">Tot: {(c - o).toFixed(0)}</span>;
+                            }}
+                          </Form.Item>
+                        </div>
+                      </td>
+                      <td className="p-1 border"><Form.Item name="shift2_noOfHoles" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+                      <td className="p-1 border"><Form.Item name="shift2_meter" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+                      <td className="p-1 border"><Form.Item name="shift2_machineHSD" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+                      <td className="p-1 border"><Form.Item name="shift2_compressorHSD" noStyle><InputNumber size="small" className="w-full text-xs" controls={false} /></Form.Item></td>
+
+                      {/* Shift 2 Employees */}
+                      <td className="p-1 border align-top">
+                        <Form.List name="shift2_employees">
+                          {(fields, { add, remove }) => (
+                            <div className="flex flex-col gap-1">
+                              {fields.map(({ key, name, ...restField }) => (
+                                <div key={key} className="flex gap-1 items-center">
+                                  <Form.Item {...restField} name={[name, 'employeeId']} noStyle>
+                                    <Select
+                                      size="small"
+                                      className="w-96"
+                                      placeholder="Select"
+                                      showSearch
+                                      optionFilterProp="children"
+                                      filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+                                    >
+                                      {employees.map(e => <Select.Option key={e.id} value={e.id}>{e.empId ? `${e.empId} - ${e.name}` : e.name}</Select.Option>)}
+                                    </Select>
+                                  </Form.Item>
+                                  <DeleteOutlined className="text-red-500 cursor-pointer text-xs" onClick={() => remove(name)} />
+                                </div>
+                              ))}
+                              <Button type="dashed" size="small" onClick={() => add()} icon={<PlusOutlined />} className="text-[10px] h-6">Add</Button>
+                            </div>
+                          )}
+                        </Form.List>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Services */}
+            <Card type="inner" title="Daily Services & Maintenance" size="small" className="mb-4">
+              <DailyServiceSection form={form} machines={machines} compressor={selectedCompressor} siteId={selectedSite} />
+            </Card>
+
+            {/* Drilling Tools */}
+            {selectedMachine && (
+              <Card type="inner" title="Drilling Tools" size="small" className="mb-4">
+                <DrillingToolsSection
+                  drillingTools={drillingTools}
+                  onAddTool={handleAddTool}
+                  onRemoveTool={handleRemoveTool}
+                  onUpdateTool={handleUpdateTool}
+                  compressorName={selectedCompressor?.compressorName}
+                  siteId={selectedSite}
+                  currentMeterValue={
+                    (form.getFieldValue('shift1_meter') || 0) +
+                    (form.getFieldValue('shift2_meter') || 0)
+                  }
+                />
+              </Card>
+            )}
+
+            {/* Spares */}
+            <Card type="inner" title="Spares Consumption" size="small" className="mb-4">
+              <DailySparesSection form={form} machines={machines} compressor={selectedCompressor} siteId={selectedSite} />
+            </Card>
+
+            <Row justify="end" className="sticky bottom-0 bg-white p-2 border-t mt-4 z-10">
+              <Space>
+                {editingId && <Button onClick={cancelEdit}>Cancel Edit</Button>}
+                <Button type="primary" htmlType="submit" size="large" icon={<SaveOutlined />} loading={submitting}>
+                  {editingId ? "Update Entry" : "Save All Entries"}
+                </Button>
+              </Space>
+            </Row>
+          </Form>
+        </Card>
+      )}
+
+      {/* History Table */}
+      <Card title="Entry History" size="small" className="shadow-sm">
         <div style={{ marginBottom: 16 }}>
-          <Space>
+          <Space wrap>
             <DatePicker.RangePicker
               placeholder={["Start Date", "End Date"]}
               format="DD/MM/YYYY"
@@ -1174,20 +1203,24 @@ const DailyEntry = () => {
               setHistoryRange([dayjs().startOf('month'), dayjs().endOf('month')]);
               setHistorySite(null);
             }}>Clear Filters</Button>
+            <Button icon={<ReloadOutlined />} onClick={() => refetchEntries()} />
           </Space>
         </div>
         <Table
           dataSource={entriesData?.data || []}
           columns={[
-            { title: "Date", dataIndex: "date", render: d => dayjs(d).format("DD/MM/YYYY") },
-            { title: "Ref", dataIndex: "refNo" },
-            { title: "Shift", dataIndex: "shift" },
-            { title: "Site", dataIndex: ["site", "siteName"] },
-            { title: "Machine", dataIndex: ["machine", "machineNumber"] },
+            { title: "Date", dataIndex: "date", render: d => dayjs(d).format("DD/MM/YYYY"), width: 100 },
+            { title: "Ref", dataIndex: "refNo", width: 100 },
+            { title: "Shift", dataIndex: "shift", width: 60, align: 'center', render: (val) => <Tag color={val === 1 ? 'blue' : 'purple'}>{val}</Tag> },
+            { title: "Site", dataIndex: ["site", "siteName"], ellipsis: true },
+            { title: "Machine", dataIndex: ["machine", "machineNumber"], width: 120 },
             {
-              title: "Action", render: (_, r) => (
+              title: "Action", width: 100, align: 'center', render: (_, r) => (
                 <Space>
-                  <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r.id)} />
+                  <Button size="small" type="primary" ghost icon={<EditOutlined />} onClick={() => {
+                    setIsFormVisible(true);
+                    handleEdit(r.id);
+                  }} />
                   <Popconfirm title="Delete?" onConfirm={() => deleteDailyEntry.mutateAsync(r.id)}><Button danger size="small" icon={<DeleteOutlined />} /></Popconfirm>
                 </Space>
               )
@@ -1195,7 +1228,8 @@ const DailyEntry = () => {
           ]}
           size="small"
           rowKey="id"
-          pagination={{ total: entriesData?.total || 0, onChange: (p) => setPagination({ ...pagination, current: p }) }}
+          pagination={{ total: entriesData?.total || 0, onChange: (p) => setPagination({ ...pagination, current: p }), pageSize: pagination.pageSize }}
+          scroll={{ x: 800 }}
         />
       </Card>
     </div>

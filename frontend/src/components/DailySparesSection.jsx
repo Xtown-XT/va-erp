@@ -82,7 +82,7 @@ const DailySparesSection = ({ form, machines, compressor, siteId }) => {
                                                                 >
                                                                     {spares.map(s => (
                                                                         <Select.Option key={s.id} value={s.id}>
-                                                                            {s.itemName} ({s.partNumber})
+                                                                            {`${s.itemName} (${s.partNumber || ''})`}
                                                                         </Select.Option>
                                                                     ))}
                                                                 </Select>

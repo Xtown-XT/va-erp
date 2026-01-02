@@ -168,7 +168,6 @@ const DrillingToolsReport = () => {
         const exportData = reportData.map(row => ({
             'Tool Name': row.toolName,
             'Part Number': row.partNumber,
-            'RPM Source': row.rpmSource,
             'Machine': row.machine,
             'Site': row.site,
             'Fitted Date': row.fittedDate ? dayjs(row.fittedDate).format('DD-MM-YYYY') : '',

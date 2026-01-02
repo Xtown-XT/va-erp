@@ -647,25 +647,36 @@ const ProductionReport = () => {
       });
 
       const printWindow = window.open("", "_blank");
-      const reportTitle = selectedSiteName ? 'Daily Production Report - ' + selectedSiteName : 'Daily Production Report';
+      // Robustly determine Site Name and entity names
+      let currentSiteName = selectedSiteName;
+      if (!currentSiteName && selectedSite) {
+        // Fallback to searching in fetched sites
+        const foundSite = pdfSites.find(s => s.id === selectedSite);
+        currentSiteName = foundSite ? foundSite.siteName : 'Unknown Site';
+      }
+      const finalSiteName = currentSiteName || 'All Sites';
 
-      // Build HTML string to avoid TypeScript template literal parsing issues
+      const machineName = selectedMachineName || '';
+      // If a specific machine is selected, show that. Otherwise show Site Name (or "All Sites")
+      const entityLabel = machineName ? machineName : finalSiteName;
+
       const periodStart = dateRange[0].format("DD/MM/YYYY");
       const periodEnd = dateRange[1].format("DD/MM/YYYY");
-      const siteName = selectedSiteName || 'All Sites';
-      const machineName = selectedMachineName || '';
-      const entityName = machineName ? machineName : siteName;
-      const reportHeader = `${entityName} - Production Report (${periodStart} - ${periodEnd})`;
+
+      const reportTitle = currentSiteName ? `Daily Production Report - ${currentSiteName}` : 'Daily Production Report';
+      // Header format: "Site Name - Production Report (From - To)"
+      const reportHeader = `${entityLabel} - Production Report (${periodStart} - ${periodEnd})`;
 
       let htmlContent = '<html><head><title>' + reportTitle + '</title>' +
         '<style>' +
         'body { font-family: Arial, sans-serif; margin: 20px; }' +
-        '.header { text-align: center; margin-bottom: 10px; }' +
-        '.header h3 { margin: 0; font-size: 18px; }' +
+        '.header { text-align: center; margin-bottom: 20px; }' +
+        '.header h3 { margin: 5px 0; font-size: 18px; }' +
+        '.header p { margin: 0; font-size: 14px; color: #555; }' +
         'table { width: 100%; border-collapse: collapse; margin-top: 10px; }' +
-        'th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 9px; }' +
-        'th { background-color: #f2f2f2; }' +
-        '.total-row { background-color: #f9f9f9; font-weight: bold; }' +
+        'th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 10px; }' +
+        'th { background-color: #f2f2f2; font-weight: bold; }' +
+        '.total-row { background-color: #e6e6e6; font-weight: bold; }' +
         '</style></head><body>' +
         '<div class="header">' +
         '<h3>' + reportHeader + '</h3>' +
@@ -681,14 +692,6 @@ const ProductionReport = () => {
       // Build table rows
       sortedDailyData.forEach((entry) => {
         const services = entry.services || [];
-        const servicesText = services.length > 0
-          ? services.map((service) => {
-            const serviceTypeLabel = service.serviceType === 'machine' ? 'Machine' :
-              service.serviceType === 'compressor' ? 'Compressor' : 'Item';
-            const serviceName = service.serviceName || 'Unnamed Service';
-            return serviceTypeLabel + ': ' + serviceName;
-          }).join(', ')
-          : 'None';
         // Get site name - try site object first, then fallback to sites array lookup
         let siteName = entry.site?.siteName;
         if (!siteName && entry.siteId) {
@@ -734,7 +737,7 @@ const ProductionReport = () => {
 
       // Build totals row
       htmlContent += '</tbody><tfoot><tr class="total-row">' +
-        '<td>Total</td><td></td><td></td>' +
+        '<td colspan="3" style="text-align: right;">Grand Total</td>' +
         '<td>' + truncateToFixed(totals.totalMeter || 0, 2) + '</td>' +
         '<td>' + Math.round(totals.totalCrawlerHSD || 0) + '</td>' +
         '<td>' + Math.round(totals.totalCompressorHSD || 0) + '</td>' +
@@ -781,7 +784,6 @@ const ProductionReport = () => {
 
       // Fetch machines, compressors, and sites for Excel (if not already available)
       let excelMachines = machines;
-      let excelCompressors = compressors;
       let excelSites = sites;
 
       if (machines.length === 0) {
@@ -790,15 +792,6 @@ const ProductionReport = () => {
           excelMachines = machinesRes.data.data || [];
         } catch (err) {
           console.warn('Could not fetch machines for Excel:', err);
-        }
-      }
-
-      if (compressors.length === 0) {
-        try {
-          const compressorsRes = await api.get('/api/compressors?limit=1000');
-          excelCompressors = compressorsRes.data.data || [];
-        } catch (err) {
-          console.warn('Could not fetch compressors for Excel:', err);
         }
       }
 
@@ -823,11 +816,18 @@ const ProductionReport = () => {
       // Prepare Excel data
       const periodStart = dateRange[0].format("DD/MM/YYYY");
       const periodEnd = dateRange[1].format("DD/MM/YYYY");
-      const siteName = selectedSiteName || 'All Sites';
-      const machineName = selectedMachineName || '';
-      const entityName = machineName ? machineName : siteName;
 
-      // Compact Header: "Entity Name Production Report (Start - End)"
+      // Robust Lookup for Site Name
+      let currentSiteName = selectedSiteName;
+      if (!currentSiteName && selectedSite) {
+        const foundSite = excelSites.find(s => s.id === selectedSite);
+        currentSiteName = foundSite ? foundSite.siteName : '';
+      }
+      const finalSiteName = currentSiteName || 'All Sites';
+      const machineName = selectedMachineName || '';
+      const entityName = machineName ? machineName : finalSiteName;
+
+      // Compact Header
       const headerText = `${entityName} Production Report (${periodStart} - ${periodEnd})`;
 
       // Create worksheet data
@@ -887,7 +887,7 @@ const ProductionReport = () => {
       // Add totals row
       worksheetData.push([]); // Empty row
       worksheetData.push([
-        'Total',
+        'Grand Total',
         '',
         '',
         truncateToFixed(totals.totalMeter || 0, 2),
@@ -908,6 +908,12 @@ const ProductionReport = () => {
       // Create workbook and worksheet
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+
+      // Merge "Grand Total" cells (A, B, C) for the last row
+      const lastRowIndex = worksheetData.length - 1;
+      if (!ws['!merges']) ws['!merges'] = [];
+      ws['!merges'].push({ s: { r: lastRowIndex, c: 0 }, e: { r: lastRowIndex, c: 2 } });
+
 
       // Set column widths
       const colWidths = [

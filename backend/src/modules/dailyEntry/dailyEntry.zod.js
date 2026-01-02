@@ -51,6 +51,16 @@ export const createDailyEntrySchema = z.object({
     })).optional()
   })).optional(),
 
+  // Spares Consumption (Direct)
+  sparesConsumption: z.array(z.object({
+    entityType: z.enum(['MACHINE', 'COMPRESSOR']),
+    entityId: z.string().uuid("Invalid entity ID"),
+    spares: z.array(z.object({
+      itemId: z.string().uuid("Invalid spare ID"),
+      quantity: z.number().int().min(1)
+    }))
+  })).optional(),
+
   // New spares structure
   machineSpares: z.array(z.object({
     itemId: z.string().uuid("Invalid item ID format"),

@@ -12,23 +12,28 @@ import {
   Statistic,
 } from "antd";
 import { FilePdfOutlined, FileExcelOutlined } from "@ant-design/icons";
-import { useInventoryReport, useVehicles, useCompressors, useSites } from "../hooks/useQueries";
+import { useInventoryReport, useMachines, useCompressors, useSites } from "../hooks/useQueries";
 import { truncateToFixed } from "../utils/textUtils";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
+const { RangePicker } = DatePicker;
 
 const InventoryReport = () => {
-  const [selectedMonth, setSelectedMonth] = useState(dayjs());
+  // Default to current month
+  const [dateRange, setDateRange] = useState([
+    dayjs().startOf('month'),
+    dayjs().endOf('month')
+  ]);
   const [itemTypeFilter, setItemTypeFilter] = useState("");
   const [selectedSite, setSelectedSite] = useState(null);
 
-  const month = selectedMonth.month() + 1; // dayjs months are 0-indexed
-  const year = selectedMonth.year();
+  const startDate = dateRange ? dateRange[0].format('YYYY-MM-DD') : '';
+  const endDate = dateRange ? dateRange[1].format('YYYY-MM-DD') : '';
 
   // Fetch machines and compressors for filter
-  const { data: machines = [] } = useVehicles();
+  const { data: machines = [] } = useMachines();
   const { data: compressors = [] } = useCompressors();
   const { data: sites = [] } = useSites();
 
@@ -48,25 +53,31 @@ const InventoryReport = () => {
 
   // Fetch inventory report
   const { data: reportData, isLoading } = useInventoryReport(
-    month,
-    year,
+    startDate,
+    endDate,
     itemTypeFilter,
     selectedSite
   );
 
   const items = reportData?.data || [];
-  const totals = reportData?.totals || {
+  // Calculate totals from items since backend might not return totals object for custom range
+  const totals = items.reduce((acc, item) => ({
+    totalOpeningStock: acc.totalOpeningStock + (item.openingStock || 0),
+    totalInward: acc.totalInward + (item.inward || 0), // Added
+    totalOutward: acc.totalOutward + (item.outward || 0), // Used
+    totalBalance: acc.totalBalance + (item.balance || 0),
+  }), {
     totalOpeningStock: 0,
     totalInward: 0,
     totalOutward: 0,
     totalBalance: 0,
-  };
+  });
 
   // Export to Excel (CSV format)
   const exportToExcel = () => {
     const csv = [
       ["Inventory Report"],
-      [`Month: ${selectedMonth.format("MMMM YYYY")}`],
+      [`Period: ${startDate} to ${endDate}`],
       [`Generated: ${new Date().toLocaleString()}`],
       [],
       [
@@ -76,9 +87,9 @@ const InventoryReport = () => {
         "Category",
         "Units",
         "Opening Stock",
-        "Inward",
-        "Outward",
-        "Balance",
+        "Added (Inward)",
+        "Used (Outward)",
+        "Current Balance",
       ],
       ...items.map((item) => [
         item.itemName,
@@ -99,7 +110,7 @@ const InventoryReport = () => {
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `inventory-report-${selectedMonth.format("YYYY-MM")}.csv`;
+    link.download = `inventory-report-${startDate}_${endDate}.csv`;
     link.click();
   };
 
@@ -109,7 +120,7 @@ const InventoryReport = () => {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Inventory Report - ${selectedMonth.format("MMMM YYYY")}</title>
+          <title>Inventory Report - ${startDate} to ${endDate}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 20px; }
             table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -124,9 +135,10 @@ const InventoryReport = () => {
         <body>
           <div class="header">
             <h1>Inventory Report</h1>
-            <p><strong>Month:</strong> ${selectedMonth.format("MMMM YYYY")}</p>
+            <p><strong>Period:</strong> ${startDate} to ${endDate}</p>
             <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
             ${itemTypeFilter ? `<p><strong>Filtered by:</strong> ${itemTypeFilter}</p>` : ""}
+            ${selectedSite ? `<p><strong>Site:</strong> ${sites.find(s => s.id === selectedSite)?.siteName || selectedSite}</p>` : ""}
           </div>
           
           <div class="summary">
@@ -136,15 +148,15 @@ const InventoryReport = () => {
             </div>
             <div class="summary-item">
               <h3 style="color: green;">${totals.totalInward.toFixed(2)}</h3>
-              <p>Inward</p>
+              <p>Added (Inward)</p>
             </div>
             <div class="summary-item">
               <h3 style="color: red;">${totals.totalOutward.toFixed(2)}</h3>
-              <p>Outward</p>
+              <p>Used (Outward)</p>
             </div>
             <div class="summary-item">
               <h3>${totals.totalBalance.toFixed(2)}</h3>
-              <p>Balance</p>
+              <p>Current Balance</p>
             </div>
           </div>
           
@@ -157,8 +169,8 @@ const InventoryReport = () => {
                 <th>Category</th>
                 <th>Units</th>
                 <th>Opening Stock</th>
-                <th>Inward</th>
-                <th>Outward</th>
+                <th>Added</th>
+                <th>Used</th>
                 <th>Balance</th>
               </tr>
             </thead>
@@ -234,7 +246,7 @@ const InventoryReport = () => {
       render: (value) => truncateToFixed(value || 0, 2),
     },
     {
-      title: "Inward",
+      title: "Added (Inward)",
       dataIndex: "inward",
       key: "inward",
       width: 100,
@@ -245,7 +257,7 @@ const InventoryReport = () => {
       ),
     },
     {
-      title: "Outward",
+      title: "Used (Outward)",
       dataIndex: "outward",
       key: "outward",
       width: 100,
@@ -256,7 +268,7 @@ const InventoryReport = () => {
       ),
     },
     {
-      title: "Balance",
+      title: "Current Balance",
       dataIndex: "balance",
       key: "balance",
       width: 120,
@@ -320,12 +332,11 @@ const InventoryReport = () => {
         {/* Filters */}
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
           <Col xs={24} sm={12}>
-            <DatePicker
-              picker="month"
-              value={selectedMonth}
-              onChange={(date) => setSelectedMonth(date || dayjs())}
+            <RangePicker
+              value={dateRange}
+              onChange={setDateRange}
               style={{ width: "100%" }}
-              format="MMMM YYYY"
+              format="DD/MM/YYYY"
             />
           </Col>
           <Col xs={24} sm={12}>
@@ -375,7 +386,7 @@ const InventoryReport = () => {
           <Col xs={24} sm={6}>
             <Card>
               <Statistic
-                title="Inward"
+                title="Added (Inward)"
                 value={totals.totalInward}
                 precision={2}
                 valueStyle={{ color: "#52c41a" }}
@@ -386,7 +397,7 @@ const InventoryReport = () => {
           <Col xs={24} sm={6}>
             <Card>
               <Statistic
-                title="Outward"
+                title="Used (Outward)"
                 value={totals.totalOutward}
                 precision={2}
                 valueStyle={{ color: "#ff4d4f" }}
@@ -397,7 +408,7 @@ const InventoryReport = () => {
           <Col xs={24} sm={6}>
             <Card>
               <Statistic
-                title="Balance"
+                title="Current Balance"
                 value={totals.totalBalance}
                 precision={2}
                 valueStyle={{

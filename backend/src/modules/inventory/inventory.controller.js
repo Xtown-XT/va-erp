@@ -200,115 +200,156 @@ export const InventoryController = {
         try {
             const { startDate, endDate, itemType, siteId } = req.query;
             const start = startDate ? new Date(startDate) : new Date(new Date().setDate(new Date().getDate() - 30));
-            const end = endDate ? new Date(endDate) : new Date();
+            // End of the day for endDate
+            const end = endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : new Date();
+            const now = new Date();
 
             // 1. Get Base Items (Spares and DrillingTools)
+            // We fetch ALL items to list them even if stock is 0? Yes.
             let items = [];
-            if (!itemType || itemType === 'spares' || itemType === 'all') {
-                const spares = await Spares.findAll({ lean: true });
-                items = [...items, ...spares.map(s => ({ ...s.dataValues, itemType: 'Spare' }))];
+            if (!itemType || itemType === 'spares' || itemType === 'all' || itemType === '') {
+                const spares = await Spares.findAll({ lean: true, raw: true });
+                items = [...items, ...spares.map(s => ({ ...s, itemType: 'Spare' }))];
             }
-            if (!itemType || itemType === 'Drilling Tools' || itemType === 'all') {
-                const tools = await DrillingTools.findAll({ lean: true });
-                items = [...items, ...tools.map(t => ({ ...t.dataValues, itemType: 'Drilling Tool', groupName: t.type }))];
+            if (!itemType || itemType === 'Drilling Tools' || itemType === 'all' || itemType === '') {
+                const tools = await DrillingTools.findAll({ lean: true, raw: true });
+                items = [...items, ...tools.map(t => ({ ...t, itemType: 'Drilling Tool', groupName: t.type }))];
             }
 
-            // 2. Fetch Purchases (Inward)
-            const purchaseWhere = {
-                createdAt: { [Op.gte]: start } // We need history for opening balance? No, we need ALL history for opening?
-                // Logic: Opening = Sum(In) - Sum(Out) BEFORE start date.
-                // Inward = Sum(In) BETWEEN start and end.
-                // Outward = Sum(Out) BETWEEN start and end.
-                // Balance = Opening + Inward - Outward.
+            // 2. Get Current Stock (from SiteStock)
+            // If siteId provided, filter. Else sum all.
+            const stockWhere = {};
+            if (siteId) stockWhere.siteId = siteId;
+            const currentStocks = await SiteStock.findAll({ where: stockWhere, raw: true });
+
+            // Helper to get current qty for an item
+            const getCurrentQty = (itemId, type) => {
+                const relevantStocks = currentStocks.filter(s =>
+                    type === 'Spare' ? s.spareId === itemId : s.drillingToolId === itemId
+                );
+                return relevantStocks.reduce((sum, s) => sum + (s.quantity || 0), 0);
             };
 
-            // To calculate Opening Stock correctly, we need ALL transactions.
-            // But fetching ALL transactions might be heavy.
-            // Alternative: Use Current Stock from SiteStock table as "Closing Balance" and work backwards?
-            // Current Stock = Opening + Inward - Outward (Total History)
-            // Opening (at start date) = Current - Inward(Since start) + Outward(Since start) ??
-            // OR: Opening = Sum(In before start) - Sum(Out before start).
-            // Let's stick to Sum method for accuracy if volume is low.
+            // 3. Fetch Transactions (Inward & Outward) from Start Date to NOW
+            // We need transactions from Start to Now to:
+            // - Calculate Added/Used in Period (Start to End)
+            // - Reverse calc Opening from Current (Current - Added(Start-Now) + Used(Start-Now) ??? No)
+
+            // Correct Reverse Logic:
+            // Closing (at End Date) = Current Stock - Inward(End+ to Now) + Outward(End+ to Now)
+            // Opening (at Start Date) = Closing - Inward(Start to End) + Outward(Start to End)
+
+            // So we need transactions from Start -> Now? 
+            // Actually we need transactions from (End Date onwards) to calculate Closing from Current.
+            // AND we need transactions from (Start to End) to calculate Opening from Closing.
+            // So essentially we need transactions from Start to Now? 
+            // Wait, if we only fetch Start->Now, we can't reverse calc Opening if we don't know Closing?
+            // Closing is derived from Current.
+
+            // Transactions needed:
+            // - Inward/Outward AFTER End Date (to rollback Current -> Closing)
+            // - Inward/Outward BETWEEN Start and End (for Report Columns and rollback Closing -> Opening)
+
+            // So we fetch ALL transactions from Start Date?
+            // No, we need ALL transactions AFTER Start Date? No, `start` is the historical point.
+            // We need everything AFTER `start`? 
+            // Actually, to get Closing from Current, we need everything AFTER `end` up to `now`.
+            // To get Report Numbers (Added/Used in period), we need `start` to `end`.
+
+            // So we need: 
+            // A: Transactions > End Date (for rollback)
+            // B: Transactions Between Start and End (for display)
+
+            const transWhere = {
+                date: { [Op.gte]: start } // Fetching potentially more than needed (start->now) is safer/easier
+            };
 
             const allPurchases = await PurchaseOrderItem.findAll({
                 include: [{ model: Purchase, as: 'purchase' }]
-            });
+            }); // Fetching all is heavy? Maybe filter by date?
+            // Purchase date is in 'purchase' model.
+
+            // Optimize:
+            // We will fetch ALL because JSON distribution logic is complex to filter in SQL for site.
+            // But we can filter by date range roughly.
 
             const allConsumption = await ServiceItem.findAll({
                 include: [{
                     association: 'serviceHistory',
-                    attributes: ['siteId', 'date']
-                }]
+                    attributes: ['siteId', 'serviceDate']
+                }],
+                where: {
+                    // optimization: only items with relevant types
+                    itemType: { [Op.or]: ['spare', 'drill bit', 'drilling tool'] }
+                }
             });
 
-            // Filter by Site if requested
-            // Purchases are global usually? No, PO items are distributed to sites.
-            // PurchaseOrderItem has `distribution` JSON field: { "siteId": qty, ... }
-            // ServiceItem has serviceHistory.siteId.
-
             const report = items.map(item => {
-                // INWARD (Purchases)
-                // Filter purchases for this item
+                // Filter relevant transactions
                 const itemPurchases = allPurchases.filter(p =>
                     (item.itemType === 'Spare' ? p.spareId === item.id : p.drillingToolId === item.id)
                 );
-
-                // OUTWARD (Consumption)
                 const itemConsumption = allConsumption.filter(c =>
                     (item.itemType === 'Spare' ? c.spareId === item.id : c.drillingToolId === item.id)
                 );
 
-                // Calculate Totals based on Site Filter and Date Ranges
-                let openingIn = 0;
-                let openingOut = 0;
-                let periodIn = 0;
-                let periodOut = 0;
+                let inwardAfterEnd = 0;
+                let outwardAfterEnd = 0;
+                let inwardInPeriod = 0;
+                let outwardInPeriod = 0;
 
-                // Process Inward (Purchases)
+                // Process Purchases (Inward)
                 itemPurchases.forEach(p => {
                     const pDate = new Date(p.purchase?.date || p.createdAt);
                     let qty = p.quantity;
 
+                    // Site Filter
                     if (siteId) {
-                        // If site filter, check distribution
                         try {
                             const dist = typeof p.distribution === 'string' ? JSON.parse(p.distribution) : p.distribution;
                             qty = Number(dist?.[siteId] || 0);
-                        } catch (e) {
-                            qty = 0;
-                        }
+                        } catch (e) { qty = 0; }
                     }
 
                     if (qty > 0) {
-                        if (pDate < start) {
-                            openingIn += qty;
+                        if (pDate > end) {
+                            inwardAfterEnd += qty;
                         } else if (pDate >= start && pDate <= end) {
-                            periodIn += qty;
+                            inwardInPeriod += qty;
                         }
                     }
                 });
 
-                // Process Outward (Consumption)
+                // Process Consumption (Outward)
                 itemConsumption.forEach(c => {
-                    const cDate = new Date(c.serviceHistory?.date || c.createdAt);
+                    const cDate = new Date(c.serviceHistory?.serviceDate || c.createdAt);
                     let qty = c.quantity;
 
-                    // Filter by site
                     if (siteId && c.serviceHistory?.siteId !== siteId) {
                         qty = 0;
                     }
 
                     if (qty > 0) {
-                        if (cDate < start) {
-                            openingOut += qty;
+                        if (cDate > end) {
+                            outwardAfterEnd += qty;
                         } else if (cDate >= start && cDate <= end) {
-                            periodOut += qty;
+                            outwardInPeriod += qty;
                         }
                     }
                 });
 
-                const openingStock = openingIn - openingOut;
-                const closingStock = openingStock + periodIn - periodOut;
+                // Calculations
+                const currentStock = getCurrentQty(item.id, item.itemType);
+
+                // Closing Balance (at End Date)
+                // Current = Closing + Inward(After) - Outward(After)
+                // Closing = Current - Inward(After) + Outward(After)
+                const closingBalance = currentStock - inwardAfterEnd + outwardAfterEnd;
+
+                // Opening Balance (at Start Date)
+                // Closing = Opening + Inward(Period) - Outward(Period)
+                // Opening = Closing - Inward(Period) + Outward(Period)
+                const openingBalance = closingBalance - inwardInPeriod + outwardInPeriod;
 
                 return {
                     id: item.id,
@@ -316,18 +357,21 @@ export const InventoryController = {
                     partNumber: item.partNumber,
                     itemType: item.itemType,
                     groupName: item.groupName,
-                    units: 'Nos', // Default
-                    openingStock,
-                    inward: periodIn,
-                    outward: periodOut,
-                    balance: closingStock,
+                    units: 'Nos',
+                    openingStock: openingBalance,
+                    inward: inwardInPeriod,
+                    outward: outwardInPeriod,
+                    balance: closingBalance,
+
+                    // Extra for tools
                     totalRPM: item.itemType === 'Drilling Tool' ? item.totalRPM : null,
                     totalMeters: item.itemType === 'Drilling Tool' ? item.totalMeters : null,
                 };
             });
 
-            // Filter out items with no activity if needed? Or show all?
-            // User likely wants to see stock even if 0 activity.
+            // Filter? No, assume showing all items is better for "Report"
+            // Sort by Name
+            report.sort((a, b) => a.itemName.localeCompare(b.itemName));
 
             res.json({ success: true, data: report });
         } catch (error) {

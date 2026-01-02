@@ -112,7 +112,29 @@ export const DashboardController = {
                         holesDrilled: parseFloat(productionStats[0]?.totalHoles || 0),
                         dieselConsumed: parseFloat(productionStats[0]?.totalDiesel || 0),
                         manDays: laborStats
-                    }
+                    },
+                    // Overview Chart: Daily Meter for the date range
+                    overview: await DailyEntry.findAll({
+                        where: productionWhere,
+                        attributes: [
+                            'date',
+                            [sequelize.fn('SUM', sequelize.col('meter')), 'totalMeter']
+                        ],
+                        group: ['date'],
+                        order: [['date', 'ASC']],
+                        raw: true
+                    }),
+                    // Recent Activity: Last 5 Entries
+                    recentActivity: await DailyEntry.findAll({
+                        where: productionWhere,
+                        limit: 5,
+                        order: [['date', 'DESC'], ['createdAt', 'DESC']],
+                        include: [
+                            { model: Site, as: 'site', attributes: ['siteName'] },
+                            { model: Machine, as: 'machine', attributes: ['machineNumber'] }
+                        ],
+                        attributes: ['id', 'date', 'meter', 'noOfHoles']
+                    })
                 }
             });
 

@@ -160,7 +160,6 @@ export const defineAssociations = () => {
   PurchaseOrder.belongsTo(Address, { foreignKey: "shippingAddressId", as: "shippingAddress" });
 
   // ========== DRILLING TOOL LOGS RELATIONSHIPS ==========
-  // Missing association causing EagerLoadingError
   DrillingToolLog.belongsTo(DrillingTools, { foreignKey: "drillingToolId", as: "drillingTool" });
   DrillingTools.hasMany(DrillingToolLog, { foreignKey: "drillingToolId", as: "logs" });
 

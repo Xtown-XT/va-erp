@@ -113,7 +113,7 @@ const Attendance = () => {
         }
       });
 
-      setEmployees(siteEmps);
+      setEmployees(siteEmps.sort((a, b) => (a.empId || "").localeCompare(b.empId || "")));
       setAttendanceMap(initialMap);
       setHasChanges(false);
 
